@@ -3,6 +3,7 @@ import '../models/customer.dart';
 import '../models/customer_summary.dart';
 import '../models/snapshot_opening_balance.dart';
 import '../models/summary_snapshot.dart';
+import '../utils/number_format_utils.dart' as number_format_utils;
 import 'package:flutter/foundation.dart';
 
 class SummaryProvider extends ChangeNotifier {
@@ -153,21 +154,11 @@ class SummaryProvider extends ChangeNotifier {
     }
   }
 
-  String formatAmount(double amount) {
-    return amount == amount.roundToDouble()
-        ? amount.toStringAsFixed(0)
-        : amount.toStringAsFixed(2);
-  }
+  String formatAmount(double amount) =>
+      number_format_utils.formatAmount(amount);
 
-  String formatBalance(double balance) {
-    if (balance > 0) {
-      return '${formatAmount(balance)} Debit';
-    }
-    if (balance < 0) {
-      return '${formatAmount(balance.abs())} Credit';
-    }
-    return '0';
-  }
+  String formatBalance(double balance) =>
+      number_format_utils.formatBalance(balance);
 
   String formatSavedAt(String value) {
     final parsedDate = DateTime.tryParse(value);

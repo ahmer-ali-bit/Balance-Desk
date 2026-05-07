@@ -10,6 +10,7 @@ import '../models/summary_snapshot.dart';
 import '../services/export_service.dart';
 import '../services/linked_devices_controller.dart';
 import '../services/pdf_service.dart';
+import '../utils/number_format_utils.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/linked_read_only_banner.dart';
 
@@ -340,21 +341,9 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     return left.compareTo(right);
   }
 
-  String _formatAmount(double amount) {
-    return amount == amount.roundToDouble()
-        ? amount.toStringAsFixed(0)
-        : amount.toStringAsFixed(2);
-  }
+  String _formatAmount(double amount) => formatAmount(amount);
 
-  String _formatBalance(double balance) {
-    if (balance > 0) {
-      return '${_formatAmount(balance)} Debit';
-    }
-    if (balance < 0) {
-      return '${_formatAmount(balance.abs())} Credit';
-    }
-    return '0';
-  }
+  String _formatBalance(double balance) => formatBalance(balance);
 
   String _formatDate(String value) {
     final parsedDate = DateTime.tryParse(value);

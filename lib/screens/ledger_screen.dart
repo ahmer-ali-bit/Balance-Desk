@@ -14,6 +14,7 @@ import '../providers/ledger_provider.dart';
 import '../services/export_service.dart';
 import '../services/linked_devices_controller.dart';
 import '../services/pdf_service.dart';
+import '../utils/number_format_utils.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/amount_input_field.dart';
 import '../widgets/app_empty_state.dart';
@@ -4240,11 +4241,7 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
     return '${date.year}-$month-$day';
   }
 
-  String _formatAmount(double amount) {
-    return amount == amount.roundToDouble()
-        ? amount.toStringAsFixed(0)
-        : amount.toStringAsFixed(2);
-  }
+  String _formatAmount(double amount) => formatAmount(amount);
 
   @override
   Widget build(BuildContext context) {

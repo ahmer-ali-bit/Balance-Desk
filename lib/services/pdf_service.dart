@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 
 import '../models/customer.dart';
 import '../models/entry.dart';
+import '../utils/number_format_utils.dart';
 
 class PdfService {
   const PdfService();
@@ -804,21 +805,9 @@ class PdfService {
     );
   }
 
-  String _formatAmount(double amount) {
-    return amount == amount.roundToDouble()
-        ? amount.toStringAsFixed(0)
-        : amount.toStringAsFixed(2);
-  }
+  String _formatAmount(double amount) => formatAmount(amount);
 
-  String _formatBalance(double balance) {
-    if (balance > 0) {
-      return '${_formatAmount(balance)} Debit';
-    }
-    if (balance < 0) {
-      return '${_formatAmount(balance.abs())} Credit';
-    }
-    return '0';
-  }
+  String _formatBalance(double balance) => formatBalance(balance);
 
   String _formatDate(String value) {
     final parsedDate = DateTime.tryParse(value);

@@ -10,6 +10,7 @@ import '../models/snapshot_opening_balance.dart';
 import '../services/export_service.dart';
 import '../services/linked_devices_controller.dart';
 import '../services/pdf_service.dart';
+import '../utils/number_format_utils.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/customer_search_field.dart';
 import '../widgets/summary_stat_card.dart';
@@ -328,21 +329,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
     return rows;
   }
 
-  String _formatAmount(double amount) {
-    return amount == amount.roundToDouble()
-        ? amount.toStringAsFixed(0)
-        : amount.toStringAsFixed(2);
-  }
+  String _formatAmount(double amount) => formatAmount(amount);
 
-  String _formatBalance(double balance) {
-    if (balance > 0) {
-      return '${_formatAmount(balance)} Debit';
-    }
-    if (balance < 0) {
-      return '${_formatAmount(balance.abs())} Credit';
-    }
-    return '0';
-  }
+  String _formatBalance(double balance) => formatBalance(balance);
 
   @override
   Widget build(BuildContext context) {

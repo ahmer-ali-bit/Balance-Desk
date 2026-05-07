@@ -5,6 +5,7 @@ import '../models/customer.dart';
 import '../models/entry.dart';
 import '../models/snapshot_opening_balance.dart';
 import '../services/linked_devices_controller.dart';
+import '../utils/number_format_utils.dart' as number_format_utils;
 
 enum LedgerDateFilter { all, today, thisWeek, thisMonth, customRange }
 
@@ -412,21 +413,11 @@ class LedgerProvider extends ChangeNotifier {
 
   double calculateBalance(Entry entry) => entry.debit - entry.credit;
 
-  String formatAmount(double amount) {
-    return amount == amount.roundToDouble()
-        ? amount.toStringAsFixed(0)
-        : amount.toStringAsFixed(2);
-  }
+  String formatAmount(double amount) =>
+      number_format_utils.formatAmount(amount);
 
-  String formatBalance(double balance) {
-    if (balance > 0) {
-      return '${formatAmount(balance)} Debit';
-    }
-    if (balance < 0) {
-      return '${formatAmount(balance.abs())} Credit';
-    }
-    return '0';
-  }
+  String formatBalance(double balance) =>
+      number_format_utils.formatBalance(balance);
 
   DateTimeRange? _resolveActiveRange() {
     final now = DateTime.now();
