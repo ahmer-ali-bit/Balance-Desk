@@ -3382,6 +3382,131 @@ class _LedgerViewState extends State<_LedgerView> {
     );
   }
 
+  List<Map<String, Object?>>? _cachedLedgerCustomers;
+
+  Future<List<Map<String, Object?>>> _getOtherCustomers(
+    int currentCustomerId,
+  ) async {
+    if (_cachedLedgerCustomers == null) {
+      _cachedLedgerCustomers = await AppDatabase.instance.getCustomers();
+    }
+    return _cachedLedgerCustomers!
+        .where(
+          (Map<String, Object?> c) => (c['id'] as int) != currentCustomerId,
+        )
+        .toList(growable: false);
+  }
+
+  Future<void> _showTransferDialog(
+    LedgerProvider provider,
+    Entry entry,
+    LinkedDevicesController linkedDevices,
+  ) async {
+    if (!linkedDevices.canEditWorkspace) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(linkedDevices.readOnlyMessage)));
+      return;
+    }
+
+    if (entry.id == null) {
+      return;
+    }
+
+    final currentCustomerId = provider.customer.id;
+    if (currentCustomerId == null) {
+      return;
+    }
+
+    final otherCustomers = await _getOtherCustomers(currentCustomerId);
+    if (otherCustomers.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No other customers available to transfer to.'),
+        ),
+      );
+      return;
+    }
+
+    final selectedCustomer = await showDialog<Map<String, Object?>>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return _LedgerTransferCustomerDialog(
+          customers: otherCustomers,
+          currentCustomerName: provider.customerName,
+          entry: entry,
+          formatDate: _formatStoredDate,
+          formatDateTime: _formatStoredDate,
+          formatAmount: provider.formatAmount,
+        );
+      },
+    );
+
+    if (selectedCustomer == null || !mounted) {
+      return;
+    }
+
+    final newCustomerId = selectedCustomer['id'] as int;
+    final newCustomerName = selectedCustomer['name'] as String;
+
+    final shouldTransfer = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Confirm Transfer'),
+          content: Text(
+            'Transfer entry #${entry.id}\n'
+            'From: ${provider.customerName}\n'
+            'To: $newCustomerName\n\n'
+            'Date: ${_formatStoredDate(entry.entryDate)}\n'
+            'Description: ${entry.displayDescription}\n'
+            'Debit: ${provider.formatAmount(entry.debit)}\n'
+            'Credit: ${provider.formatAmount(entry.credit)}',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Transfer'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldTransfer != true || !mounted) {
+      return;
+    }
+
+    final isTransferred = await provider.transferEntry(
+      entry: entry,
+      newCustomerId: newCustomerId,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (isTransferred) {
+      _cachedLedgerCustomers = null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Entry transferred to $newCustomerName.')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(provider.errorMessage ?? 'Unable to transfer entry.'),
+        ),
+      );
+    }
+  }
+
   List<DataRow> _buildLedgerRows(
     LedgerProvider provider, {
     required LinkedDevicesController linkedDevices,
@@ -3453,6 +3578,17 @@ class _LedgerViewState extends State<_LedgerView> {
                               ? () => _showEditEntryDialog(entry)
                               : null,
                           icon: const Icon(Icons.edit_outlined),
+                        ),
+                        IconButton(
+                          tooltip: 'Transfer to another customer',
+                          onPressed: linkedDevices.canEditWorkspace
+                              ? () => _showTransferDialog(
+                                  provider,
+                                  entry,
+                                  linkedDevices,
+                                )
+                              : null,
+                          icon: const Icon(Icons.swap_horiz_rounded, size: 18),
                         ),
                         IconButton(
                           tooltip: 'Delete entry',
@@ -4606,6 +4742,117 @@ class _LedgerSelectedDatePreference {
     return AppDatabase.instance.setAppSetting(
       key: _settingKey,
       value: date.toIso8601String(),
+    );
+  }
+}
+
+class _LedgerTransferCustomerDialog extends StatefulWidget {
+  const _LedgerTransferCustomerDialog({
+    required this.customers,
+    required this.currentCustomerName,
+    required this.entry,
+    required this.formatDate,
+    required this.formatDateTime,
+    required this.formatAmount,
+  });
+
+  final List<Map<String, Object?>> customers;
+  final String currentCustomerName;
+  final Entry entry;
+  final String Function(String) formatDate;
+  final String Function(String) formatDateTime;
+  final String Function(double) formatAmount;
+
+  @override
+  State<_LedgerTransferCustomerDialog> createState() =>
+      _LedgerTransferCustomerDialogState();
+}
+
+class _LedgerTransferCustomerDialogState
+    extends State<_LedgerTransferCustomerDialog> {
+  String _searchQuery = '';
+
+  List<Map<String, Object?>> get _filteredCustomers {
+    final query = _searchQuery.trim().toLowerCase();
+    if (query.isEmpty) {
+      return widget.customers;
+    }
+
+    return widget.customers
+        .where(
+          (Map<String, Object?> c) =>
+              (c['name'] as String? ?? '').toLowerCase().contains(query),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return AlertDialog(
+      title: const Text('Transfer Entry to...'),
+      content: SizedBox(
+        width: 360,
+        height: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(
+              'Current customer: ${widget.currentCustomerName}',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              decoration: const InputDecoration(
+                hintText: 'Search customer...',
+                prefixIcon: Icon(Icons.search),
+                isDense: true,
+              ),
+              onChanged: (String value) {
+                setState(() {
+                  _searchQuery = value;
+                });
+              },
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: _filteredCustomers.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No customers found.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: _filteredCustomers.length,
+                      itemBuilder: (BuildContext context, int index) {
+                        final customer = _filteredCustomers[index];
+                        final name = customer['name'] as String? ?? '-';
+                        return ListTile(
+                          title: Text(name),
+                          subtitle: Text(
+                            'ID: ${customer['id']}',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                          onTap: () => Navigator.of(context).pop(customer),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+      ],
     );
   }
 }

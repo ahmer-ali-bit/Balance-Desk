@@ -129,6 +129,8 @@ class PdfService {
     List<({String label, String value})> summaryItems = const [],
     Map<int, pw.Alignment> cellAlignments = const <int, pw.Alignment>{},
     Map<int, pw.TableColumnWidth>? columnWidths,
+    bool highlightFirstRow = false,
+    List<String>? openingBalanceRow,
   }) async {
     final bytes = await generateSnapshotPdf(
       title: title,
@@ -137,6 +139,8 @@ class PdfService {
       summaryItems: summaryItems,
       cellAlignments: cellAlignments,
       columnWidths: columnWidths,
+      highlightFirstRow: highlightFirstRow,
+      openingBalanceRow: openingBalanceRow,
     );
 
     await Printing.sharePdf(bytes: bytes, filename: fileName);
@@ -149,6 +153,8 @@ class PdfService {
     List<({String label, String value})> summaryItems = const [],
     Map<int, pw.Alignment> cellAlignments = const <int, pw.Alignment>{},
     Map<int, pw.TableColumnWidth>? columnWidths,
+    bool highlightFirstRow = false,
+    List<String>? openingBalanceRow,
   }) async {
     final pdf = pw.Document();
     final resolvedColumnWidths =
@@ -171,6 +177,7 @@ class PdfService {
             summaryItems: summaryItems,
             cellAlignments: resolvedCellAlignments,
             columnWidths: resolvedColumnWidths,
+            openingBalanceRow: openingBalanceRow,
           );
         },
         build: (pw.Context context) {
@@ -183,6 +190,7 @@ class PdfService {
                 rows: rows,
                 cellAlignments: resolvedCellAlignments,
                 columnWidths: resolvedColumnWidths,
+                highlightFirstRow: highlightFirstRow,
               ),
           ];
         },
@@ -253,13 +261,18 @@ class PdfService {
     required List<({String label, String value})> summaryItems,
     required Map<int, pw.Alignment> cellAlignments,
     required Map<int, pw.TableColumnWidth> columnWidths,
+    List<String>? openingBalanceRow,
   }) {
     final children = <pw.Widget>[_buildDocumentTitle(title: title)];
 
+    // Show Total Debit, Total Credit, Total Balance as cards at top (page 1 only)
     if (context.pageNumber == 1 && summaryItems.isNotEmpty) {
       children.addAll(<pw.Widget>[
         pw.SizedBox(height: 10),
-        _buildSummaryItems(summaryItems),
+        _buildSummaryItemRow(
+          summaryItems,
+          tint: const PdfColor.fromInt(0xFFF2F7FF),
+        ),
       ]);
     }
 
@@ -272,9 +285,61 @@ class PdfService {
       ),
     ]);
 
+    // Show opening balance row highlighted only on first page
+    if (context.pageNumber == 1 &&
+        openingBalanceRow != null &&
+        openingBalanceRow.isNotEmpty) {
+      children.addAll(<pw.Widget>[
+        pw.SizedBox(height: 0), // no gap - row directly under header
+        _buildOpeningBalanceRow(
+          row: openingBalanceRow,
+          headers: headers,
+          cellAlignments: cellAlignments,
+          columnWidths: columnWidths,
+        ),
+        pw.SizedBox(height: 0),
+      ]);
+    }
+
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: children,
+    );
+  }
+
+  pw.Widget _buildOpeningBalanceRow({
+    required List<String> row,
+    required List<String> headers,
+    required Map<int, pw.Alignment> cellAlignments,
+    required Map<int, pw.TableColumnWidth> columnWidths,
+  }) {
+    final cellStyle = pw.TextStyle(
+      fontSize: 6.8,
+      fontWeight: pw.FontWeight.bold,
+    );
+    const padding = pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2);
+
+    return pw.Table(
+      border: pw.TableBorder.all(color: PdfColors.blueGrey200, width: 0.6),
+      defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle,
+      columnWidths: columnWidths,
+      children: <pw.TableRow>[
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(
+            color: PdfColor.fromInt(0xFFFFF3E0),
+          ),
+          children: List<pw.Widget>.generate(headers.length, (int index) {
+            return _buildTableCell(
+              value: index < row.length ? row[index] : '',
+              style: cellStyle,
+              padding: padding,
+              alignment:
+                  cellAlignments[index] ??
+                  _defaultAlignmentForHeader(headers[index]),
+            );
+          }),
+        ),
+      ],
     );
   }
 
@@ -302,90 +367,6 @@ class PdfService {
       value,
       style: pw.TextStyle(fontSize: 8.5, color: PdfColors.blueGrey700),
     );
-  }
-
-  pw.Widget _buildSummaryItems(List<({String label, String value})> items) {
-    final groupedSummary = _buildSnapshotSummaryItems(items);
-    if (groupedSummary != null) {
-      return groupedSummary;
-    }
-
-    if (items.length <= 4) {
-      return pw.Row(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: List<pw.Widget>.generate(items.length * 2 - 1, (int index) {
-          if (index.isOdd) {
-            return pw.SizedBox(width: 10);
-          }
-
-          return pw.Expanded(child: _buildSummaryItemCard(items[index ~/ 2]));
-        }),
-      );
-    }
-
-    return pw.Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: items
-          .map<pw.Widget>((item) => _buildSummaryItemCard(item, width: 150))
-          .toList(growable: false),
-    );
-  }
-
-  pw.Widget? _buildSnapshotSummaryItems(
-    List<({String label, String value})> items,
-  ) {
-    final openingItems = <({String label, String value})>[];
-    final snapshotItems = <({String label, String value})>[];
-
-    for (final item in items) {
-      final group = _summaryItemGroup(item.label);
-      if (group == null) {
-        return null;
-      }
-
-      if (group == 'opening') {
-        openingItems.add(item);
-      } else {
-        snapshotItems.add(item);
-      }
-    }
-
-    if (openingItems.isEmpty) {
-      return null;
-    }
-
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: <pw.Widget>[
-        _buildSummaryItemRow(
-          openingItems,
-          tint: const PdfColor.fromInt(0xFFFFF6ED),
-        ),
-        if (snapshotItems.isNotEmpty) ...<pw.Widget>[
-          pw.SizedBox(height: 8),
-          _buildSummaryItemRow(
-            snapshotItems,
-            tint: const PdfColor.fromInt(0xFFF2F7FF),
-          ),
-        ],
-      ],
-    );
-  }
-
-  String? _summaryItemGroup(String label) {
-    final normalizedLabel = label.trim().toLowerCase();
-
-    if (normalizedLabel.startsWith('opening ')) {
-      return 'opening';
-    }
-
-    if (normalizedLabel == 'last saved snapshot' ||
-        normalizedLabel.startsWith('snapshot ')) {
-      return 'snapshot';
-    }
-
-    return null;
   }
 
   pw.Widget _buildSummaryItemRow(
@@ -672,8 +653,13 @@ class PdfService {
     required List<List<String>> rows,
     Map<int, pw.Alignment> cellAlignments = const <int, pw.Alignment>{},
     Map<int, pw.TableColumnWidth>? columnWidths,
+    bool highlightFirstRow = false,
   }) {
     const cellStyle = pw.TextStyle(fontSize: 6.8);
+    final highlightStyle = pw.TextStyle(
+      fontSize: 6.8,
+      fontWeight: pw.FontWeight.bold,
+    );
     const padding = pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2);
 
     return pw.Table(
@@ -682,11 +668,15 @@ class PdfService {
       columnWidths: columnWidths,
       children: rows
           .map<pw.TableRow>((List<String> row) {
+            final isFirst = rows.indexOf(row) == 0 && highlightFirstRow;
             return pw.TableRow(
+              decoration: isFirst
+                  ? pw.BoxDecoration(color: const PdfColor.fromInt(0xFFFFF3E0))
+                  : null,
               children: List<pw.Widget>.generate(headers.length, (int index) {
                 return _buildTableCell(
                   value: index < row.length ? row[index] : '',
-                  style: cellStyle,
+                  style: isFirst ? highlightStyle : cellStyle,
                   padding: padding,
                   alignment:
                       cellAlignments[index] ??

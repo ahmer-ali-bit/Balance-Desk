@@ -592,6 +592,19 @@ class DatabaseHelper {
     );
   }
 
+  Future<int> transferEntry({
+    required int entryId,
+    required int newCustomerId,
+  }) async {
+    final db = await database;
+    return db.update(
+      entriesTable,
+      <String, Object?>{'customerId': newCustomerId},
+      where: 'id = ?',
+      whereArgs: <Object?>[entryId],
+    );
+  }
+
   Future<int> deleteEntry(int id) async {
     final db = await database;
     return db.delete(entriesTable, where: 'id = ?', whereArgs: <Object?>[id]);
@@ -1392,6 +1405,16 @@ class AppDatabase {
       description: description,
       debit: debit,
       credit: credit,
+    );
+  }
+
+  Future<int> transferEntry({
+    required int entryId,
+    required int newCustomerId,
+  }) {
+    return _helper.transferEntry(
+      entryId: entryId,
+      newCustomerId: newCustomerId,
     );
   }
 

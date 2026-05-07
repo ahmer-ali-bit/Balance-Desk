@@ -301,6 +301,41 @@ class LedgerProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> transferEntry({
+    required Entry entry,
+    required int newCustomerId,
+  }) async {
+    if (!_linkedDevices.canEditWorkspace) {
+      _errorMessage = _linkedDevices.readOnlyMessage;
+      _notifyListeners();
+      return false;
+    }
+
+    if (entry.id == null) {
+      _errorMessage = 'Entry record is invalid.';
+      _notifyListeners();
+      return false;
+    }
+
+    _setLoading(true);
+
+    try {
+      await _database.transferEntry(
+        entryId: entry.id!,
+        newCustomerId: newCustomerId,
+      );
+      await loadEntries();
+      await _linkedDevices.syncAfterLocalChange(reason: 'entry_transfer');
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint('LedgerProvider.transferEntry failed: $error');
+      debugPrint('$stackTrace');
+      _errorMessage = 'Unable to transfer entry.';
+      _setLoading(false);
+      return false;
+    }
+  }
+
   Future<bool> deleteEntry(Entry entry) async {
     if (!_linkedDevices.canEditWorkspace) {
       _errorMessage = _linkedDevices.readOnlyMessage;
