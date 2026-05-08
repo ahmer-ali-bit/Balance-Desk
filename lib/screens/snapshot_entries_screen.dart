@@ -454,43 +454,17 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
 
   List<({String label, String value})> _buildSnapshotPdfSummaryItems() {
     final items = <({String label, String value})>[];
+
+    items.add((
+      label: 'Total Entries',
+      value: '${_entries.length}',
+    ));
+
     final latestSnapshot = _latestSnapshot;
-
-    if (latestSnapshot != null) {
-      items.addAll(<({String label, String value})>[
-        (
-          label: 'Last Saved Snapshot',
-          value: _formatDateTime(latestSnapshot.savedAt),
-        ),
-        (
-          label: 'Snapshot Debit',
-          value: _formatAmount(latestSnapshot.overallDebit),
-        ),
-        (
-          label: 'Snapshot Credit',
-          value: _formatAmount(latestSnapshot.overallCredit),
-        ),
-        (
-          label: 'Snapshot Balance',
-          value: _formatBalance(latestSnapshot.finalBalance),
-        ),
-      ]);
-    }
-
-    items.addAll(<({String label, String value})>[
-      (
-        label: 'Opening Debit',
-        value: _formatAmount(_effectiveOpeningBalance.debit),
-      ),
-      (
-        label: 'Opening Credit',
-        value: _formatAmount(_effectiveOpeningBalance.credit),
-      ),
-      (
-        label: 'Opening Balance',
-        value: _formatBalance(_effectiveOpeningBalance.finalBalance),
-      ),
-    ]);
+    items.add((
+      label: 'Last Saved Snapshot Balance',
+      value: latestSnapshot != null ? _formatBalance(latestSnapshot.finalBalance) : '-',
+    ));
 
     return items;
   }
