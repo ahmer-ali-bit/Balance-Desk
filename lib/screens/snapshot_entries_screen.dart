@@ -166,12 +166,74 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           : '';
     } catch (error, stackTrace) {
       debugPrint('SnapshotEntriesScreen._loadTimeline failed: $error');
-      debugPrint('$stackTrace');
       if (!mounted) {
         return;
       }
       setState(() {
         _errorMessage = 'Unable to load snapshot entries.';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _recalculateSnapshots() async {
+    if (!_linkedDevices.canEditWorkspace) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final snapshotRows = await _database.getSummarySnapshots();
+      final snapshots = snapshotRows
+          .map((Map<String, Object?> row) => SummarySnapshot.fromMap(row))
+          .toList()
+          .reversed
+          .toList();
+
+      String? previousSavedAt;
+      SnapshotOpeningBalance currentStartingBalance = _effectiveOpeningBalance;
+
+      for (final snapshot in snapshots) {
+        if (snapshot.id == null) continue;
+
+        final entries = await _loadEntriesPaged(
+          startDate: previousSavedAt,
+          endDate: snapshot.savedAt,
+        );
+
+        final totals = _buildSnapshotTotals(
+          entries: entries,
+          startingBalance: currentStartingBalance,
+        );
+
+        await _database.updateSummarySnapshotTotals(
+          id: snapshot.id!,
+          overallDebit: totals.debit,
+          overallCredit: totals.credit,
+        );
+
+        final finalBalance = totals.debit - totals.credit;
+        currentStartingBalance = _balanceToOpening(finalBalance);
+        previousSavedAt = snapshot.savedAt;
+      }
+
+      await _linkedDevices.syncAfterLocalChange(reason: 'snapshot_recalculate');
+      await _loadTimeline();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All snapshots recalculated successfully.')),
+      );
+    } catch (e, stackTrace) {
+      debugPrint('SnapshotEntriesScreen._recalculateSnapshots failed: $e');
+      debugPrint('$stackTrace');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to recalculate snapshots: $e')),
+      );
+      setState(() {
         _isLoading = false;
       });
     }
@@ -896,6 +958,15 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           icon: const Icon(Icons.refresh_rounded),
           label: const Text('Refresh'),
         ),
+        if (_snapshots.isNotEmpty)
+          OutlinedButton.icon(
+            onPressed:
+                _isLoading || _isSavingSnapshot || !_linkedDevices.canEditWorkspace
+                    ? null
+                    : _recalculateSnapshots,
+            icon: const Icon(Icons.calculate_outlined),
+            label: const Text('Recalculate'),
+          ),
         OutlinedButton.icon(
           onPressed: _isLoading || _isSavingSnapshot ? null : _exportSnapshot,
           icon: const Icon(Icons.file_download_outlined),
