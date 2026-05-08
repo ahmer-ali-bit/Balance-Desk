@@ -187,11 +187,6 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       return;
     }
 
-    setState(() {
-      _isSavingSnapshot = true;
-      _errorMessage = null;
-    });
-
     final savedAt = DateTime.now().toIso8601String();
 
     try {
@@ -216,6 +211,52 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         return;
       }
 
+      final pageNoController = TextEditingController();
+      final shouldSave = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Save Snapshot'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Enter Daily Log Page Number (Optional):'),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: pageNoController,
+                  decoration: const InputDecoration(
+                    labelText: 'Page No',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.menu_book_outlined),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (shouldSave != true) {
+        return;
+      }
+      final dailyLogPageNo = pageNoController.text.trim();
+
+      setState(() {
+        _isSavingSnapshot = true;
+        _errorMessage = null;
+      });
+
       final customerIds = entries
           .map<int>((_SnapshotEntry entry) => entry.entry.customerId)
           .toSet();
@@ -238,7 +279,22 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         overallDebit: snapshotTotals.debit,
         overallCredit: snapshotTotals.credit,
         customerCount: customerIds.length,
+        dailyLogPageNo: dailyLogPageNo,
       );
+
+      if (dailyLogPageNo.isNotEmpty) {
+        final entryIds = entries
+            .map((e) => e.entry.id)
+            .where((id) => id != null)
+            .cast<int>()
+            .toList();
+        if (entryIds.isNotEmpty) {
+          await _database.batchUpdateDailyLogPageNo(
+            entryIds: entryIds,
+            dailyLogPageNo: dailyLogPageNo,
+          );
+        }
+      }
       await _linkedDevices.syncAfterLocalChange(reason: 'snapshot_save');
       if (!_hasSavedOpeningBalance) {
         _debitOpeningBalanceController.clear();
@@ -393,7 +449,10 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           _formatAmount(entry.entry.debit),
           _formatAmount(entry.entry.credit),
           '',
-          entry.entry.pageNo,
+          [
+            if (entry.entry.pageNo.isNotEmpty) entry.entry.pageNo,
+            if (entry.entry.dailyLogPageNo.isNotEmpty) 'DL: ${entry.entry.dailyLogPageNo}',
+          ].join(' | '),
         ]);
         entryIndex++;
       }
@@ -405,7 +464,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         _formatAmount(snapshot.overallDebit),
         _formatAmount(snapshot.overallCredit),
         _formatBalance(snapshot.finalBalance),
-        '',
+        snapshot.dailyLogPageNo,
       ]);
 
       final carryForward = _balanceToOpening(snapshot.finalBalance);
@@ -444,7 +503,10 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         _formatAmount(entry.entry.debit),
         _formatAmount(entry.entry.credit),
         '',
-        entry.entry.pageNo,
+        [
+          if (entry.entry.pageNo.isNotEmpty) entry.entry.pageNo,
+          if (entry.entry.dailyLogPageNo.isNotEmpty) 'DL: ${entry.entry.dailyLogPageNo}',
+        ].join(' | '),
       ]);
       entryIndex++;
     }
@@ -1345,6 +1407,24 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
+                  if (snapshot.dailyLogPageNo.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.tertiaryContainer,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'DL Pg ${snapshot.dailyLogPageNo}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.onTertiaryContainer,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   if (_linkedDevices.canEditWorkspace)
                     IconButton(
                       tooltip: 'Delete snapshot',
@@ -1888,16 +1968,30 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           Text(_formatBalance(snapshot.finalBalance), style: totalStyle),
         ),
         DataCell(
-          IconButton(
-            tooltip: 'Delete snapshot',
-            onPressed:
-                _isLoading ||
-                    _isSavingSnapshot ||
-                    !_linkedDevices.canEditWorkspace
-                ? null
-                : () => _deleteSnapshot(snapshot),
-            icon: const Icon(Icons.delete_outline),
-            visualDensity: VisualDensity.compact,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              if (snapshot.dailyLogPageNo.isNotEmpty) ...[
+                Text(
+                  'DL Pg ${snapshot.dailyLogPageNo}',
+                  style: totalStyle?.copyWith(
+                    color: Theme.of(context).colorScheme.tertiary,
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              IconButton(
+                tooltip: 'Delete snapshot',
+                onPressed:
+                    _isLoading ||
+                        _isSavingSnapshot ||
+                        !_linkedDevices.canEditWorkspace
+                    ? null
+                    : () => _deleteSnapshot(snapshot),
+                icon: const Icon(Icons.delete_outline),
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
           ),
         ),
       ],

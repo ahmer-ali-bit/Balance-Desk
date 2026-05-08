@@ -2855,7 +2855,6 @@ class _LedgerViewState extends State<_LedgerView> {
                     DataColumn(label: Text('Entry Date')),
                     DataColumn(label: Text('Created Date')),
                     DataColumn(label: Text('Page No')),
-                    DataColumn(label: Text('Page No')),
                     DataColumn(label: Text('Description')),
                     DataColumn(label: Text('Debit'), numeric: true),
                     DataColumn(label: Text('Credit'), numeric: true),
@@ -3550,14 +3549,17 @@ class _LedgerViewState extends State<_LedgerView> {
             DataCell(Text(_formatStoredDate(entry.entryDate), style: rowStyle)),
             DataCell(Text(_formatStoredDate(entry.createdAt), style: rowStyle)),
             DataCell(
-              Text(entry.pageNo.isEmpty ? '-' : entry.pageNo, style: rowStyle),
-            ),
-            DataCell(
               Text(
-                entry.dailyLogPageNo.isEmpty ? '-' : entry.dailyLogPageNo,
+                [
+                  if (entry.pageNo.isNotEmpty) entry.pageNo,
+                  if (entry.dailyLogPageNo.isNotEmpty) 'DL: ${entry.dailyLogPageNo}'
+                ].join(' | ').isEmpty ? '-' : [
+                  if (entry.pageNo.isNotEmpty) entry.pageNo,
+                  if (entry.dailyLogPageNo.isNotEmpty) 'DL: ${entry.dailyLogPageNo}'
+                ].join(' | '),
                 style: rowStyle?.copyWith(
-                  color: colorScheme.tertiary,
-                  fontWeight: FontWeight.bold,
+                  color: entry.dailyLogPageNo.isNotEmpty ? colorScheme.tertiary : null,
+                  fontWeight: entry.dailyLogPageNo.isNotEmpty ? FontWeight.bold : null,
                 ),
               ),
             ),
