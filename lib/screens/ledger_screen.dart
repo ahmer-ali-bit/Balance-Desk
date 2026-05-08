@@ -200,6 +200,132 @@ class _LedgerViewState extends State<_LedgerView> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _addEntryToDailyLog(LedgerProvider provider, Entry entry) async {
+    if (entry.id == null) return;
+    try {
+      await AppDatabase.instance.updateEntryDailyLogVisibility(
+        entryId: entry.id!,
+        show: true,
+      );
+      await provider.loadEntries();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Entry added to Daily Logs')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to add entry to Daily Logs: $e')),
+      );
+    }
+  }
+
+  void _showEntryMenu(BuildContext context, LedgerProvider provider, Entry entry) {
+    final linkedDevices = context.read<LinkedDevicesController>();
+    if (!linkedDevices.canEditWorkspace) return;
+
+    showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16, left: 24, right: 24),
+                  child: Row(
+                    children: <Widget>[
+                      Icon(Icons.tune_rounded, color: colorScheme.primary),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Entry Actions',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(),
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primaryContainer,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.edit_outlined, color: colorScheme.onPrimaryContainer),
+                  ),
+                  title: const Text('Edit Entry', style: TextStyle(fontWeight: FontWeight.w600)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showEditEntryDialog(entry);
+                  },
+                ),
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: colorScheme.secondaryContainer,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.swap_horiz_rounded, color: colorScheme.onSecondaryContainer),
+                  ),
+                  title: const Text('Transfer to another customer', style: TextStyle(fontWeight: FontWeight.w600)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showTransferDialog(provider, entry, linkedDevices);
+                  },
+                ),
+                if (!entry.showInDailyLog)
+                  ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: colorScheme.tertiaryContainer,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.playlist_add_rounded, color: colorScheme.onTertiaryContainer),
+                    ),
+                    title: const Text('Add to Daily Log', style: TextStyle(fontWeight: FontWeight.w600)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _addEntryToDailyLog(provider, entry);
+                    },
+                  ),
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: colorScheme.errorContainer,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.delete_outline, color: colorScheme.onErrorContainer),
+                  ),
+                  title: Text('Delete Entry', style: TextStyle(color: colorScheme.error, fontWeight: FontWeight.w600)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _confirmDeleteEntry(entry);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _showEditCustomerDialog(LedgerProvider provider) async {
     final draft = await showDialog<_CustomerProfileDraft>(
       context: context,
@@ -3111,15 +3237,9 @@ class _LedgerViewState extends State<_LedgerView> {
                   )
                 else ...<Widget>[
                   IconButton.filledTonal(
-                    tooltip: 'Edit entry',
-                    onPressed: () => _showEditEntryDialog(entry),
-                    icon: const Icon(Icons.edit_outlined, size: 18),
-                  ),
-                  const SizedBox(width: 6),
-                  IconButton(
-                    tooltip: 'Delete entry',
-                    onPressed: () => _confirmDeleteEntry(entry),
-                    icon: const Icon(Icons.delete_outline, size: 18),
+                    tooltip: 'Entry Options',
+                    onPressed: () => _showEntryMenu(context, provider, entry),
+                    icon: const Icon(Icons.more_vert_rounded, size: 18),
                   ),
                 ],
               ],
@@ -3645,29 +3765,11 @@ class _LedgerViewState extends State<_LedgerView> {
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
                         IconButton(
-                          tooltip: 'Edit entry',
+                          tooltip: 'Entry Options',
                           onPressed: linkedDevices.canEditWorkspace
-                              ? () => _showEditEntryDialog(entry)
+                              ? () => _showEntryMenu(context, provider, entry)
                               : null,
-                          icon: const Icon(Icons.edit_outlined),
-                        ),
-                        IconButton(
-                          tooltip: 'Transfer to another customer',
-                          onPressed: linkedDevices.canEditWorkspace
-                              ? () => _showTransferDialog(
-                                  provider,
-                                  entry,
-                                  linkedDevices,
-                                )
-                              : null,
-                          icon: const Icon(Icons.swap_horiz_rounded, size: 18),
-                        ),
-                        IconButton(
-                          tooltip: 'Delete entry',
-                          onPressed: linkedDevices.canEditWorkspace
-                              ? () => _confirmDeleteEntry(entry)
-                              : null,
-                          icon: const Icon(Icons.delete_outline),
+                          icon: const Icon(Icons.more_vert_rounded),
                         ),
                       ],
                     ),

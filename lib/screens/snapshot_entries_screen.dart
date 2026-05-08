@@ -334,6 +334,28 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     }
   }
 
+  Future<void> _removeEntryFromDailyLog(Entry entry) async {
+    if (entry.id == null || !_linkedDevices.canEditWorkspace) return;
+    
+    try {
+      await _database.updateEntryDailyLogVisibility(
+        entryId: entry.id!,
+        show: false,
+      );
+      await _loadTimeline();
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Entry removed from Daily Logs')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to remove entry: $e')),
+      );
+    }
+  }
+
   Future<List<_SnapshotEntry>> _loadEntriesPaged({
     required String? startDate,
     required String endDate,
@@ -1708,7 +1730,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                   ),
                 ),
               ),
-              if (item.entry.pageNo.isNotEmpty)
+              if (item.entry.pageNo.isNotEmpty) ...[
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -1723,6 +1745,15 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                     style: theme.textTheme.labelMedium,
                   ),
                 ),
+                const SizedBox(width: 8),
+              ],
+              IconButton(
+                tooltip: 'Remove from Daily Logs',
+                icon: const Icon(Icons.remove_circle_outline),
+                color: Theme.of(context).colorScheme.error,
+                onPressed: () => _removeEntryFromDailyLog(item.entry),
+                visualDensity: VisualDensity.compact,
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -1881,7 +1912,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                     DataColumn(label: Text('Debit'), numeric: true),
                     DataColumn(label: Text('Credit'), numeric: true),
                     DataColumn(label: Text('Balance')),
-                    DataColumn(label: Text('Page/Action')),
+                    DataColumn(label: Text('Page No')),
+                    DataColumn(label: Text('Action')),
                   ],
                   rows: _buildTimelineRows(context, compact: false),
                 ),
@@ -2013,6 +2045,15 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         ),
         const DataCell(Text('')),
         DataCell(Text(item.entry.pageNo.isEmpty ? '-' : item.entry.pageNo)),
+        DataCell(
+          IconButton(
+            tooltip: 'Remove from Daily Logs',
+            icon: const Icon(Icons.remove_circle_outline),
+            color: Theme.of(context).colorScheme.error,
+            onPressed: () => _removeEntryFromDailyLog(item.entry),
+            visualDensity: VisualDensity.compact,
+          ),
+        ),
       ],
     );
   }
@@ -2083,30 +2124,26 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           ),
         ),
         DataCell(
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              if (snapshot.dailyLogPageNo.isNotEmpty) ...[
-                Text(
+          snapshot.dailyLogPageNo.isNotEmpty
+              ? Text(
                   'DL Pg ${snapshot.dailyLogPageNo}',
                   style: totalStyle?.copyWith(
                     color: Theme.of(context).colorScheme.tertiary,
                   ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              IconButton(
-                tooltip: 'Delete snapshot',
-                onPressed:
-                    _isLoading ||
-                        _isSavingSnapshot ||
-                        !_linkedDevices.canEditWorkspace
-                    ? null
-                    : () => _deleteSnapshot(snapshot),
-                icon: const Icon(Icons.delete_outline),
-                visualDensity: VisualDensity.compact,
-              ),
-            ],
+                )
+              : const Text('-'),
+        ),
+        DataCell(
+          IconButton(
+            tooltip: 'Delete snapshot',
+            onPressed:
+                _isLoading ||
+                    _isSavingSnapshot ||
+                    !_linkedDevices.canEditWorkspace
+                ? null
+                : () => _deleteSnapshot(snapshot),
+            icon: const Icon(Icons.delete_outline),
+            visualDensity: VisualDensity.compact,
           ),
         ),
       ],
@@ -2150,6 +2187,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           ),
         ),
         const DataCell(Text('')),
+        const DataCell(Text('')),
       ],
     );
   }
@@ -2190,6 +2228,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
             style: rowStyle?.copyWith(color: AppColors.balanceColor(carryForward.finalBalance)),
           ),
         ),
+        const DataCell(Text('')),
         const DataCell(Text('')),
       ],
     );

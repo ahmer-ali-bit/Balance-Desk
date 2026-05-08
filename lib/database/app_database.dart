@@ -669,6 +669,7 @@ class DatabaseHelper {
         'description',
         'debit',
         'credit',
+        'showInDailyLog',
       ],
       where: 'customerId = ?',
       whereArgs: <Object?>[customerId],
@@ -724,6 +725,7 @@ class DatabaseHelper {
         e.description,
         e.debit,
         e.credit,
+        e.showInDailyLog,
         c.name AS customerName
       FROM $entriesTable e
       JOIN $customersTable c ON c.id = e.customerId
@@ -760,6 +762,7 @@ class DatabaseHelper {
         e.description,
         e.debit,
         e.credit,
+        e.showInDailyLog,
         c.name AS customerName
       FROM $entriesTable e
       JOIN $customersTable c ON c.id = e.customerId

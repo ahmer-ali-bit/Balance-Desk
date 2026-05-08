@@ -9,6 +9,7 @@ class Entry {
     required this.debit,
     required this.credit,
     this.dailyLogPageNo = '',
+    this.showInDailyLog = true,
   });
 
   final int? id;
@@ -20,6 +21,7 @@ class Entry {
   final double debit;
   final double credit;
   final String dailyLogPageNo;
+  final bool showInDailyLog;
 
   String get displayDescription =>
       description.trim().isEmpty ? '-' : description.trim();
@@ -35,6 +37,7 @@ class Entry {
       debit: (map['debit'] as num).toDouble(),
       credit: (map['credit'] as num).toDouble(),
       dailyLogPageNo: map['dailyLogPageNo'] as String? ?? '',
+      showInDailyLog: (map['showInDailyLog'] as int? ?? 1) == 1,
     );
   }
 
@@ -49,6 +52,7 @@ class Entry {
       'debit': debit,
       'credit': credit,
       'dailyLogPageNo': dailyLogPageNo,
+      'showInDailyLog': showInDailyLog ? 1 : 0,
     };
   }
 }
