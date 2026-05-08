@@ -8,7 +8,6 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:shop/database/app_database.dart';
 import 'package:shop/providers/customer_provider.dart';
 import 'package:shop/screens/customer_list_screen.dart';
-import 'package:shop/services/linked_devices_controller.dart';
 
 void main() {
   setUp(() async {
@@ -35,13 +34,8 @@ void main() {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
-          ChangeNotifierProvider<LinkedDevicesController>.value(
-            value: LinkedDevicesController.instance,
-          ),
           ChangeNotifierProvider(
-            create: (_) => CustomerProvider(
-              linkedDevices: LinkedDevicesController.instance,
-            )..loadCustomers(),
+            create: (_) => CustomerProvider()..loadCustomers(),
           ),
         ],
         child: const MaterialApp(home: Scaffold(body: CustomerListScreen())),
@@ -55,9 +49,7 @@ void main() {
   });
 
   test('customer provider can add and reload a customer', () async {
-    final provider = CustomerProvider(
-      linkedDevices: LinkedDevicesController.instance,
-    );
+    final provider = CustomerProvider();
 
     await provider.loadCustomers();
     expect(provider.customers, isEmpty);
@@ -76,9 +68,7 @@ void main() {
   });
 
   test('customer provider blocks duplicate customer names', () async {
-    final provider = CustomerProvider(
-      linkedDevices: LinkedDevicesController.instance,
-    );
+    final provider = CustomerProvider();
 
     await provider.loadCustomers();
 

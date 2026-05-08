@@ -8,7 +8,6 @@ import '../models/customer.dart';
 import '../models/entry.dart';
 import '../models/snapshot_opening_balance.dart';
 import '../services/export_service.dart';
-import '../services/linked_devices_controller.dart';
 import '../services/pdf_service.dart';
 import '../utils/app_colors.dart';
 import '../utils/number_format_utils.dart';
@@ -29,8 +28,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
   final AppDatabase _database = AppDatabase.instance;
   final PdfService _pdfService = const PdfService();
   final ExportService _exportService = const ExportService();
-  final LinkedDevicesController _linkedDevices =
-      LinkedDevicesController.instance;
   final ScrollController _tableVerticalController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
@@ -38,7 +35,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
   bool _isLoading = true;
   String? _errorMessage;
   _SummaryData _summaryData = const _SummaryData.empty();
-  int _lastSeenLinkedDataVersion = 0;
   String _searchQuery = '';
   bool _showSummaryTools = false;
   bool _showSummaryTotals = false;
@@ -46,26 +42,15 @@ class _SummaryScreenState extends State<SummaryScreen> {
   @override
   void initState() {
     super.initState();
-    _linkedDevices.addListener(_handleLinkedDevicesChanged);
     _loadSummary();
   }
 
   @override
   void dispose() {
-    _linkedDevices.removeListener(_handleLinkedDevicesChanged);
     _tableVerticalController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
-  }
-
-  void _handleLinkedDevicesChanged() {
-    if (_lastSeenLinkedDataVersion == _linkedDevices.dataVersion) {
-      return;
-    }
-
-    _lastSeenLinkedDataVersion = _linkedDevices.dataVersion;
-    _loadSummary();
   }
 
   Future<void> _loadSummary() async {

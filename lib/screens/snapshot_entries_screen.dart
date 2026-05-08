@@ -8,12 +8,10 @@ import '../models/entry.dart';
 import '../models/snapshot_opening_balance.dart';
 import '../models/summary_snapshot.dart';
 import '../services/export_service.dart';
-import '../services/linked_devices_controller.dart';
 import '../services/pdf_service.dart';
 import '../utils/app_colors.dart';
 import '../utils/number_format_utils.dart';
 import '../utils/platform_helper.dart';
-import '../widgets/linked_read_only_banner.dart';
 
 class SnapshotEntriesScreen extends StatefulWidget {
   const SnapshotEntriesScreen({super.key});
@@ -34,8 +32,6 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   final AppDatabase _database = AppDatabase.instance;
   final PdfService _pdfService = const PdfService();
   final ExportService _exportService = const ExportService();
-  final LinkedDevicesController _linkedDevices =
-      LinkedDevicesController.instance;
   final ScrollController _entryTableVerticalController = ScrollController();
   final TextEditingController _debitOpeningBalanceController =
       TextEditingController();
@@ -48,7 +44,6 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   bool _isLoading = true;
   bool _isSavingSnapshot = false;
   String? _errorMessage;
-  int _lastSeenLinkedDataVersion = 0;
   bool _showDailyLogActions = false;
   bool _showDailyLatestSnapshot = false;
   bool _showDailyOpeningBalance = false;
@@ -59,9 +54,15 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   SummarySnapshot? get _latestSnapshot =>
       _snapshots.isEmpty ? null : _snapshots.last;
   double get _openingDebitBalance =>
-      double.tryParse(_debitOpeningBalanceController.text.trim().replaceAll(',', '')) ?? 0;
+      double.tryParse(
+        _debitOpeningBalanceController.text.trim().replaceAll(',', ''),
+      ) ??
+      0;
   double get _openingCreditBalance =>
-      double.tryParse(_creditOpeningBalanceController.text.trim().replaceAll(',', '')) ?? 0;
+      double.tryParse(
+        _creditOpeningBalanceController.text.trim().replaceAll(',', ''),
+      ) ??
+      0;
   SnapshotOpeningBalance get _effectiveOpeningBalance => SnapshotOpeningBalance(
     debit: _openingDebitBalance,
     credit: _openingCreditBalance,
@@ -97,26 +98,15 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   @override
   void initState() {
     super.initState();
-    _linkedDevices.addListener(_handleLinkedDevicesChanged);
     _loadTimeline();
   }
 
   @override
   void dispose() {
-    _linkedDevices.removeListener(_handleLinkedDevicesChanged);
     _entryTableVerticalController.dispose();
     _debitOpeningBalanceController.dispose();
     _creditOpeningBalanceController.dispose();
     super.dispose();
-  }
-
-  void _handleLinkedDevicesChanged() {
-    if (_lastSeenLinkedDataVersion == _linkedDevices.dataVersion) {
-      return;
-    }
-
-    _lastSeenLinkedDataVersion = _linkedDevices.dataVersion;
-    _loadTimeline();
   }
 
   Future<void> _loadTimeline() async {
@@ -164,7 +154,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           openingBalance != null && openingBalance.credit != 0
           ? _formatAmount(openingBalance.credit)
           : '';
-    } catch (error, stackTrace) {
+    } catch (error) {
       debugPrint('SnapshotEntriesScreen._loadTimeline failed: $error');
       if (!mounted) {
         return;
@@ -177,8 +167,6 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   }
 
   Future<void> _recalculateSnapshots() async {
-    if (!_linkedDevices.canEditWorkspace) return;
-
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -219,12 +207,13 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         previousSavedAt = snapshot.savedAt;
       }
 
-      await _linkedDevices.syncAfterLocalChange(reason: 'snapshot_recalculate');
       await _loadTimeline();
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('All snapshots recalculated successfully.')),
+        const SnackBar(
+          content: Text('All snapshots recalculated successfully.'),
+        ),
       );
     } catch (e, stackTrace) {
       debugPrint('SnapshotEntriesScreen._recalculateSnapshots failed: $e');
@@ -240,13 +229,6 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   }
 
   Future<void> _saveSnapshot() async {
-    if (!_linkedDevices.canEditWorkspace) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_linkedDevices.readOnlyMessage)));
-      return;
-    }
-
     if (_isLoading || _isSavingSnapshot) {
       return;
     }
@@ -359,7 +341,6 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           );
         }
       }
-      await _linkedDevices.syncAfterLocalChange(reason: 'snapshot_save');
       if (!_hasSavedOpeningBalance) {
         _debitOpeningBalanceController.clear();
         _creditOpeningBalanceController.clear();
@@ -397,24 +378,24 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   }
 
   Future<void> _removeEntryFromDailyLog(Entry entry) async {
-    if (entry.id == null || !_linkedDevices.canEditWorkspace) return;
-    
+    if (entry.id == null) return;
+
     try {
       await _database.updateEntryDailyLogVisibility(
         entryId: entry.id!,
         show: false,
       );
       await _loadTimeline();
-      
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Entry removed from Daily Logs')),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to remove entry: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to remove entry: $e')));
     }
   }
 
@@ -516,13 +497,18 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     return 'snapshot_$suffix.$ext';
   }
 
-  List<List<String>> _buildSnapshotExportRows({bool includeOpeningBalance = true}) {
+  List<List<String>> _buildSnapshotExportRows({
+    bool includeOpeningBalance = true,
+  }) {
     final rows = <List<String>>[];
     var entryIndex = 0;
 
     for (final snapshot in _snapshots) {
-      final matchesSearch = _searchQuery.isEmpty || 
-                            snapshot.dailyLogPageNo.toLowerCase().contains(_searchQuery.toLowerCase());
+      final matchesSearch =
+          _searchQuery.isEmpty ||
+          snapshot.dailyLogPageNo.toLowerCase().contains(
+            _searchQuery.toLowerCase(),
+          );
       final snapshotEntries = <List<String>>[];
 
       while (entryIndex < _entries.length &&
@@ -541,7 +527,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           '',
           [
             if (entry.entry.pageNo.isNotEmpty) entry.entry.pageNo,
-            if (entry.entry.dailyLogPageNo.isNotEmpty) 'DL: ${entry.entry.dailyLogPageNo}',
+            if (entry.entry.dailyLogPageNo.isNotEmpty)
+              'DL: ${entry.entry.dailyLogPageNo}',
           ].join(' | '),
         ]);
         entryIndex++;
@@ -556,7 +543,9 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           _formatAmount(snapshot.overallDebit),
           _formatAmount(snapshot.overallCredit),
           _formatBalance(snapshot.finalBalance),
-          snapshot.dailyLogPageNo.isNotEmpty ? 'DL Pg ${snapshot.dailyLogPageNo}' : '',
+          snapshot.dailyLogPageNo.isNotEmpty
+              ? 'DL Pg ${snapshot.dailyLogPageNo}'
+              : '',
         ]);
 
         final carryForward = _balanceToOpening(snapshot.finalBalance);
@@ -599,7 +588,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           '',
           [
             if (entry.entry.pageNo.isNotEmpty) entry.entry.pageNo,
-            if (entry.entry.dailyLogPageNo.isNotEmpty) 'DL: ${entry.entry.dailyLogPageNo}',
+            if (entry.entry.dailyLogPageNo.isNotEmpty)
+              'DL: ${entry.entry.dailyLogPageNo}',
           ].join(' | '),
         ]);
         entryIndex++;
@@ -614,15 +604,14 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   List<({String label, String value})> _buildSnapshotPdfSummaryItems() {
     final items = <({String label, String value})>[];
 
-    items.add((
-      label: 'Total Entries',
-      value: '${_entries.length}',
-    ));
+    items.add((label: 'Total Entries', value: '${_entries.length}'));
 
     final latestSnapshot = _latestSnapshot;
     items.add((
       label: 'Last Saved Snapshot Balance',
-      value: latestSnapshot != null ? _formatBalance(latestSnapshot.finalBalance) : '-',
+      value: latestSnapshot != null
+          ? _formatBalance(latestSnapshot.finalBalance)
+          : '-',
     ));
 
     return items;
@@ -837,10 +826,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                         headerActions,
                     ] else
                       headerActions,
-                    if (_linkedDevices.isReadOnlyLinkedDevice) ...<Widget>[
-                      const SizedBox(height: 12),
-                      const LinkedReadOnlyBanner(),
-                    ],
+
                     if (isCompact) ...<Widget>[
                       const SizedBox(height: 10),
                     ] else ...<Widget>[
@@ -898,7 +884,10 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
       ),
       onChanged: (String value) {
         setState(() {
@@ -960,10 +949,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         ),
         if (_snapshots.isNotEmpty)
           OutlinedButton.icon(
-            onPressed:
-                _isLoading || _isSavingSnapshot || !_linkedDevices.canEditWorkspace
-                    ? null
-                    : _recalculateSnapshots,
+            onPressed: _isLoading || _isSavingSnapshot ? null : _recalculateSnapshots,
             icon: const Icon(Icons.calculate_outlined),
             label: const Text('Recalculate'),
           ),
@@ -974,21 +960,13 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         ),
         if (_snapshots.isNotEmpty)
           TextButton.icon(
-            onPressed:
-                _isLoading ||
-                    _isSavingSnapshot ||
-                    !_linkedDevices.canEditWorkspace
-                ? null
-                : _clearAllSnapshots,
+            onPressed: _isLoading || _isSavingSnapshot ? null : _clearAllSnapshots,
             icon: const Icon(Icons.delete_sweep_outlined),
             label: Text(isDesktop ? 'Clear Snapshots' : 'Clear'),
           ),
         FilledButton.icon(
           onPressed:
-              _isLoading ||
-                  _isSavingSnapshot ||
-                  !_hasCurrentPeriodEntries ||
-                  !_linkedDevices.canEditWorkspace
+              _isLoading || _isSavingSnapshot || !_hasCurrentPeriodEntries
               ? null
               : _saveSnapshot,
           icon: _isSavingSnapshot
@@ -1188,11 +1166,14 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                   label: 'Balance',
                   value: _formatBalance(snapshot.finalBalance),
                   icon: Icons.account_balance_wallet_outlined,
-                  accentColor: AppColors.balanceColor(snapshot.finalBalance) == AppColors.debit
+                  accentColor:
+                      AppColors.balanceColor(snapshot.finalBalance) ==
+                          AppColors.debit
                       ? AppColors.debit
-                      : (AppColors.balanceColor(snapshot.finalBalance) == AppColors.credit
-                          ? AppColors.credit
-                          : Colors.grey.shade600),
+                      : (AppColors.balanceColor(snapshot.finalBalance) ==
+                                AppColors.credit
+                            ? AppColors.credit
+                            : Colors.grey.shade600),
                 ),
               ),
             ],
@@ -1239,11 +1220,17 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
               ]
             : null,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: isMetric ? Colors.transparent : colorScheme.outlineVariant),
+        border: Border.all(
+          color: isMetric ? Colors.transparent : colorScheme.outlineVariant,
+        ),
       ),
       child: Row(
         children: <Widget>[
-          Icon(icon, size: 18, color: isMetric ? Colors.white : colorScheme.primary),
+          Icon(
+            icon,
+            size: 18,
+            color: isMetric ? Colors.white : colorScheme.primary,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -1255,7 +1242,9 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.labelMedium?.copyWith(
-                    color: isMetric ? Colors.white70 : colorScheme.onSurfaceVariant,
+                    color: isMetric
+                        ? Colors.white70
+                        : colorScheme.onSurfaceVariant,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -1270,7 +1259,9 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                         value,
                         maxLines: 1,
                         style: theme.textTheme.titleSmall?.copyWith(
-                          color: isMetric ? Colors.white : colorScheme.onSurface,
+                          color: isMetric
+                              ? Colors.white
+                              : colorScheme.onSurface,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -1359,7 +1350,6 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   }
 
   Widget _buildOpeningBalanceSection(BuildContext context) {
-    final openingLocked = !_linkedDevices.canEditWorkspace;
 
     return Card(
       child: Padding(
@@ -1370,13 +1360,13 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
               controller: _debitOpeningBalanceController,
               label: 'Debit Opening Balance',
               icon: Icons.arrow_downward_rounded,
-              readOnly: openingLocked,
+              readOnly: false,
             );
             final creditField = _buildOpeningBalanceField(
               controller: _creditOpeningBalanceController,
               label: 'Credit Opening Balance',
               icon: Icons.arrow_upward_rounded,
-              readOnly: openingLocked,
+              readOnly: false,
             );
 
             if (constraints.maxWidth < 560) {
@@ -1565,7 +1555,11 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
             children: <Widget>[
               Row(
                 children: <Widget>[
-                  Icon(isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down),
+                  Icon(
+                    isExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -1575,7 +1569,10 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                   ),
                   if (snapshot.dailyLogPageNo.isNotEmpty) ...[
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: Theme.of(context).colorScheme.tertiaryContainer,
                         borderRadius: BorderRadius.circular(4),
@@ -1585,13 +1582,13 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.onTertiaryContainer,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onTertiaryContainer,
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
-                  ],
-                  if (_linkedDevices.canEditWorkspace)
                     IconButton(
                       tooltip: 'Delete snapshot',
                       onPressed: _isLoading || _isSavingSnapshot
@@ -1599,6 +1596,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                           : () => _deleteSnapshot(snapshot),
                       icon: const Icon(Icons.delete_outline),
                     ),
+                  ],
                 ],
               ),
               Text(
@@ -1727,16 +1725,15 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         entryIndex--;
       }
 
-      final matchesSearch = _searchQuery.isEmpty || 
-                            snapshot.dailyLogPageNo.toLowerCase().contains(_searchQuery.toLowerCase());
+      final matchesSearch =
+          _searchQuery.isEmpty ||
+          snapshot.dailyLogPageNo.toLowerCase().contains(
+            _searchQuery.toLowerCase(),
+          );
 
       if (matchesSearch) {
         items.add(
-          _buildCompactSnapshotCard(
-            context,
-            snapshot,
-            isExpanded: isExpanded,
-          ),
+          _buildCompactSnapshotCard(context, snapshot, isExpanded: isExpanded),
         );
         if (isExpanded) {
           items.addAll(snapshotEntries);
@@ -1755,7 +1752,9 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
             );
           }
         } else if (_hasOpeningBalance) {
-          items.add(_buildCompactBalanceCard(context, _effectiveOpeningBalance));
+          items.add(
+            _buildCompactBalanceCard(context, _effectiveOpeningBalance),
+          );
         }
       }
     }
@@ -2043,8 +2042,11 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         entryIndex--;
       }
 
-      final matchesSearch = _searchQuery.isEmpty || 
-                            snapshot.dailyLogPageNo.toLowerCase().contains(_searchQuery.toLowerCase());
+      final matchesSearch =
+          _searchQuery.isEmpty ||
+          snapshot.dailyLogPageNo.toLowerCase().contains(
+            _searchQuery.toLowerCase(),
+          );
 
       if (matchesSearch) {
         rows.add(
@@ -2105,13 +2107,19 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         DataCell(
           Text(
             _formatEntryAmount(item.entry.debit),
-            style: const TextStyle(color: AppColors.debit, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              color: AppColors.debit,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
         DataCell(
           Text(
             _formatEntryAmount(item.entry.credit),
-            style: const TextStyle(color: AppColors.credit, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              color: AppColors.credit,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
         const DataCell(Text('')),
@@ -2160,7 +2168,12 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
               },
               child: Row(
                 children: <Widget>[
-                  Icon(isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 18),
+                  Icon(
+                    isExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    size: 18,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -2191,7 +2204,9 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         DataCell(
           Text(
             _formatBalance(snapshot.finalBalance),
-            style: totalStyle?.copyWith(color: AppColors.balanceColor(snapshot.finalBalance)),
+            style: totalStyle?.copyWith(
+              color: AppColors.balanceColor(snapshot.finalBalance),
+            ),
           ),
         ),
         DataCell(
@@ -2207,10 +2222,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         DataCell(
           IconButton(
             tooltip: 'Delete snapshot',
-            onPressed:
-                _isLoading ||
-                    _isSavingSnapshot ||
-                    !_linkedDevices.canEditWorkspace
+            onPressed: _isLoading || _isSavingSnapshot
                 ? null
                 : () => _deleteSnapshot(snapshot),
             icon: const Icon(Icons.delete_outline),
@@ -2254,7 +2266,9 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         DataCell(
           Text(
             _formatBalance(openingBalance.finalBalance),
-            style: rowStyle?.copyWith(color: AppColors.balanceColor(openingBalance.finalBalance)),
+            style: rowStyle?.copyWith(
+              color: AppColors.balanceColor(openingBalance.finalBalance),
+            ),
           ),
         ),
         const DataCell(Text('')),
@@ -2296,7 +2310,9 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         DataCell(
           Text(
             _formatBalance(carryForward.finalBalance),
-            style: rowStyle?.copyWith(color: AppColors.balanceColor(carryForward.finalBalance)),
+            style: rowStyle?.copyWith(
+              color: AppColors.balanceColor(carryForward.finalBalance),
+            ),
           ),
         ),
         const DataCell(Text('')),
@@ -2306,12 +2322,6 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   }
 
   Future<void> _deleteSnapshot(SummarySnapshot snapshot) async {
-    if (!_linkedDevices.canEditWorkspace) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_linkedDevices.readOnlyMessage)));
-      return;
-    }
 
     final snapshotId = snapshot.id;
     if (snapshotId == null) {
@@ -2347,7 +2357,6 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     }
 
     await _database.deleteSummarySnapshot(snapshotId);
-    await _linkedDevices.syncAfterLocalChange(reason: 'snapshot_delete');
     await _loadTimeline();
 
     if (!mounted) {
@@ -2360,12 +2369,6 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   }
 
   Future<void> _clearAllSnapshots() async {
-    if (!_linkedDevices.canEditWorkspace) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_linkedDevices.readOnlyMessage)));
-      return;
-    }
 
     if (_snapshots.isEmpty) {
       return;
@@ -2400,7 +2403,6 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     }
 
     await _database.clearSummarySnapshots();
-    await _linkedDevices.syncAfterLocalChange(reason: 'snapshot_clear_all');
     await _loadTimeline();
 
     if (!mounted) {

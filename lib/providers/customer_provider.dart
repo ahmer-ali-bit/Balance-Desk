@@ -2,21 +2,13 @@ import 'package:flutter/foundation.dart';
 
 import '../database/app_database.dart';
 import '../models/customer.dart';
-import '../services/linked_devices_controller.dart';
-
 class CustomerProvider extends ChangeNotifier {
   CustomerProvider({
     AppDatabase? database,
-    LinkedDevicesController? linkedDevices,
-  }) : _database = database ?? AppDatabase.instance,
-       _linkedDevices = linkedDevices ?? LinkedDevicesController.instance {
-    _linkedDevices.addListener(_handleLinkedDevicesChanged);
-  }
+  }) : _database = database ?? AppDatabase.instance;
 
   final AppDatabase _database;
-  final LinkedDevicesController _linkedDevices;
   bool _isDisposed = false;
-  int _lastSeenLinkedDataVersion = 0;
 
   List<Customer> _customers = <Customer>[];
   bool _isLoading = false;
@@ -72,11 +64,6 @@ class CustomerProvider extends ChangeNotifier {
     String address = '',
     String phone = '',
   }) async {
-    if (!_linkedDevices.canEditWorkspace) {
-      _errorMessage = _linkedDevices.readOnlyMessage;
-      _notifyListeners();
-      return null;
-    }
 
     final trimmedName = name.trim();
     if (trimmedName.isEmpty) {
@@ -99,7 +86,6 @@ class CustomerProvider extends ChangeNotifier {
       );
       await _refreshCustomers();
       _errorMessage = null;
-      await _linkedDevices.syncAfterLocalChange(reason: 'customer_add');
       _notifyListeners();
       return _customers.firstWhere(
         (Customer customer) => customer.id == id,
@@ -128,11 +114,6 @@ class CustomerProvider extends ChangeNotifier {
   }
 
   Future<void> deleteCustomer(Customer customer) async {
-    if (!_linkedDevices.canEditWorkspace) {
-      _errorMessage = _linkedDevices.readOnlyMessage;
-      _notifyListeners();
-      return;
-    }
 
     if (customer.id == null) {
       return;
@@ -143,7 +124,6 @@ class CustomerProvider extends ChangeNotifier {
       await _refreshCustomers();
       await _database.resetCustomerIdSequence();
       _errorMessage = null;
-      await _linkedDevices.syncAfterLocalChange(reason: 'customer_delete');
       _notifyListeners();
     } catch (error, stackTrace) {
       debugPrint('CustomerProvider.deleteCustomer failed: $error');
@@ -157,11 +137,6 @@ class CustomerProvider extends ChangeNotifier {
     required int customerId,
     required String name,
   }) async {
-    if (!_linkedDevices.canEditWorkspace) {
-      _errorMessage = _linkedDevices.readOnlyMessage;
-      _notifyListeners();
-      return false;
-    }
 
     final trimmedName = name.trim();
     if (trimmedName.isEmpty) {
@@ -183,7 +158,6 @@ class CustomerProvider extends ChangeNotifier {
       await _database.updateCustomer(id: customerId, name: trimmedName);
       await _refreshCustomers();
       _errorMessage = null;
-      await _linkedDevices.syncAfterLocalChange(reason: 'customer_rename');
       _notifyListeners();
       return true;
     } catch (error, stackTrace) {
@@ -247,18 +221,8 @@ class CustomerProvider extends ChangeNotifier {
     }
   }
 
-  void _handleLinkedDevicesChanged() {
-    if (_lastSeenLinkedDataVersion == _linkedDevices.dataVersion) {
-      return;
-    }
-
-    _lastSeenLinkedDataVersion = _linkedDevices.dataVersion;
-    loadCustomers();
-  }
-
   @override
   void dispose() {
-    _linkedDevices.removeListener(_handleLinkedDevicesChanged);
     _isDisposed = true;
     super.dispose();
   }

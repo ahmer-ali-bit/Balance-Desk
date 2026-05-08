@@ -1,21 +1,13 @@
 import 'package:flutter/foundation.dart';
 
 import '../database/app_database.dart';
-import '../services/linked_devices_controller.dart';
-
 class LedgerYearProvider extends ChangeNotifier {
   LedgerYearProvider({
     AppDatabase? database,
-    LinkedDevicesController? linkedDevices,
-  }) : _database = database ?? AppDatabase.instance,
-       _linkedDevices = linkedDevices ?? LinkedDevicesController.instance {
-    _linkedDevices.addListener(_handleLinkedDevicesChanged);
-  }
+  }) : _database = database ?? AppDatabase.instance;
 
   final AppDatabase _database;
-  final LinkedDevicesController _linkedDevices;
   bool _isDisposed = false;
-  int _lastSeenLinkedDataVersion = 0;
 
   List<int> _years = <int>[];
   int _activeYear = DateTime.now().year;
@@ -48,11 +40,7 @@ class LedgerYearProvider extends ChangeNotifier {
   }
 
   Future<bool> addAndSelectYear(int year) async {
-    if (!_linkedDevices.canEditWorkspace) {
-      _errorMessage = _linkedDevices.readOnlyMessage;
-      _notifyListeners();
-      return false;
-    }
+
 
     if (!_isValidYear(year)) {
       _errorMessage = 'Enter a valid year.';
@@ -66,7 +54,6 @@ class LedgerYearProvider extends ChangeNotifier {
       await _database.addLedgerYear(year);
       await _database.setActiveYear(year);
       await loadYears();
-      await _linkedDevices.syncAfterLocalChange(reason: 'year_add');
       return true;
     } catch (_) {
       _errorMessage = 'Unable to add year.';
@@ -76,11 +63,7 @@ class LedgerYearProvider extends ChangeNotifier {
   }
 
   Future<bool> selectYear(int year) async {
-    if (!_linkedDevices.canEditWorkspace) {
-      _errorMessage = _linkedDevices.readOnlyMessage;
-      _notifyListeners();
-      return false;
-    }
+
 
     if (!_isValidYear(year)) {
       _errorMessage = 'Enter a valid year.';
@@ -97,7 +80,6 @@ class LedgerYearProvider extends ChangeNotifier {
     try {
       await _database.setActiveYear(year);
       await loadYears();
-      await _linkedDevices.syncAfterLocalChange(reason: 'year_select');
       return true;
     } catch (_) {
       _errorMessage = 'Unable to open year.';
@@ -107,11 +89,7 @@ class LedgerYearProvider extends ChangeNotifier {
   }
 
   Future<bool> deleteYear(int year) async {
-    if (!_linkedDevices.canEditWorkspace) {
-      _errorMessage = _linkedDevices.readOnlyMessage;
-      _notifyListeners();
-      return false;
-    }
+
 
     if (!_isValidYear(year)) {
       _errorMessage = 'Enter a valid year.';
@@ -130,7 +108,6 @@ class LedgerYearProvider extends ChangeNotifier {
     try {
       await _database.deleteLedgerYear(year);
       await loadYears();
-      await _linkedDevices.syncAfterLocalChange(reason: 'year_delete');
       return true;
     } catch (_) {
       _errorMessage = 'Unable to delete year.';
@@ -158,18 +135,8 @@ class LedgerYearProvider extends ChangeNotifier {
     }
   }
 
-  void _handleLinkedDevicesChanged() {
-    if (_lastSeenLinkedDataVersion == _linkedDevices.dataVersion) {
-      return;
-    }
-
-    _lastSeenLinkedDataVersion = _linkedDevices.dataVersion;
-    loadYears();
-  }
-
   @override
   void dispose() {
-    _linkedDevices.removeListener(_handleLinkedDevicesChanged);
     _isDisposed = true;
     super.dispose();
   }

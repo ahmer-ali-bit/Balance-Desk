@@ -4,7 +4,6 @@ import '../database/app_database.dart';
 import '../models/customer.dart';
 import '../models/entry.dart';
 import '../models/snapshot_opening_balance.dart';
-import '../services/linked_devices_controller.dart';
 import '../utils/number_format_utils.dart' as number_format_utils;
 
 enum LedgerDateFilter { all, today, thisWeek, thisMonth, customRange }
@@ -15,24 +14,18 @@ class LedgerProvider extends ChangeNotifier {
   LedgerProvider({
     required Customer customer,
     AppDatabase? database,
-    LinkedDevicesController? linkedDevices,
   }) : _customer = customer,
        _customerName = customer.name,
        _customerAddress = customer.address,
        _customerPhone = customer.phone,
-       _database = database ?? AppDatabase.instance,
-       _linkedDevices = linkedDevices ?? LinkedDevicesController.instance {
-    _linkedDevices.addListener(_handleLinkedDevicesChanged);
-  }
+       _database = database ?? AppDatabase.instance;
 
   final Customer _customer;
   String _customerName;
   String _customerAddress;
   String _customerPhone;
   final AppDatabase _database;
-  final LinkedDevicesController _linkedDevices;
   bool _isDisposed = false;
-  int _lastSeenLinkedDataVersion = 0;
 
   List<Entry> _entries = <Entry>[];
   List<Entry> _visibleEntries = <Entry>[];
@@ -143,11 +136,6 @@ class LedgerProvider extends ChangeNotifier {
     required double debit,
     required double credit,
   }) async {
-    if (!_linkedDevices.canEditWorkspace) {
-      _errorMessage = _linkedDevices.readOnlyMessage;
-      _notifyListeners();
-      return false;
-    }
 
     if (_customer.id == null) {
       _errorMessage = 'Customer record is invalid.';
@@ -178,9 +166,6 @@ class LedgerProvider extends ChangeNotifier {
       _rebuildVisibleEntries();
       _errorMessage = null;
       _setLoading(false);
-      await _linkedDevices.syncAfterLocalChange(
-        reason: 'ledger_opening_balance',
-      );
       return true;
     } catch (error, stackTrace) {
       debugPrint('LedgerProvider.setOpeningBalance failed: $error');
@@ -198,11 +183,6 @@ class LedgerProvider extends ChangeNotifier {
     required double debit,
     required double credit,
   }) async {
-    if (!_linkedDevices.canEditWorkspace) {
-      _errorMessage = _linkedDevices.readOnlyMessage;
-      _notifyListeners();
-      return false;
-    }
 
     if (_customer.id == null) {
       _errorMessage = 'Customer record is invalid.';
@@ -235,7 +215,6 @@ class LedgerProvider extends ChangeNotifier {
         credit: credit,
       );
       await loadEntries();
-      await _linkedDevices.syncAfterLocalChange(reason: 'entry_add');
       return true;
     } catch (error, stackTrace) {
       debugPrint('LedgerProvider.addEntry failed: $error');
@@ -254,11 +233,6 @@ class LedgerProvider extends ChangeNotifier {
     required double debit,
     required double credit,
   }) async {
-    if (!_linkedDevices.canEditWorkspace) {
-      _errorMessage = _linkedDevices.readOnlyMessage;
-      _notifyListeners();
-      return false;
-    }
 
     if (entry.id == null) {
       _errorMessage = 'Entry record is invalid.';
@@ -290,7 +264,6 @@ class LedgerProvider extends ChangeNotifier {
         credit: credit,
       );
       await loadEntries();
-      await _linkedDevices.syncAfterLocalChange(reason: 'entry_update');
       return true;
     } catch (error, stackTrace) {
       debugPrint('LedgerProvider.updateEntry failed: $error');
@@ -305,11 +278,6 @@ class LedgerProvider extends ChangeNotifier {
     required Entry entry,
     required int newCustomerId,
   }) async {
-    if (!_linkedDevices.canEditWorkspace) {
-      _errorMessage = _linkedDevices.readOnlyMessage;
-      _notifyListeners();
-      return false;
-    }
 
     if (entry.id == null) {
       _errorMessage = 'Entry record is invalid.';
@@ -325,7 +293,6 @@ class LedgerProvider extends ChangeNotifier {
         newCustomerId: newCustomerId,
       );
       await loadEntries();
-      await _linkedDevices.syncAfterLocalChange(reason: 'entry_transfer');
       return true;
     } catch (error, stackTrace) {
       debugPrint('LedgerProvider.transferEntry failed: $error');
@@ -337,11 +304,6 @@ class LedgerProvider extends ChangeNotifier {
   }
 
   Future<bool> deleteEntry(Entry entry) async {
-    if (!_linkedDevices.canEditWorkspace) {
-      _errorMessage = _linkedDevices.readOnlyMessage;
-      _notifyListeners();
-      return false;
-    }
 
     if (entry.id == null) {
       _errorMessage = 'Entry record is invalid.';
@@ -354,7 +316,6 @@ class LedgerProvider extends ChangeNotifier {
     try {
       await _database.deleteEntry(entry.id!);
       await loadEntries();
-      await _linkedDevices.syncAfterLocalChange(reason: 'entry_delete');
       return true;
     } catch (error, stackTrace) {
       debugPrint('LedgerProvider.deleteEntry failed: $error');
@@ -370,11 +331,6 @@ class LedgerProvider extends ChangeNotifier {
     String address = '',
     String phone = '',
   }) async {
-    if (!_linkedDevices.canEditWorkspace) {
-      _errorMessage = _linkedDevices.readOnlyMessage;
-      _notifyListeners();
-      return false;
-    }
 
     if (_customer.id == null) {
       _errorMessage = 'Customer record is invalid.';
@@ -412,9 +368,6 @@ class LedgerProvider extends ChangeNotifier {
       _customerPhone = phone.trim();
       _errorMessage = null;
       _setLoading(false);
-      await _linkedDevices.syncAfterLocalChange(
-        reason: 'ledger_customer_update',
-      );
       return true;
     } catch (_) {
       _errorMessage = 'Unable to update customer details.';
@@ -527,18 +480,8 @@ class LedgerProvider extends ChangeNotifier {
     }
   }
 
-  void _handleLinkedDevicesChanged() {
-    if (_lastSeenLinkedDataVersion == _linkedDevices.dataVersion) {
-      return;
-    }
-
-    _lastSeenLinkedDataVersion = _linkedDevices.dataVersion;
-    loadEntries();
-  }
-
   @override
   void dispose() {
-    _linkedDevices.removeListener(_handleLinkedDevicesChanged);
     _isDisposed = true;
     super.dispose();
   }

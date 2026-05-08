@@ -4,11 +4,9 @@ import 'package:provider/provider.dart';
 
 import '../models/customer.dart';
 import '../providers/customer_provider.dart';
-import '../services/linked_devices_controller.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/customer_search_field.dart';
-import '../widgets/linked_read_only_banner.dart';
 import '../widgets/scale_down_width.dart';
 import 'ledger_screen.dart';
 
@@ -98,15 +96,11 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
   }
 
   Future<void> _openLedger(Customer customer) async {
-    final linkedDevices = context.read<LinkedDevicesController>();
     final customerProvider = context.read<CustomerProvider>();
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => MultiProvider(
           providers: [
-            ChangeNotifierProvider<LinkedDevicesController>.value(
-              value: linkedDevices,
-            ),
             ChangeNotifierProvider<CustomerProvider>.value(
               value: customerProvider,
             ),
@@ -161,9 +155,6 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     return Consumer<CustomerProvider>(
       builder: (BuildContext context, CustomerProvider provider, _) {
         final customers = provider.filteredCustomers;
-        final linkedDevices =
-            context.watch<LinkedDevicesController?>() ??
-            LinkedDevicesController.instance;
 
         return Shortcuts(
           shortcuts: <LogicalKeySet, Intent>{
@@ -188,11 +179,8 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
               ),
               _CustomerIntent: CallbackAction<_CustomerIntent>(
                 onInvoke: (_CustomerIntent intent) {
-                  final linkedDevices = context.read<LinkedDevicesController>();
                   if (intent.action == _CustomerShortcut.add) {
-                    if (linkedDevices.canEditWorkspace) {
                       _showAddCustomerDialog();
-                    }
                   } else if (intent.action == _CustomerShortcut.refresh) {
                     if (!provider.isLoading) {
                       provider.loadCustomers();
@@ -224,7 +212,6 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                     context: context,
                     provider: provider,
                     customers: customers,
-                    linkedDevices: linkedDevices,
                     compactCards: !isDesktop && isCompact,
                     embedInParentScroll: !isDesktop && isCompact,
                   );
@@ -238,10 +225,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          if (linkedDevices.isReadOnlyLinkedDevice) ...<Widget>[
-                            const LinkedReadOnlyBanner(),
-                            const SizedBox(height: 12),
-                          ],
+
                           _buildCustomerHero(
                             context,
                             totalCount: provider.customers.length,
@@ -252,7 +236,6 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                           _buildCustomerToolbar(
                             context: context,
                             provider: provider,
-                            linkedDevices: linkedDevices,
                             isCompact: true,
                           ),
                           const SizedBox(height: 12),
@@ -267,10 +250,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        if (linkedDevices.isReadOnlyLinkedDevice) ...<Widget>[
-                          const LinkedReadOnlyBanner(),
-                          const SizedBox(height: 12),
-                        ],
+
                         if (!isDesktop) ...<Widget>[
                           _buildCustomerHero(
                             context,
@@ -283,7 +263,6 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                         _buildCustomerToolbar(
                           context: context,
                           provider: provider,
-                          linkedDevices: linkedDevices,
                           isCompact: isDesktop ? false : isCompact,
                         ),
                         const SizedBox(height: 12),
@@ -364,7 +343,6 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
   Widget _buildCustomerToolbar({
     required BuildContext context,
     required CustomerProvider provider,
-    required LinkedDevicesController linkedDevices,
     required bool isCompact,
   }) {
     final buttons = Wrap(
@@ -377,9 +355,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
           label: const Text('Refresh'),
         ),
         FilledButton.icon(
-          onPressed: linkedDevices.canEditWorkspace
-              ? _showAddCustomerDialog
-              : null,
+          onPressed: _showAddCustomerDialog,
           icon: const Icon(Icons.person_add_alt_1_rounded),
           label: const Text('Add Customer'),
         ),
@@ -421,7 +397,6 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
   Widget? _buildCustomerState({
     required CustomerProvider provider,
     required List<Customer> customers,
-    required LinkedDevicesController linkedDevices,
   }) {
     if (provider.isLoading && provider.customers.isEmpty) {
       return const Center(child: CircularProgressIndicator());
@@ -431,17 +406,9 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       return AppEmptyState(
         icon: Icons.people_outline,
         title: 'No customers yet',
-        message: linkedDevices.canEditWorkspace
-            ? 'Add your first customer to start managing ledgers.'
-            : 'This linked device can view customers but cannot create them.',
-        actionLabel: linkedDevices.canEditWorkspace
-            ? 'Add Customer'
-            : 'Refresh',
-        onAction: linkedDevices.canEditWorkspace
-            ? _showAddCustomerDialog
-            : () {
-                provider.loadCustomers();
-              },
+        message: 'Add your first customer to start managing ledgers.',
+        actionLabel: 'Add Customer',
+        onAction: _showAddCustomerDialog,
       );
     }
 
@@ -465,14 +432,12 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     required BuildContext context,
     required CustomerProvider provider,
     required List<Customer> customers,
-    required LinkedDevicesController linkedDevices,
     required bool compactCards,
     required bool embedInParentScroll,
   }) {
     final state = _buildCustomerState(
       provider: provider,
       customers: customers,
-      linkedDevices: linkedDevices,
     );
     if (state != null) {
       return state;
@@ -482,7 +447,6 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       return _buildCustomerCardList(
         context: context,
         customers: customers,
-        linkedDevices: linkedDevices,
         embedInParentScroll: embedInParentScroll,
       );
     }
@@ -590,9 +554,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                             DataCell(
                               IconButton(
                                 tooltip: 'Delete customer',
-                                onPressed: linkedDevices.canEditWorkspace
-                                    ? () => _confirmDelete(customer)
-                                    : null,
+                                onPressed: () => _confirmDelete(customer),
                                 icon: const Icon(Icons.delete_outline),
                               ),
                             ),
@@ -613,7 +575,6 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
   Widget _buildCustomerCardList({
     required BuildContext context,
     required List<Customer> customers,
-    required LinkedDevicesController linkedDevices,
     required bool embedInParentScroll,
   }) {
     final theme = Theme.of(context);
@@ -689,9 +650,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                   ),
                   IconButton(
                     tooltip: 'Delete customer',
-                    onPressed: linkedDevices.canEditWorkspace
-                        ? () => _confirmDelete(customer)
-                        : null,
+                    onPressed: () => _confirmDelete(customer),
                     icon: const Icon(Icons.delete_outline_rounded),
                   ),
                 ],

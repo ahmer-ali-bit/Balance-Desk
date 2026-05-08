@@ -12,7 +12,6 @@ import '../models/snapshot_opening_balance.dart';
 import '../providers/customer_provider.dart';
 import '../providers/ledger_provider.dart';
 import '../services/export_service.dart';
-import '../services/linked_devices_controller.dart';
 import '../services/pdf_service.dart';
 import '../utils/app_colors.dart';
 import '../utils/number_format_utils.dart';
@@ -20,7 +19,6 @@ import '../utils/platform_helper.dart';
 import '../widgets/amount_input_field.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/decimal_text_input_formatter.dart';
-import '../widgets/linked_read_only_banner.dart';
 import '../widgets/scale_down_width.dart';
 
 enum _ExportChoice { pdf, excel }
@@ -51,7 +49,6 @@ class LedgerScreen extends StatelessWidget {
     return ChangeNotifierProvider<LedgerProvider>(
       create: (_) => LedgerProvider(
         customer: customer,
-        linkedDevices: LinkedDevicesController.instance,
       )..loadEntries(),
       child: _LedgerView(customer: customer),
     );
@@ -221,8 +218,6 @@ class _LedgerViewState extends State<_LedgerView> {
   }
 
   void _showEntryMenu(BuildContext context, LedgerProvider provider, Entry entry) {
-    final linkedDevices = context.read<LinkedDevicesController>();
-    if (!linkedDevices.canEditWorkspace) return;
 
     showDialog<void>(
       context: context,
@@ -282,7 +277,7 @@ class _LedgerViewState extends State<_LedgerView> {
                   title: const Text('Transfer to another customer', style: TextStyle(fontWeight: FontWeight.w600)),
                   onTap: () {
                     Navigator.pop(context);
-                    _showTransferDialog(provider, entry, linkedDevices);
+                    _showTransferDialog(provider, entry);
                   },
                 ),
                 if (!entry.showInDailyLog)
@@ -823,7 +818,6 @@ class _LedgerViewState extends State<_LedgerView> {
   Future<void> _handleAppBarAction(
     _LedgerAppBarAction action, {
     required LedgerProvider provider,
-    required LinkedDevicesController linkedDevices,
   }) async {
     switch (action) {
       case _LedgerAppBarAction.export:
@@ -833,9 +827,7 @@ class _LedgerViewState extends State<_LedgerView> {
         await _printPdf();
         break;
       case _LedgerAppBarAction.editCustomer:
-        if (linkedDevices.canEditWorkspace) {
           await _showEditCustomerDialog(provider);
-        }
         break;
     }
   }
@@ -843,7 +835,6 @@ class _LedgerViewState extends State<_LedgerView> {
   List<Widget> _buildAppBarActions({
     required BuildContext context,
     required LedgerProvider provider,
-    required LinkedDevicesController linkedDevices,
     required bool isCompact,
   }) {
     final hasEntries = provider.entries.isNotEmpty;
@@ -861,7 +852,6 @@ class _LedgerViewState extends State<_LedgerView> {
               _handleAppBarAction(
                 action,
                 provider: provider,
-                linkedDevices: linkedDevices,
               ),
             );
           },
@@ -885,7 +875,6 @@ class _LedgerViewState extends State<_LedgerView> {
                     label: 'Print',
                   ),
                 ),
-                if (linkedDevices.canEditWorkspace)
                   PopupMenuItem<_LedgerAppBarAction>(
                     value: _LedgerAppBarAction.editCustomer,
                     child: _buildAppBarMenuItem(
@@ -932,9 +921,7 @@ class _LedgerViewState extends State<_LedgerView> {
                 ),
                 const SizedBox(width: 10),
                 FilledButton.icon(
-                  onPressed: linkedDevices.canEditWorkspace
-                      ? _showAddEntryDialog
-                      : null,
+                  onPressed: _showAddEntryDialog,
                   icon: const Icon(Icons.add_rounded),
                   label: const Text('Add Entry'),
                 ),
@@ -1159,21 +1146,16 @@ class _LedgerViewState extends State<_LedgerView> {
   Widget _buildOpeningBalanceSection({
     required BuildContext context,
     required LedgerProvider provider,
-    required LinkedDevicesController linkedDevices,
     bool compactForDesktop = false,
   }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final readOnly = !linkedDevices.canEditWorkspace;
+    final readOnly = false;
     final hasInvalidAmount =
         _parseOpeningBalanceValue(_openingDebitController.text) == null ||
         _parseOpeningBalanceValue(_openingCreditController.text) == null;
     final hasChanges = _hasOpeningBalanceDraftChanged(provider);
-    final statusLabel = readOnly
-        ? 'Read only'
-        : hasChanges
-        ? 'Unsaved changes'
-        : 'Saved';
+    final statusLabel = hasChanges ? 'Unsaved changes' : 'Saved';
     final containerPadding = compactForDesktop ? 10.0 : 12.0;
     final headerIconSize = compactForDesktop ? 34.0 : 40.0;
     final headerIconRadius = compactForDesktop ? 13.0 : 15.0;
@@ -1252,22 +1234,16 @@ class _LedgerViewState extends State<_LedgerView> {
                     vertical: compactForDesktop ? 6 : 7,
                   ),
                   decoration: BoxDecoration(
-                    color: readOnly
-                        ? colorScheme.surfaceContainerHighest
-                        : colorScheme.primary.withValues(alpha: 0.12),
+                    color: colorScheme.primary.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(999),
                     border: Border.all(
-                      color: readOnly
-                          ? colorScheme.outlineVariant
-                          : colorScheme.primary.withValues(alpha: 0.22),
+                      color: colorScheme.primary.withValues(alpha: 0.22),
                     ),
                   ),
                   child: Text(
                     statusLabel,
                     style: theme.textTheme.labelMedium?.copyWith(
-                      color: readOnly
-                          ? colorScheme.onSurfaceVariant
-                          : colorScheme.primary,
+                      color: colorScheme.primary,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -1299,11 +1275,9 @@ class _LedgerViewState extends State<_LedgerView> {
                       IconButton(
                         tooltip: 'Clear opening balance',
                         onPressed:
-                            readOnly ||
-                                provider.isLoading ||
-                                !_readOpeningBalance(provider).hasValue
-                            ? null
-                            : () => _clearOpeningBalance(provider),
+                            !provider.hasOpeningBalance
+                                ? null
+                                : () => _clearOpeningBalance(provider),
                         style: IconButton.styleFrom(
                           foregroundColor: colorScheme.error,
                           backgroundColor: colorScheme.surface,
@@ -1317,12 +1291,9 @@ class _LedgerViewState extends State<_LedgerView> {
                       IconButton.filled(
                         tooltip: 'Save opening balance',
                         onPressed:
-                            readOnly ||
-                                provider.isLoading ||
-                                hasInvalidAmount ||
-                                !hasChanges
-                            ? null
-                            : _saveOpeningBalance,
+                            hasInvalidAmount || !hasChanges
+                                ? null
+                                : _saveOpeningBalance,
                         style: IconButton.styleFrom(
                           backgroundColor: colorScheme.primary,
                           foregroundColor: colorScheme.onPrimary,
@@ -1590,7 +1561,6 @@ class _LedgerViewState extends State<_LedgerView> {
   Widget _buildMobileLedgerOverview(
     BuildContext context,
     LedgerProvider provider,
-    LinkedDevicesController linkedDevices,
   ) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -1650,11 +1620,6 @@ class _LedgerViewState extends State<_LedgerView> {
                       children: <Widget>[
                         _buildMobileInfoPill(
                           context,
-                          icon: Icons.verified_user_outlined,
-                          label: linkedDevices.workspaceBadgeLabel,
-                        ),
-                        _buildMobileInfoPill(
-                          context,
                           icon: Icons.filter_alt_outlined,
                           label: _shortActiveFilterLabel(provider),
                         ),
@@ -1663,14 +1628,11 @@ class _LedgerViewState extends State<_LedgerView> {
                   ],
                 ),
               ),
-              if (linkedDevices.canEditWorkspace) ...<Widget>[
-                const SizedBox(width: 8),
                 IconButton.filledTonal(
                   tooltip: 'Edit customer details',
                   onPressed: () => _showEditCustomerDialog(provider),
                   icon: const Icon(Icons.edit_outlined, size: 18),
                 ),
-              ],
             ],
           ),
           const SizedBox(height: 12),
@@ -1839,7 +1801,6 @@ class _LedgerViewState extends State<_LedgerView> {
   Widget _buildMobileLedgerControls({
     required BuildContext context,
     required LedgerProvider provider,
-    required LinkedDevicesController linkedDevices,
   }) {
     final openingBalance = _readOpeningBalance(provider);
     final openingLabel = openingBalance.hasValue
@@ -1866,11 +1827,10 @@ class _LedgerViewState extends State<_LedgerView> {
           child: _showOpeningBalancePanel
               ? Padding(
                   padding: const EdgeInsets.only(top: 10),
-                  child: _buildOpeningBalanceSection(
-                    context: context,
-                    provider: provider,
-                    linkedDevices: linkedDevices,
-                  ),
+                    child: _buildOpeningBalanceSection(
+                      context: context,
+                      provider: provider,
+                    ),
                 )
               : const SizedBox.shrink(),
         ),
@@ -1977,7 +1937,6 @@ class _LedgerViewState extends State<_LedgerView> {
   Widget _buildCustomerInfoCard(
     BuildContext context,
     LedgerProvider provider,
-    LinkedDevicesController linkedDevices,
   ) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -2048,11 +2007,6 @@ class _LedgerViewState extends State<_LedgerView> {
                           children: <Widget>[
                             _buildHeroMetaChip(
                               context,
-                              icon: Icons.verified_user_outlined,
-                              label: linkedDevices.workspaceBadgeLabel,
-                            ),
-                            _buildHeroMetaChip(
-                              context,
                               icon: Icons.filter_alt_outlined,
                               label: _shortActiveFilterLabel(provider),
                             ),
@@ -2074,7 +2028,7 @@ class _LedgerViewState extends State<_LedgerView> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          linkedDevices.workspaceSubtitle,
+                          'Local Workspace',
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                             height: 1.35,
@@ -2087,8 +2041,7 @@ class _LedgerViewState extends State<_LedgerView> {
                       value: provider.formatBalance(provider.finalBalance),
                       accentColor: balanceAccent,
                     );
-                    final editButton = linkedDevices.canEditWorkspace
-                        ? IconButton.filledTonal(
+                    final editButton = IconButton.filledTonal(
                             tooltip: 'Edit customer details',
                             onPressed: () => _showEditCustomerDialog(provider),
                             style: IconButton.styleFrom(
@@ -2096,8 +2049,7 @@ class _LedgerViewState extends State<_LedgerView> {
                               foregroundColor: colorScheme.primary,
                             ),
                             icon: const Icon(Icons.edit_outlined),
-                          )
-                        : null;
+                          );
 
                     if (constraints.maxWidth < 520) {
                       return Column(
@@ -2107,10 +2059,10 @@ class _LedgerViewState extends State<_LedgerView> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
                               Expanded(child: titleBlock),
-                              if (editButton != null) ...<Widget>[
-                                const SizedBox(width: 12),
-                                editButton,
-                              ],
+                              ...<Widget>[
+                              const SizedBox(width: 12),
+                              editButton,
+                            ],
                             ],
                           ),
                           const SizedBox(height: 16),
@@ -2127,10 +2079,10 @@ class _LedgerViewState extends State<_LedgerView> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
                               Expanded(child: titleBlock),
-                              if (editButton != null) ...<Widget>[
-                                const SizedBox(width: 12),
-                                editButton,
-                              ],
+                              ...<Widget>[
+                              const SizedBox(width: 12),
+                              editButton,
+                            ],
                             ],
                           ),
                         ),
@@ -2204,7 +2156,6 @@ class _LedgerViewState extends State<_LedgerView> {
   Widget _buildDesktopLedgerHeader(
     BuildContext context,
     LedgerProvider provider,
-    LinkedDevicesController linkedDevices,
   ) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -2235,7 +2186,6 @@ class _LedgerViewState extends State<_LedgerView> {
                 ),
               ),
             ),
-            if (linkedDevices.canEditWorkspace)
               IconButton(
                 tooltip: 'Edit customer details',
                 onPressed: () => _showEditCustomerDialog(provider),
@@ -2337,7 +2287,6 @@ class _LedgerViewState extends State<_LedgerView> {
     required Color accentColor,
   }) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -2668,7 +2617,6 @@ class _LedgerViewState extends State<_LedgerView> {
   Widget build(BuildContext context) {
     return Consumer<LedgerProvider>(
       builder: (BuildContext context, LedgerProvider provider, _) {
-        final linkedDevices = context.watch<LinkedDevicesController>();
         _syncOpeningBalanceControllers(provider);
 
         return LayoutBuilder(
@@ -2677,7 +2625,7 @@ class _LedgerViewState extends State<_LedgerView> {
             final isCompact = !isDesktop && constraints.maxWidth < 760;
             final useWideTopLayout = isDesktop || constraints.maxWidth >= 980;
             final useCardLayout = !isDesktop && constraints.maxWidth < 920;
-            final hasFab = isCompact && linkedDevices.canEditWorkspace;
+            final hasFab = isCompact;
             const desktopContentWidth = 1400.0;
             const desktopHorizontalPadding = 20.0;
             const desktopMinViewportWidth =
@@ -2695,15 +2643,12 @@ class _LedgerViewState extends State<_LedgerView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 if (isCompact)
-                  _buildMobileLedgerOverview(context, provider, linkedDevices)
+                  _buildMobileLedgerOverview(context, provider)
                 else if (isDesktop)
-                  _buildDesktopLedgerHeader(context, provider, linkedDevices)
+                  _buildDesktopLedgerHeader(context, provider)
                 else
-                  _buildCustomerInfoCard(context, provider, linkedDevices),
-                if (linkedDevices.isReadOnlyLinkedDevice) ...<Widget>[
-                  const SizedBox(height: 12),
-                  const LinkedReadOnlyBanner(),
-                ],
+                  _buildCustomerInfoCard(context, provider),
+
                 if (!isCompact && !isDesktop) ...<Widget>[
                   const SizedBox(height: 12),
                   _buildLedgerStats(context, provider),
@@ -2713,7 +2658,6 @@ class _LedgerViewState extends State<_LedgerView> {
                   _buildMobileLedgerControls(
                     context: context,
                     provider: provider,
-                    linkedDevices: linkedDevices,
                   ),
                 ] else if (useWideTopLayout) ...<Widget>[
                   SizedBox(
@@ -2725,7 +2669,6 @@ class _LedgerViewState extends State<_LedgerView> {
                           child: _buildOpeningBalanceSection(
                             context: context,
                             provider: provider,
-                            linkedDevices: linkedDevices,
                             compactForDesktop: true,
                           ),
                         ),
@@ -2744,7 +2687,6 @@ class _LedgerViewState extends State<_LedgerView> {
                   _buildOpeningBalanceSection(
                     context: context,
                     provider: provider,
-                    linkedDevices: linkedDevices,
                   ),
                   const SizedBox(height: 12),
                   _buildFilterBar(context: context, provider: provider),
@@ -2804,7 +2746,6 @@ class _LedgerViewState extends State<_LedgerView> {
                 actions: _buildAppBarActions(
                   context: context,
                   provider: provider,
-                  linkedDevices: linkedDevices,
                   isCompact: isCompact,
                 ),
               ),
@@ -2845,12 +2786,8 @@ class _LedgerViewState extends State<_LedgerView> {
                     actions: <Type, Action<Intent>>{
                       _LedgerIntent: CallbackAction<_LedgerIntent>(
                         onInvoke: (_LedgerIntent intent) {
-                          final linkedDevices = context
-                              .read<LinkedDevicesController>();
                           if (intent.action == _LedgerShortcut.addEntry) {
-                            if (linkedDevices.canEditWorkspace) {
                               _showAddEntryDialog();
-                            }
                           } else if (intent.action == _LedgerShortcut.export) {
                             _exportWithOptions();
                           } else if (intent.action == _LedgerShortcut.print) {
@@ -2936,7 +2873,6 @@ class _LedgerViewState extends State<_LedgerView> {
     required LedgerProvider provider,
     required bool compactLayout,
   }) {
-    final linkedDevices = context.watch<LinkedDevicesController>();
 
     if (provider.isLoading && provider.entries.isEmpty) {
       return const SizedBox(
@@ -2949,15 +2885,9 @@ class _LedgerViewState extends State<_LedgerView> {
       return AppEmptyState(
         icon: Icons.receipt_long_outlined,
         title: 'No ledger entries yet',
-        message: linkedDevices.canEditWorkspace
-            ? 'Add the first debit or credit entry for this customer.'
-            : 'This linked device can view ledger entries but cannot create them.',
-        actionLabel: linkedDevices.canEditWorkspace ? 'Add Entry' : 'Refresh',
-        onAction: linkedDevices.canEditWorkspace
-            ? _showAddEntryDialog
-            : () {
-                provider.loadEntries();
-              },
+        message: 'Add the first debit or credit entry for this customer.',
+        actionLabel: 'Add Entry',
+        onAction: _showAddEntryDialog,
       );
     }
 
@@ -2965,7 +2895,6 @@ class _LedgerViewState extends State<_LedgerView> {
       return _buildCompactLedgerEntries(
         context,
         provider,
-        linkedDevices: linkedDevices,
       );
     }
 
@@ -3023,7 +2952,6 @@ class _LedgerViewState extends State<_LedgerView> {
                   ],
                   rows: _buildLedgerRows(
                     provider,
-                    linkedDevices: linkedDevices,
                     compact: false,
                   ),
                 ),
@@ -3037,9 +2965,8 @@ class _LedgerViewState extends State<_LedgerView> {
 
   Widget _buildCompactLedgerEntries(
     BuildContext context,
-    LedgerProvider provider, {
-    required LinkedDevicesController linkedDevices,
-  }) {
+    LedgerProvider provider,
+  ) {
     final children = <Widget>[];
     double? runningBalance;
 
@@ -3068,7 +2995,6 @@ class _LedgerViewState extends State<_LedgerView> {
           entry: entry,
           balanceLabel: balanceLabel,
           isOpeningBalanceEntry: isOpeningBalanceEntry,
-          linkedDevices: linkedDevices,
         ),
       );
     }
@@ -3085,7 +3011,6 @@ class _LedgerViewState extends State<_LedgerView> {
     required Entry entry,
     required String balanceLabel,
     required bool isOpeningBalanceEntry,
-    required LinkedDevicesController linkedDevices,
   }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -3224,27 +3149,25 @@ class _LedgerViewState extends State<_LedgerView> {
               );
             },
           ),
-          if (linkedDevices.canEditWorkspace) ...<Widget>[
-            const SizedBox(height: 14),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: <Widget>[
-                if (isOpeningBalanceEntry)
-                  IconButton(
-                    tooltip: 'Clear opening balance',
-                    onPressed: () => _clearOpeningBalance(provider),
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                  )
-                else ...<Widget>[
-                  IconButton.filledTonal(
-                    tooltip: 'Entry Options',
-                    onPressed: () => _showEntryMenu(context, provider, entry),
-                    icon: const Icon(Icons.more_vert_rounded, size: 18),
-                  ),
-                ],
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: <Widget>[
+              if (isOpeningBalanceEntry)
+                IconButton(
+                  tooltip: 'Clear opening balance',
+                  onPressed: () => _clearOpeningBalance(provider),
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                )
+              else ...<Widget>[
+                IconButton.filledTonal(
+                  tooltip: 'Entry Options',
+                  onPressed: () => _showEntryMenu(context, provider, entry),
+                  icon: const Icon(Icons.more_vert_rounded, size: 18),
+                ),
               ],
-            ),
-          ],
+            ],
+          ),
         ],
       ),
     );
@@ -3557,14 +3480,8 @@ class _LedgerViewState extends State<_LedgerView> {
   Future<void> _showTransferDialog(
     LedgerProvider provider,
     Entry entry,
-    LinkedDevicesController linkedDevices,
   ) async {
-    if (!linkedDevices.canEditWorkspace) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(linkedDevices.readOnlyMessage)));
-      return;
-    }
+
 
     if (entry.id == null) {
       return;
@@ -3667,7 +3584,6 @@ class _LedgerViewState extends State<_LedgerView> {
 
   List<DataRow> _buildLedgerRows(
     LedgerProvider provider, {
-    required LinkedDevicesController linkedDevices,
     required bool compact,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -3756,9 +3672,7 @@ class _LedgerViewState extends State<_LedgerView> {
               isOpeningBalanceEntry
                   ? IconButton(
                       tooltip: 'Clear opening balance',
-                      onPressed: linkedDevices.canEditWorkspace
-                          ? () => _clearOpeningBalance(provider)
-                          : null,
+                      onPressed: () => _clearOpeningBalance(provider),
                       icon: const Icon(Icons.delete_outline),
                     )
                   : Row(
@@ -3766,9 +3680,7 @@ class _LedgerViewState extends State<_LedgerView> {
                       children: <Widget>[
                         IconButton(
                           tooltip: 'Entry Options',
-                          onPressed: linkedDevices.canEditWorkspace
-                              ? () => _showEntryMenu(context, provider, entry)
-                              : null,
+                          onPressed: () => _showEntryMenu(context, provider, entry),
                           icon: const Icon(Icons.more_vert_rounded),
                         ),
                       ],

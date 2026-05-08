@@ -7,18 +7,15 @@ import 'package:provider/provider.dart';
 import '../database/app_database.dart';
 import '../providers/customer_provider.dart';
 import '../providers/ledger_year_provider.dart';
-import '../services/app_deep_link_service.dart';
 import '../services/app_pin_service.dart';
 import '../services/company_profile_service.dart';
 import '../services/csv_backup_service.dart';
-import '../services/linked_devices_controller.dart';
 import '../services/manual_update_service.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/app_pin_dialogs.dart';
 import '../widgets/platform_shell_layouts.dart';
 import '../widgets/scale_down_width.dart';
 import 'customer_list_screen.dart';
-import 'linked_devices_screen.dart';
 import 'snapshot_entries_screen.dart';
 import 'summary_screen.dart';
 
@@ -35,10 +32,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
   final AppPinService _appPinService = AppPinService();
   final CompanyProfileService _companyProfileService = CompanyProfileService();
   final CsvBackupService _csvBackupService = CsvBackupService();
-  final LinkedDevicesController _linkedDevices =
-      LinkedDevicesController.instance;
   final ManualUpdateService _manualUpdateService = ManualUpdateService.instance;
-  final AppDeepLinkService _deepLinkService = AppDeepLinkService.instance;
   int _selectedIndex = 0;
   int _reloadRevision = 0;
   bool _isPinEnabled = false;
@@ -47,8 +41,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
     logoPath: null,
   );
   bool _didPromptCompanyProfile = false;
-  int _lastSeenLinkedDataVersion = 0;
-  bool _isHandlingDeepLink = false;
   String _sidebarNotes = '';
 
   static const List<_ShellDestination> _destinations = <_ShellDestination>[
@@ -75,70 +67,14 @@ class _AppShellScreenState extends State<AppShellScreen> {
   @override
   void initState() {
     super.initState();
-    _linkedDevices.addListener(_handleLinkedDevicesChanged);
-    _deepLinkService.addListener(_onPendingDeepLinkChanged);
     _loadPinStatus();
     _loadCompanyProfile();
     _loadSidebarNotes();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _handlePendingDeepLink();
-    });
   }
 
   @override
   void dispose() {
-    _linkedDevices.removeListener(_handleLinkedDevicesChanged);
-    _deepLinkService.removeListener(_onPendingDeepLinkChanged);
     super.dispose();
-  }
-
-  void _handleLinkedDevicesChanged() {
-    if (_lastSeenLinkedDataVersion == _linkedDevices.dataVersion) {
-      return;
-    }
-
-    _lastSeenLinkedDataVersion = _linkedDevices.dataVersion;
-    _loadCompanyProfile();
-    _loadSidebarNotes();
-    if (mounted) {
-      setState(() {
-        _reloadRevision++;
-      });
-    }
-  }
-
-  void _onPendingDeepLinkChanged() {
-    _handlePendingDeepLink();
-  }
-
-  Future<void> _handlePendingDeepLink() async {
-    if (_isHandlingDeepLink || !mounted) {
-      return;
-    }
-
-    final inviteLink = _deepLinkService.takePendingInviteLink();
-    if ((inviteLink ?? '').isEmpty) {
-      return;
-    }
-
-    _isHandlingDeepLink = true;
-    try {
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => LinkedDevicesScreen(
-            initialInviteLink: inviteLink,
-            controller: _linkedDevices,
-          ),
-        ),
-      );
-    } finally {
-      _isHandlingDeepLink = false;
-      if (mounted) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _handlePendingDeepLink();
-        });
-      }
-    }
   }
 
   @override
@@ -223,20 +159,10 @@ class _AppShellScreenState extends State<AppShellScreen> {
               'Balance Desk',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
               ),
             ),
           ],
         ),
-        actions: <Widget>[
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: _WorkspaceStatusPill(
-              label: _linkedDevices.workspaceBadgeLabel,
-              compact: true,
-            ),
-          ),
-        ],
       ),
       body: SafeArea(bottom: false, child: _buildMobileMain(content)),
       bottomNavigationBar: Padding(
@@ -320,9 +246,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
     required bool closeDrawerOnAction,
     bool showDestinations = true,
   }) {
-    final linkedDevices =
-        context.watch<LinkedDevicesController?>() ?? _linkedDevices;
-
     return _SidebarContent(
       selectedIndex: _selectedIndex,
       destinations: _destinations,
@@ -363,10 +286,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
         closeDrawerOnAction: closeDrawerOnAction,
         action: _openNotesEditor,
       ),
-      onLinkedDevicesRequested: () => _runDrawerAction(
-        closeDrawerOnAction: closeDrawerOnAction,
-        action: _openLinkedDevicesScreen,
-      ),
+
       onCheckUpdateRequested: () => _runDrawerAction(
         closeDrawerOnAction: closeDrawerOnAction,
         action: _openManualUpdateDialog,
@@ -376,8 +296,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
           ? 'Balance Desk'
           : _companyProfile.name.trim(),
       companyLogoPath: _companyProfile.logoPath,
-      workspaceSubtitle: linkedDevices.workspaceSubtitle,
-      workspaceBadge: linkedDevices.workspaceBadgeLabel,
       hasNotes: _sidebarNotes.trim().isNotEmpty,
       showDestinations: showDestinations,
       dark: dark,
@@ -457,25 +375,8 @@ class _AppShellScreenState extends State<AppShellScreen> {
     }
   }
 
-  void _showLinkedReadOnlyMessage() {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(_linkedDevices.readOnlyMessage)));
-  }
-
-  Future<void> _openLinkedDevicesScreen() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => LinkedDevicesScreen(controller: _linkedDevices),
-      ),
-    );
-  }
 
   Future<void> _openNotesEditor() async {
-    if (!_linkedDevices.canEditWorkspace) {
-      _showLinkedReadOnlyMessage();
-      return;
-    }
 
     final controller = TextEditingController(text: _sidebarNotes);
     final notes = await showDialog<String>(
@@ -524,7 +425,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
       key: _notesSettingKey,
       value: notes,
     );
-    await _linkedDevices.syncAfterLocalChange(reason: 'sidebar_notes');
+
 
     if (!mounted) {
       return;
@@ -760,10 +661,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
   }
 
   Future<void> _showAddYearDialog() async {
-    if (!_linkedDevices.canEditWorkspace) {
-      _showLinkedReadOnlyMessage();
-      return;
-    }
 
     final year = await showDialog<int>(
       context: context,
@@ -801,10 +698,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
   }
 
   Future<void> _confirmDeleteYear() async {
-    if (!_linkedDevices.canEditWorkspace) {
-      _showLinkedReadOnlyMessage();
-      return;
-    }
 
     final yearProvider = context.read<LedgerYearProvider>();
     final yearToDelete = yearProvider.activeYear;
@@ -895,19 +788,13 @@ class _AppShellScreenState extends State<AppShellScreen> {
   }
 
   Future<void> _restoreBackup() async {
-    if (!_linkedDevices.canEditWorkspace) {
-      _showLinkedReadOnlyMessage();
-      return;
-    }
 
     try {
       final filePath = await _csvBackupService.restoreBackupFile();
       if (!mounted || filePath == null || filePath.isEmpty) {
         return;
       }
-      await _linkedDevices.syncAfterLocalChange(
-        reason: 'manual_backup_restore',
-      );
+
       await _reloadActiveYearData();
       if (!mounted) {
         return;
@@ -933,10 +820,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
   }
 
   Future<void> _openCompanyProfileEditor({bool isInitial = false}) async {
-    if (!isInitial && !_linkedDevices.canEditWorkspace) {
-      _showLinkedReadOnlyMessage();
-      return;
-    }
 
     final nameController = TextEditingController(text: _companyProfile.name);
     String? pickedLogoPath = _companyProfile.logoPath;
@@ -1059,9 +942,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
                       name: name,
                       logoPath: logoPath,
                     );
-                    await _linkedDevices.syncAfterLocalChange(
-                      reason: 'company_profile_update',
-                    );
+
 
                     if (!dialogContext.mounted) {
                       return;
@@ -1168,13 +1049,10 @@ class _SidebarContent extends StatefulWidget {
     required this.onRestoreBackupRequested,
     required this.onCompanyProfileRequested,
     required this.onNotesRequested,
-    required this.onLinkedDevicesRequested,
     required this.onCheckUpdateRequested,
     required this.pinButtonLabel,
     required this.companyName,
     required this.companyLogoPath,
-    required this.workspaceSubtitle,
-    required this.workspaceBadge,
     required this.hasNotes,
     this.showDestinations = true,
     this.dark = false,
@@ -1192,13 +1070,10 @@ class _SidebarContent extends StatefulWidget {
   final Future<void> Function() onRestoreBackupRequested;
   final Future<void> Function() onCompanyProfileRequested;
   final Future<void> Function() onNotesRequested;
-  final Future<void> Function() onLinkedDevicesRequested;
   final Future<void> Function() onCheckUpdateRequested;
   final String pinButtonLabel;
   final String companyName;
   final String? companyLogoPath;
-  final String workspaceSubtitle;
-  final String workspaceBadge;
   final bool hasNotes;
   final bool showDestinations;
   final bool dark;
@@ -1270,9 +1145,9 @@ class _SidebarContentState extends State<_SidebarContent> {
                 const SizedBox(height: 26),
                 _DrawerProfileCard(
                   title: widget.companyName,
-                  subtitle: widget.workspaceSubtitle,
-                  badge: widget.workspaceBadge,
+                  subtitle: 'Local Workspace',
                   logoPath: widget.companyLogoPath,
+                  badge: 'Active',
                 ),
                 const SizedBox(height: 18),
                 Consumer<LedgerYearProvider>(
@@ -1326,14 +1201,7 @@ class _SidebarContentState extends State<_SidebarContent> {
                   },
                 ),
                 const SizedBox(height: 8),
-                _SidebarActionItem(
-                  icon: Icons.devices_outlined,
-                  label: 'Linked Devices',
-                  trailingText: widget.workspaceBadge,
-                  onTap: () {
-                    widget.onLinkedDevicesRequested();
-                  },
-                ),
+
                 const SizedBox(height: 8),
                 _SidebarActionItem(
                   icon: Icons.system_update_alt_outlined,
@@ -1855,57 +1723,6 @@ class _CompanyHeaderCard extends StatelessWidget {
   }
 }
 
-class _WorkspaceStatusPill extends StatelessWidget {
-  const _WorkspaceStatusPill({required this.label, this.compact = false});
-
-  final String label;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 10 : 12,
-        vertical: compact ? 7 : 8,
-      ),
-      decoration: BoxDecoration(
-        color: colorScheme.primaryContainer.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.12)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Container(
-            width: 7,
-            height: 7,
-            decoration: BoxDecoration(
-              color: colorScheme.primary,
-              shape: BoxShape.circle,
-            ),
-          ),
-          SizedBox(width: compact ? 6 : 8),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style:
-                (compact
-                        ? theme.textTheme.labelSmall
-                        : theme.textTheme.labelMedium)
-                    ?.copyWith(
-                      color: colorScheme.primary,
-                      fontWeight: FontWeight.w800,
-                    ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _DrawerProfileCard extends StatelessWidget {
   const _DrawerProfileCard({

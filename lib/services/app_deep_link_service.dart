@@ -12,11 +12,6 @@ class AppDeepLinkService extends ChangeNotifier {
 
   StreamSubscription<String>? _linkSubscription;
   bool _isInitialized = false;
-  String? _pendingInviteLink;
-  String? _lastDeliveredInviteLink;
-
-  String? get pendingInviteLink => _pendingInviteLink;
-
   Future<void> initialize() async {
     if (_isInitialized) {
       return;
@@ -39,45 +34,12 @@ class AppDeepLinkService extends ChangeNotifier {
     );
   }
 
-  String? takePendingInviteLink() {
-    final inviteLink = _pendingInviteLink;
-    if (inviteLink == null) {
-      return null;
-    }
-
-    _lastDeliveredInviteLink = inviteLink;
-    _pendingInviteLink = null;
-    return inviteLink;
-  }
-
   bool isInviteLink(String? rawLink) {
-    final uri = Uri.tryParse((rawLink ?? '').trim());
-    if (uri == null) {
-      return false;
-    }
-
-    return uri.scheme.toLowerCase() == 'balancedesk' &&
-        uri.host.toLowerCase() == 'link-device' &&
-        (uri.queryParameters['workspace'] ?? '').trim().isNotEmpty &&
-        (uri.queryParameters['invite'] ?? '').trim().isNotEmpty &&
-        (uri.queryParameters['token'] ?? '').trim().isNotEmpty;
+    return false;
   }
 
   void _storeIncomingLink(String? rawLink) {
-    final normalizedLink = rawLink?.trim();
-    if ((normalizedLink ?? '').isEmpty) {
-      return;
-    }
-    if (!isInviteLink(normalizedLink)) {
-      return;
-    }
-    if (_pendingInviteLink == normalizedLink ||
-        _lastDeliveredInviteLink == normalizedLink) {
-      return;
-    }
-
-    _pendingInviteLink = normalizedLink;
-    notifyListeners();
+    // Deep linking logic for local operations can be added here.
   }
 
   @override

@@ -31,15 +31,11 @@ class DatabaseHelper {
   static const String _activeYearSettingKey = 'activeYear';
   static const int _databaseVersion = 5;
   static const String _databaseName = 'shop_desktop.db';
-  static const String _defaultUserKey = 'local';
-  static const String _signedOutUserKey = 'signed_out';
 
   Database? _database;
   int _activeYear = DateTime.now().year;
-  String _userKey = _defaultUserKey;
 
   int get activeYear => _activeYear;
-  String get userKey => _userKey;
 
   String _snapshotOpeningDebitSettingKey(int year) =>
       'snapshotOpeningDebit:$year';
@@ -116,7 +112,7 @@ class DatabaseHelper {
 
   Future<String> _resolveDatabasePath() async {
     final basePath = await _resolveDatabaseBasePath();
-    final databaseFolder = Directory(path.join(basePath, _userKey));
+    final databaseFolder = Directory(path.join(basePath, 'local'));
     if (!await databaseFolder.exists()) {
       await databaseFolder.create(recursive: true);
     }
@@ -156,24 +152,6 @@ class DatabaseHelper {
     return Directory.systemTemp.path;
   }
 
-  String _normalizeUserKey(String? rawKey) {
-    final trimmed = rawKey?.trim();
-    if (trimmed == null || trimmed.isEmpty) {
-      return _signedOutUserKey;
-    }
-    final safe = trimmed.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-    return safe.isEmpty ? _signedOutUserKey : safe;
-  }
-
-  Future<void> setUserKey(String? rawKey) async {
-    final nextKey = _normalizeUserKey(rawKey ?? _defaultUserKey);
-    if (nextKey == _userKey) {
-      return;
-    }
-    await close();
-    _userKey = nextKey;
-    _activeYear = DateTime.now().year;
-  }
 
   Future<void> _createTables(Database db) async {
     final defaultYear = DateTime.now().year;
@@ -1416,10 +1394,8 @@ class AppDatabase {
   final DatabaseHelper _helper = DatabaseHelper.instance;
 
   int get activeYear => _helper.activeYear;
-  String get userKey => _helper.userKey;
 
   Future<void> initialize() => _helper.initialize();
-  Future<void> setUserKey(String? userKey) => _helper.setUserKey(userKey);
 
   Future<Database> get database => _helper.database;
 
