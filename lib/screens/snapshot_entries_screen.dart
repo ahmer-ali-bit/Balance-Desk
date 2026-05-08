@@ -10,6 +10,7 @@ import '../models/summary_snapshot.dart';
 import '../services/export_service.dart';
 import '../services/linked_devices_controller.dart';
 import '../services/pdf_service.dart';
+import '../utils/app_colors.dart';
 import '../utils/number_format_utils.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/linked_read_only_banner.dart';
@@ -1027,14 +1028,17 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 _CompactAmountChip(
                   label: 'Debit',
                   value: _formatEntryAmount(snapshot.overallDebit),
+                  color: AppColors.debit,
                 ),
                 _CompactAmountChip(
                   label: 'Credit',
                   value: _formatEntryAmount(snapshot.overallCredit),
+                  color: AppColors.credit,
                 ),
                 _CompactAmountChip(
                   label: 'Balance',
                   value: _formatBalance(snapshot.finalBalance),
+                  color: AppColors.balanceColor(snapshot.finalBalance),
                 ),
               ],
             ),
@@ -1398,10 +1402,12 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 _CompactAmountChip(
                   label: 'Debit',
                   value: _formatEntryAmount(item.entry.debit),
+                  color: AppColors.debit,
                 ),
                 _CompactAmountChip(
                   label: 'Credit',
                   value: _formatEntryAmount(item.entry.credit),
+                  color: AppColors.credit,
                 ),
               ],
             ),
@@ -1484,14 +1490,17 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                   _CompactAmountChip(
                     label: 'Debit',
                     value: _formatEntryAmount(snapshot.overallDebit),
+                    color: AppColors.debit,
                   ),
                   _CompactAmountChip(
                     label: 'Credit',
                     value: _formatEntryAmount(snapshot.overallCredit),
+                    color: AppColors.credit,
                   ),
                   _CompactAmountChip(
                     label: 'Balance',
                     value: _formatBalance(snapshot.finalBalance),
+                    color: AppColors.balanceColor(snapshot.finalBalance),
                   ),
                 ],
               ),
@@ -1531,14 +1540,17 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 _CompactAmountChip(
                   label: 'Debit',
                   value: _formatEntryAmount(balance.debit),
+                  color: AppColors.debit,
                 ),
                 _CompactAmountChip(
                   label: 'Credit',
                   value: _formatEntryAmount(balance.credit),
+                  color: AppColors.credit,
                 ),
                 _CompactAmountChip(
                   label: 'Balance',
                   value: _formatBalance(balance.finalBalance),
+                  color: AppColors.balanceColor(balance.finalBalance),
                 ),
               ],
             ),
@@ -1708,6 +1720,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     required String debit,
     required String credit,
     String? balance,
+    Color? balanceColor,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -1725,7 +1738,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
               context,
               label: 'Debit',
               value: debit,
-              color: colorScheme.primary,
+              color: AppColors.debit,
             ),
           ),
           _dailyStripDivider(context),
@@ -1734,7 +1747,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
               context,
               label: 'Credit',
               value: credit,
-              color: colorScheme.secondary,
+              color: AppColors.credit,
             ),
           ),
           if (balance != null) ...<Widget>[
@@ -1744,7 +1757,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 context,
                 label: 'Balance',
                 value: balance,
-                color: colorScheme.tertiary,
+                color: balanceColor ?? colorScheme.tertiary,
               ),
             ),
           ],
@@ -1956,8 +1969,18 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
             ),
           ),
         ),
-        DataCell(Text(_formatEntryAmount(item.entry.debit))),
-        DataCell(Text(_formatEntryAmount(item.entry.credit))),
+        DataCell(
+          Text(
+            _formatEntryAmount(item.entry.debit),
+            style: const TextStyle(color: AppColors.debit, fontWeight: FontWeight.bold),
+          ),
+        ),
+        DataCell(
+          Text(
+            _formatEntryAmount(item.entry.credit),
+            style: const TextStyle(color: AppColors.credit, fontWeight: FontWeight.bold),
+          ),
+        ),
         const DataCell(Text('')),
         DataCell(Text(item.entry.pageNo.isEmpty ? '-' : item.entry.pageNo)),
       ],
@@ -2012,13 +2035,22 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         DataCell(Text(_formatDateTime(snapshot.savedAt), style: totalStyle)),
         DataCell(Text('Total incl. balance B/F', style: totalStyle)),
         DataCell(
-          Text(_formatEntryAmount(snapshot.overallDebit), style: totalStyle),
+          Text(
+            _formatEntryAmount(snapshot.overallDebit),
+            style: totalStyle?.copyWith(color: AppColors.debit),
+          ),
         ),
         DataCell(
-          Text(_formatEntryAmount(snapshot.overallCredit), style: totalStyle),
+          Text(
+            _formatEntryAmount(snapshot.overallCredit),
+            style: totalStyle?.copyWith(color: AppColors.credit),
+          ),
         ),
         DataCell(
-          Text(_formatBalance(snapshot.finalBalance), style: totalStyle),
+          Text(
+            _formatBalance(snapshot.finalBalance),
+            style: totalStyle?.copyWith(color: AppColors.balanceColor(snapshot.finalBalance)),
+          ),
         ),
         DataCell(
           Row(
@@ -2070,13 +2102,22 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         const DataCell(Text('-')),
         DataCell(Text('Starting amount', style: rowStyle)),
         DataCell(
-          Text(_formatEntryAmount(openingBalance.debit), style: rowStyle),
+          Text(
+            _formatEntryAmount(openingBalance.debit),
+            style: rowStyle?.copyWith(color: AppColors.debit),
+          ),
         ),
         DataCell(
-          Text(_formatEntryAmount(openingBalance.credit), style: rowStyle),
+          Text(
+            _formatEntryAmount(openingBalance.credit),
+            style: rowStyle?.copyWith(color: AppColors.credit),
+          ),
         ),
         DataCell(
-          Text(_formatBalance(openingBalance.finalBalance), style: rowStyle),
+          Text(
+            _formatBalance(openingBalance.finalBalance),
+            style: rowStyle?.copyWith(color: AppColors.balanceColor(openingBalance.finalBalance)),
+          ),
         ),
         const DataCell(Text('')),
       ],
@@ -2101,12 +2142,23 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         DataCell(Text('Balance B/F', style: rowStyle)),
         const DataCell(Text('-')),
         DataCell(Text('From previous snapshot', style: rowStyle)),
-        DataCell(Text(_formatEntryAmount(carryForward.debit), style: rowStyle)),
         DataCell(
-          Text(_formatEntryAmount(carryForward.credit), style: rowStyle),
+          Text(
+            _formatEntryAmount(carryForward.debit),
+            style: rowStyle?.copyWith(color: AppColors.debit),
+          ),
         ),
         DataCell(
-          Text(_formatBalance(carryForward.finalBalance), style: rowStyle),
+          Text(
+            _formatEntryAmount(carryForward.credit),
+            style: rowStyle?.copyWith(color: AppColors.credit),
+          ),
+        ),
+        DataCell(
+          Text(
+            _formatBalance(carryForward.finalBalance),
+            style: rowStyle?.copyWith(color: AppColors.balanceColor(carryForward.finalBalance)),
+          ),
         ),
         const DataCell(Text('')),
       ],
@@ -2251,23 +2303,29 @@ class _SnapshotTotals {
 }
 
 class _CompactAmountChip extends StatelessWidget {
-  const _CompactAmountChip({required this.label, required this.value});
+  const _CompactAmountChip({
+    required this.label,
+    required this.value,
+    this.color,
+  });
 
   final String label;
   final String value;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final primaryColor = color ?? colorScheme.primary;
 
     return Container(
       constraints: const BoxConstraints(minWidth: 80),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: colorScheme.primary.withValues(alpha: 0.08),
+        color: primaryColor.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.10)),
+        border: Border.all(color: primaryColor.withValues(alpha: 0.10)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2275,7 +2333,7 @@ class _CompactAmountChip extends StatelessWidget {
           Text(
             label,
             style: theme.textTheme.labelSmall?.copyWith(
-              color: colorScheme.primary,
+              color: primaryColor,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -2284,6 +2342,7 @@ class _CompactAmountChip extends StatelessWidget {
             value,
             style: theme.textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w800,
+              color: primaryColor,
             ),
           ),
         ],
