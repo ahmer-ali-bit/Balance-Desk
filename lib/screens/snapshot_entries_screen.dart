@@ -53,6 +53,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   bool _showDailyOpeningBalance = false;
   static const int _snapshotPageSize = 800;
   final Set<String> _expandedSnapshots = <String>{};
+  String _searchQuery = '';
 
   SummarySnapshot? get _latestSnapshot =>
       _snapshots.isEmpty ? null : _snapshots.last;
@@ -435,6 +436,10 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     var entryIndex = 0;
 
     for (final snapshot in _snapshots) {
+      final matchesSearch = _searchQuery.isEmpty || 
+                            snapshot.dailyLogPageNo.toLowerCase().contains(_searchQuery.toLowerCase());
+      final snapshotEntries = <List<String>>[];
+
       while (entryIndex < _entries.length &&
           _compareMoments(
                 _entries[entryIndex].entry.createdAt,
@@ -442,7 +447,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
               ) <=
               0) {
         final entry = _entries[entryIndex];
-        rows.add(<String>[
+        snapshotEntries.add(<String>[
           entry.customerName,
           _formatDate(entry.entry.entryDate),
           entry.entry.displayDescription,
@@ -457,27 +462,30 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         entryIndex++;
       }
 
-      rows.add(<String>[
-        'Snapshot Total',
-        _formatDateTime(snapshot.savedAt),
-        'Total incl. balance B/F',
-        _formatAmount(snapshot.overallDebit),
-        _formatAmount(snapshot.overallCredit),
-        _formatBalance(snapshot.finalBalance),
-        snapshot.dailyLogPageNo,
-      ]);
-
-      final carryForward = _balanceToOpening(snapshot.finalBalance);
-      if (carryForward.hasValue) {
+      if (matchesSearch) {
+        rows.addAll(snapshotEntries);
         rows.add(<String>[
-          'Balance B/F',
-          '-',
-          'From previous snapshot',
-          _formatAmount(carryForward.debit),
-          _formatAmount(carryForward.credit),
-          _formatBalance(carryForward.finalBalance),
-          '',
+          'Snapshot Total',
+          _formatDateTime(snapshot.savedAt),
+          'Total incl. balance B/F',
+          _formatAmount(snapshot.overallDebit),
+          _formatAmount(snapshot.overallCredit),
+          _formatBalance(snapshot.finalBalance),
+          snapshot.dailyLogPageNo,
         ]);
+
+        final carryForward = _balanceToOpening(snapshot.finalBalance);
+        if (carryForward.hasValue) {
+          rows.add(<String>[
+            'Balance B/F',
+            '-',
+            'From previous snapshot',
+            _formatAmount(carryForward.debit),
+            _formatAmount(carryForward.credit),
+            _formatBalance(carryForward.finalBalance),
+            '',
+          ]);
+        }
       }
     }
 
@@ -494,21 +502,25 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       ]);
     }
 
-    while (entryIndex < _entries.length) {
-      final entry = _entries[entryIndex];
-      rows.add(<String>[
-        entry.customerName,
-        _formatDate(entry.entry.entryDate),
-        entry.entry.displayDescription,
-        _formatAmount(entry.entry.debit),
-        _formatAmount(entry.entry.credit),
-        '',
-        [
-          if (entry.entry.pageNo.isNotEmpty) entry.entry.pageNo,
-          if (entry.entry.dailyLogPageNo.isNotEmpty) 'DL: ${entry.entry.dailyLogPageNo}',
-        ].join(' | '),
-      ]);
-      entryIndex++;
+    if (_searchQuery.isEmpty) {
+      while (entryIndex < _entries.length) {
+        final entry = _entries[entryIndex];
+        rows.add(<String>[
+          entry.customerName,
+          _formatDate(entry.entry.entryDate),
+          entry.entry.displayDescription,
+          _formatAmount(entry.entry.debit),
+          _formatAmount(entry.entry.credit),
+          '',
+          [
+            if (entry.entry.pageNo.isNotEmpty) entry.entry.pageNo,
+            if (entry.entry.dailyLogPageNo.isNotEmpty) 'DL: ${entry.entry.dailyLogPageNo}',
+          ].join(' | '),
+        ]);
+        entryIndex++;
+      }
+    } else {
+      entryIndex = _entries.length;
     }
 
     return rows;
@@ -758,6 +770,10 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                       _buildOpeningBalanceSection(context),
                       const SizedBox(height: 12),
                     ],
+                    if (_snapshots.isNotEmpty) ...<Widget>[
+                      _buildSearchBar(compact: isCompact),
+                      const SizedBox(height: 16),
+                    ],
                     _buildTimelineContent(context),
                   ],
                 ),
@@ -783,6 +799,27 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       target,
       duration: const Duration(milliseconds: 120),
       curve: Curves.easeOut,
+    );
+  }
+
+  Widget _buildSearchBar({required bool compact}) {
+    return TextField(
+      decoration: InputDecoration(
+        hintText: 'Search by DL Page No...',
+        prefixIcon: const Icon(Icons.search),
+        filled: true,
+        fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
+      onChanged: (String value) {
+        setState(() {
+          _searchQuery = value.trim();
+        });
+      },
     );
   }
 
@@ -1528,7 +1565,10 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       );
       entryIndex--;
     }
-    items.addAll(currentEntries);
+    final showCurrentEntries = _searchQuery.isEmpty;
+    if (showCurrentEntries) {
+      items.addAll(currentEntries);
+    }
 
     for (var i = _snapshots.length - 1; i >= 0; i--) {
       final snapshot = _snapshots[i];
@@ -1552,35 +1592,40 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         entryIndex--;
       }
 
-      items.add(
-        _buildCompactSnapshotCard(
-          context,
-          snapshot,
-          isExpanded: isExpanded,
-        ),
-      );
-      if (isExpanded) {
-        items.addAll(snapshotEntries);
-      }
+      final matchesSearch = _searchQuery.isEmpty || 
+                            snapshot.dailyLogPageNo.toLowerCase().contains(_searchQuery.toLowerCase());
 
-      if (previousSnapshot != null) {
-        final carryForward = _balanceToOpening(previousSnapshot.finalBalance);
-        if (carryForward.hasValue) {
-          items.add(
-            _buildCompactBalanceCard(
-              context,
-              carryForward,
-              title: 'Balance B/F',
-              subtitle: 'From previous snapshot',
-            ),
-          );
+      if (matchesSearch) {
+        items.add(
+          _buildCompactSnapshotCard(
+            context,
+            snapshot,
+            isExpanded: isExpanded,
+          ),
+        );
+        if (isExpanded) {
+          items.addAll(snapshotEntries);
         }
-      } else if (_hasOpeningBalance) {
-        items.add(_buildCompactBalanceCard(context, _effectiveOpeningBalance));
+
+        if (previousSnapshot != null) {
+          final carryForward = _balanceToOpening(previousSnapshot.finalBalance);
+          if (carryForward.hasValue) {
+            items.add(
+              _buildCompactBalanceCard(
+                context,
+                carryForward,
+                title: 'Balance B/F',
+                subtitle: 'From previous snapshot',
+              ),
+            );
+          }
+        } else if (_hasOpeningBalance) {
+          items.add(_buildCompactBalanceCard(context, _effectiveOpeningBalance));
+        }
       }
     }
 
-    if (_snapshots.isEmpty && _hasOpeningBalance) {
+    if (_snapshots.isEmpty && _hasOpeningBalance && _searchQuery.isEmpty) {
       items.add(_buildCompactBalanceCard(context, _effectiveOpeningBalance));
     }
 
@@ -1825,7 +1870,10 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       );
       entryIndex--;
     }
-    rows.addAll(currentEntries);
+    final showCurrentEntries = _searchQuery.isEmpty;
+    if (showCurrentEntries) {
+      rows.addAll(currentEntries);
+    }
 
     for (var i = _snapshots.length - 1; i >= 0; i--) {
       final snapshot = _snapshots[i];
@@ -1849,31 +1897,36 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         entryIndex--;
       }
 
-      rows.add(
-        _buildSnapshotTotalRow(
-          context,
-          snapshot,
-          compact: compact,
-          isExpanded: isExpanded,
-        ),
-      );
-      if (isExpanded) {
-        rows.addAll(snapshotEntries);
-      }
+      final matchesSearch = _searchQuery.isEmpty || 
+                            snapshot.dailyLogPageNo.toLowerCase().contains(_searchQuery.toLowerCase());
 
-      if (previousSnapshot != null) {
-        final carryForward = _balanceToOpening(previousSnapshot.finalBalance);
-        if (carryForward.hasValue) {
-          rows.add(
-            _buildCarryForwardRow(context, carryForward, compact: compact),
-          );
+      if (matchesSearch) {
+        rows.add(
+          _buildSnapshotTotalRow(
+            context,
+            snapshot,
+            compact: compact,
+            isExpanded: isExpanded,
+          ),
+        );
+        if (isExpanded) {
+          rows.addAll(snapshotEntries);
         }
-      } else if (_hasOpeningBalance) {
-        rows.add(_buildOpeningBalanceRow(context, compact: compact));
+
+        if (previousSnapshot != null) {
+          final carryForward = _balanceToOpening(previousSnapshot.finalBalance);
+          if (carryForward.hasValue) {
+            rows.add(
+              _buildCarryForwardRow(context, carryForward, compact: compact),
+            );
+          }
+        } else if (_hasOpeningBalance) {
+          rows.add(_buildOpeningBalanceRow(context, compact: compact));
+        }
       }
     }
 
-    if (_snapshots.isEmpty && _hasOpeningBalance) {
+    if (_snapshots.isEmpty && _hasOpeningBalance && _searchQuery.isEmpty) {
       rows.add(_buildOpeningBalanceRow(context, compact: compact));
     }
 
