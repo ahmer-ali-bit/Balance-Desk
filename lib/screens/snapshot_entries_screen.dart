@@ -1075,6 +1075,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                   label: 'Debit',
                   value: _formatEntryAmount(snapshot.overallDebit),
                   icon: Icons.arrow_downward_rounded,
+                  accentColor: AppColors.debit,
                 ),
               ),
               const SizedBox(width: 12),
@@ -1084,6 +1085,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                   label: 'Credit',
                   value: _formatEntryAmount(snapshot.overallCredit),
                   icon: Icons.arrow_upward_rounded,
+                  accentColor: AppColors.credit,
                 ),
               ),
               const SizedBox(width: 12),
@@ -1093,6 +1095,11 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                   label: 'Balance',
                   value: _formatBalance(snapshot.finalBalance),
                   icon: Icons.account_balance_wallet_outlined,
+                  accentColor: AppColors.balanceColor(snapshot.finalBalance) == AppColors.debit
+                      ? AppColors.debit
+                      : (AppColors.balanceColor(snapshot.finalBalance) == AppColors.credit
+                          ? AppColors.credit
+                          : Colors.grey.shade600),
                 ),
               ),
             ],
@@ -1107,21 +1114,43 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     required String label,
     required String value,
     required IconData icon,
+    Color? accentColor,
   }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isMetric = accentColor != null;
 
     return Container(
       height: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
+        color: accentColor ?? colorScheme.surfaceContainerHighest,
+        gradient: isMetric
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: <Color>[
+                  accentColor.withValues(alpha: 0.85),
+                  accentColor,
+                  accentColor.withValues(alpha: 0.95),
+                ],
+              )
+            : null,
+        boxShadow: isMetric
+            ? <BoxShadow>[
+                BoxShadow(
+                  color: accentColor.withValues(alpha: 0.3),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colorScheme.outlineVariant),
+        border: Border.all(color: isMetric ? Colors.transparent : colorScheme.outlineVariant),
       ),
       child: Row(
         children: <Widget>[
-          Icon(icon, size: 18, color: colorScheme.primary),
+          Icon(icon, size: 18, color: isMetric ? Colors.white : colorScheme.primary),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -1133,7 +1162,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.labelMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
+                    color: isMetric ? Colors.white70 : colorScheme.onSurfaceVariant,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -1148,6 +1177,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                         value,
                         maxLines: 1,
                         style: theme.textTheme.titleSmall?.copyWith(
+                          color: isMetric ? Colors.white : colorScheme.onSurface,
                           fontWeight: FontWeight.w800,
                         ),
                       ),

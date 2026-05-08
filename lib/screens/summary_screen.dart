@@ -713,8 +713,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 value: _formatAmount(_summaryData.overallDebit),
                 stretch: true,
                 height: 84,
-                backgroundColor: AppColors.debitSurface,
-                labelColor: AppColors.debit,
+                backgroundColor: AppColors.debit,
+                labelColor: Colors.white,
               ),
             ),
             SizedBox(
@@ -724,8 +724,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 value: _formatAmount(_summaryData.overallCredit),
                 stretch: true,
                 height: 84,
-                backgroundColor: AppColors.creditSurface,
-                labelColor: AppColors.credit,
+                backgroundColor: AppColors.credit,
+                labelColor: Colors.white,
               ),
             ),
             SizedBox(
@@ -736,11 +736,11 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 stretch: true,
                 height: 84,
                 backgroundColor: AppColors.balanceColor(overallBalance) == AppColors.debit
-                    ? AppColors.debitSurface
+                    ? AppColors.debit
                     : (AppColors.balanceColor(overallBalance) == AppColors.credit
-                        ? AppColors.creditSurface
-                        : Colors.grey.shade50),
-                labelColor: AppColors.balanceColor(overallBalance),
+                        ? AppColors.credit
+                        : Colors.grey.shade600),
+                labelColor: Colors.white,
               ),
             ),
           ],

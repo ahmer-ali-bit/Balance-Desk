@@ -2135,18 +2135,37 @@ class _LedgerViewState extends State<_LedgerView> {
               spacing: spacing,
               runSpacing: spacing,
               children: <Widget>[
-                for (final item in items)
-                  SizedBox(
-                    width: tileWidth,
-                    child: _CustomerInfoTile(
-                      label: item.label,
-                      value: item.value,
-                      backgroundColor: colorScheme.surface,
-                      labelColor: colorScheme.onSurfaceVariant,
-                      valueColor: colorScheme.onSurface,
-                      borderColor: colorScheme.outlineVariant,
-                    ),
-                  ),
+                for (final item in items) ...[
+                  () {
+                    final isDebit = item.label == 'Total Debit';
+                    final isCredit = item.label == 'Total Credit';
+                    final isBalance = item.label == 'Balance';
+                    final isMetric = isDebit || isCredit || isBalance;
+                    
+                    final bgColor = isDebit 
+                      ? AppColors.debit 
+                      : isCredit 
+                        ? AppColors.credit 
+                        : isBalance 
+                          ? (AppColors.balanceColor(provider.finalBalance) == AppColors.debit 
+                              ? AppColors.debit 
+                              : (AppColors.balanceColor(provider.finalBalance) == AppColors.credit ? AppColors.credit : Colors.grey.shade600))
+                          : colorScheme.surface;
+
+                    return SizedBox(
+                      width: tileWidth,
+                      child: _CustomerInfoTile(
+                        label: item.label,
+                        value: item.value,
+                        backgroundColor: bgColor,
+                        labelColor: isMetric ? Colors.white70 : colorScheme.onSurfaceVariant,
+                        valueColor: isMetric ? Colors.white : colorScheme.onSurface,
+                        borderColor: isMetric ? Colors.transparent : colorScheme.outlineVariant,
+                        isMetric: isMetric,
+                      ),
+                    );
+                  }(),
+                ],
               ],
             );
           },
@@ -2197,9 +2216,24 @@ class _LedgerViewState extends State<_LedgerView> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: colorScheme.surface,
+        color: accentColor,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[
+            accentColor.withValues(alpha: 0.85),
+            accentColor,
+            accentColor.withValues(alpha: 0.95),
+          ],
+        ),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: accentColor.withValues(alpha: 0.3),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2208,26 +2242,26 @@ class _LedgerViewState extends State<_LedgerView> {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: accentColor.withValues(alpha: 0.16),
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Icon(
+            child: const Icon(
               Icons.account_balance_wallet_outlined,
-              color: accentColor,
+              color: Colors.white,
             ),
           ),
           const SizedBox(height: 14),
           Text(
             'Current Balance',
             style: theme.textTheme.labelMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
+              color: Colors.white70,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             value,
             style: theme.textTheme.titleLarge?.copyWith(
-              color: colorScheme.onSurface,
+              color: Colors.white,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -4677,6 +4711,7 @@ class _CustomerInfoTile extends StatelessWidget {
     this.labelColor,
     this.valueColor,
     this.borderColor,
+    this.isMetric = false,
   });
 
   final String label;
@@ -4686,18 +4721,41 @@ class _CustomerInfoTile extends StatelessWidget {
   final Color? labelColor;
   final Color? valueColor;
   final Color? borderColor;
+  final bool isMetric;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    final resolvedBg = backgroundColor ?? colorScheme.surfaceContainerLowest;
+
     return ConstrainedBox(
       constraints: const BoxConstraints(minWidth: 120, maxWidth: 240),
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: backgroundColor ?? colorScheme.surfaceContainerLowest,
+          color: resolvedBg,
+          gradient: isMetric
+              ? LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: <Color>[
+                    resolvedBg.withValues(alpha: 0.85),
+                    resolvedBg,
+                    resolvedBg.withValues(alpha: 0.95),
+                  ],
+                )
+              : null,
+          boxShadow: isMetric
+              ? <BoxShadow>[
+                  BoxShadow(
+                    color: resolvedBg.withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : null,
           borderRadius: BorderRadius.circular(22),
           border: Border.all(color: borderColor ?? colorScheme.outlineVariant),
         ),

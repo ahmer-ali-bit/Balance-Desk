@@ -40,8 +40,34 @@ class SummaryStatCard extends StatelessWidget {
           : 176,
       child: ConstrainedBox(
         constraints: BoxConstraints(minHeight: resolvedHeight),
-        child: Card(
-          color: backgroundColor,
+        child: Container(
+          decoration: BoxDecoration(
+            color: backgroundColor ?? theme.cardTheme.color ?? colorScheme.surfaceContainerLow,
+            gradient: backgroundColor != null
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: <Color>[
+                      backgroundColor!.withValues(alpha: 0.85),
+                      backgroundColor!,
+                      backgroundColor!.withValues(alpha: 0.95),
+                    ],
+                  )
+                : null,
+            borderRadius: BorderRadius.circular(compact ? 12 : 16),
+            border: backgroundColor == null
+                ? Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.5))
+                : null,
+            boxShadow: backgroundColor != null
+                ? <BoxShadow>[
+                    BoxShadow(
+                      color: backgroundColor!.withValues(alpha: 0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
+          ),
           child: Padding(
             padding: EdgeInsets.symmetric(
               horizontal: compact ? 12 : 16,
@@ -54,7 +80,7 @@ class SummaryStatCard extends StatelessWidget {
                 Text(
                   label,
                   style: labelStyle?.copyWith(
-                    color: labelColor ?? colorScheme.onSurfaceVariant,
+                    color: labelColor ?? (backgroundColor != null ? Colors.white70 : colorScheme.onSurfaceVariant),
                   ),
                   maxLines: 1,
                 ),
@@ -66,7 +92,9 @@ class SummaryStatCard extends StatelessWidget {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       value,
-                      style: valueStyle?.copyWith(color: labelColor),
+                      style: valueStyle?.copyWith(
+                        color: labelColor ?? (backgroundColor != null ? Colors.white : null),
+                      ),
                       maxLines: 1,
                     ),
                   ),
