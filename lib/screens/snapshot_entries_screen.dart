@@ -57,9 +57,9 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   SummarySnapshot? get _latestSnapshot =>
       _snapshots.isEmpty ? null : _snapshots.last;
   double get _openingDebitBalance =>
-      double.tryParse(_debitOpeningBalanceController.text.trim()) ?? 0;
+      double.tryParse(_debitOpeningBalanceController.text.trim().replaceAll(',', '')) ?? 0;
   double get _openingCreditBalance =>
-      double.tryParse(_creditOpeningBalanceController.text.trim()) ?? 0;
+      double.tryParse(_creditOpeningBalanceController.text.trim().replaceAll(',', '')) ?? 0;
   SnapshotOpeningBalance get _effectiveOpeningBalance => SnapshotOpeningBalance(
     debit: _openingDebitBalance,
     credit: _openingCreditBalance,
@@ -374,7 +374,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     return 'snapshot_$suffix.$ext';
   }
 
-  List<List<String>> _buildSnapshotExportRows() {
+  List<List<String>> _buildSnapshotExportRows({bool includeOpeningBalance = true}) {
     final rows = <List<String>>[];
     var entryIndex = 0;
 
@@ -422,7 +422,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       }
     }
 
-    if (_snapshots.isEmpty && _hasOpeningBalance) {
+    if (includeOpeningBalance && _snapshots.isEmpty && _hasOpeningBalance) {
       final openingBalance = _effectiveOpeningBalance;
       rows.add(<String>[
         'Opening Balance',
@@ -470,8 +470,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   }
 
   Future<void> _exportSnapshotPdf() async {
-    final rows = _buildSnapshotExportRows();
-    if (rows.isEmpty) {
+    final rows = _buildSnapshotExportRows(includeOpeningBalance: false);
+    if (rows.isEmpty && !_hasOpeningBalance) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No snapshot rows to export.')),
       );
@@ -493,6 +493,17 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         rows: rows,
         fileName: _buildExportFileName('export', 'pdf'),
         summaryItems: _buildSnapshotPdfSummaryItems(),
+        openingBalanceRow: _hasOpeningBalance
+            ? <String>[
+                'Opening Balance',
+                '-',
+                'Starting amount',
+                _formatAmount(_effectiveOpeningBalance.debit),
+                _formatAmount(_effectiveOpeningBalance.credit),
+                _formatBalance(_effectiveOpeningBalance.finalBalance),
+                '-',
+              ]
+            : null,
       );
     } catch (_) {
       if (!mounted) {
