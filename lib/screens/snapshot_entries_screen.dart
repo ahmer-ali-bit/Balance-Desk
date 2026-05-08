@@ -471,7 +471,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           _formatAmount(snapshot.overallDebit),
           _formatAmount(snapshot.overallCredit),
           _formatBalance(snapshot.finalBalance),
-          snapshot.dailyLogPageNo,
+          snapshot.dailyLogPageNo.isNotEmpty ? 'DL Pg ${snapshot.dailyLogPageNo}' : '',
         ]);
 
         final carryForward = _balanceToOpening(snapshot.finalBalance);
