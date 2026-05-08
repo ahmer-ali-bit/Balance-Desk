@@ -1448,49 +1448,75 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
 
   Widget _buildCompactTimeline(BuildContext context) {
     final items = <Widget>[];
-    var entryIndex = 0;
+    var entryIndex = _entries.length - 1;
 
-    for (final snapshot in _snapshots) {
+    final currentEntries = <Widget>[];
+    while (entryIndex >= 0 &&
+        (_snapshots.isEmpty ||
+            _compareMoments(
+                  _entries[entryIndex].entry.createdAt,
+                  _snapshots.last.savedAt,
+                ) >
+                0)) {
+      currentEntries.add(
+        _buildTimelineEntryCard(context, _entries[entryIndex]),
+      );
+      entryIndex--;
+    }
+    items.addAll(currentEntries);
+
+    for (var i = _snapshots.length - 1; i >= 0; i--) {
+      final snapshot = _snapshots[i];
+      final previousSnapshot = i > 0 ? _snapshots[i - 1] : null;
+
       final isExpanded = _expandedSnapshots.contains(snapshot.savedAt);
       final snapshotEntries = <Widget>[];
 
-      while (entryIndex < _entries.length &&
-          _compareMoments(
-                _entries[entryIndex].entry.createdAt,
-                snapshot.savedAt,
-              ) <=
-              0) {
+      while (entryIndex >= 0 &&
+          (previousSnapshot == null ||
+              _compareMoments(
+                    _entries[entryIndex].entry.createdAt,
+                    previousSnapshot.savedAt,
+                  ) >
+                  0)) {
         if (isExpanded) {
-          snapshotEntries.add(_buildTimelineEntryCard(context, _entries[entryIndex]));
+          snapshotEntries.add(
+            _buildTimelineEntryCard(context, _entries[entryIndex]),
+          );
         }
-        entryIndex++;
+        entryIndex--;
       }
 
-      items.add(_buildCompactSnapshotCard(context, snapshot, isExpanded: isExpanded));
+      items.add(
+        _buildCompactSnapshotCard(
+          context,
+          snapshot,
+          isExpanded: isExpanded,
+        ),
+      );
       if (isExpanded) {
         items.addAll(snapshotEntries);
       }
 
-      final carryForward = _balanceToOpening(snapshot.finalBalance);
-      if (carryForward.hasValue) {
-        items.add(
-          _buildCompactBalanceCard(
-            context,
-            carryForward,
-            title: 'Balance B/F',
-            subtitle: 'From previous snapshot',
-          ),
-        );
+      if (previousSnapshot != null) {
+        final carryForward = _balanceToOpening(previousSnapshot.finalBalance);
+        if (carryForward.hasValue) {
+          items.add(
+            _buildCompactBalanceCard(
+              context,
+              carryForward,
+              title: 'Balance B/F',
+              subtitle: 'From previous snapshot',
+            ),
+          );
+        }
+      } else if (_hasOpeningBalance) {
+        items.add(_buildCompactBalanceCard(context, _effectiveOpeningBalance));
       }
     }
 
     if (_snapshots.isEmpty && _hasOpeningBalance) {
       items.add(_buildCompactBalanceCard(context, _effectiveOpeningBalance));
-    }
-
-    while (entryIndex < _entries.length) {
-      items.add(_buildTimelineEntryCard(context, _entries[entryIndex]));
-      entryIndex++;
     }
 
     return Column(
@@ -1719,44 +1745,71 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     required bool compact,
   }) {
     final rows = <DataRow>[];
-    var entryIndex = 0;
+    var entryIndex = _entries.length - 1;
 
-    for (final snapshot in _snapshots) {
+    final currentEntries = <DataRow>[];
+    while (entryIndex >= 0 &&
+        (_snapshots.isEmpty ||
+            _compareMoments(
+                  _entries[entryIndex].entry.createdAt,
+                  _snapshots.last.savedAt,
+                ) >
+                0)) {
+      currentEntries.add(
+        _buildEntryRow(_entries[entryIndex], compact: compact),
+      );
+      entryIndex--;
+    }
+    rows.addAll(currentEntries);
+
+    for (var i = _snapshots.length - 1; i >= 0; i--) {
+      final snapshot = _snapshots[i];
+      final previousSnapshot = i > 0 ? _snapshots[i - 1] : null;
+
       final isExpanded = _expandedSnapshots.contains(snapshot.savedAt);
       final snapshotEntries = <DataRow>[];
 
-      while (entryIndex < _entries.length &&
-          _compareMoments(
-                _entries[entryIndex].entry.createdAt,
-                snapshot.savedAt,
-              ) <=
-              0) {
+      while (entryIndex >= 0 &&
+          (previousSnapshot == null ||
+              _compareMoments(
+                    _entries[entryIndex].entry.createdAt,
+                    previousSnapshot.savedAt,
+                  ) >
+                  0)) {
         if (isExpanded) {
-          snapshotEntries.add(_buildEntryRow(_entries[entryIndex], compact: compact));
+          snapshotEntries.add(
+            _buildEntryRow(_entries[entryIndex], compact: compact),
+          );
         }
-        entryIndex++;
+        entryIndex--;
       }
 
-      rows.add(_buildSnapshotTotalRow(context, snapshot, compact: compact, isExpanded: isExpanded));
+      rows.add(
+        _buildSnapshotTotalRow(
+          context,
+          snapshot,
+          compact: compact,
+          isExpanded: isExpanded,
+        ),
+      );
       if (isExpanded) {
         rows.addAll(snapshotEntries);
       }
 
-      final carryForward = _balanceToOpening(snapshot.finalBalance);
-      if (carryForward.hasValue) {
-        rows.add(
-          _buildCarryForwardRow(context, carryForward, compact: compact),
-        );
+      if (previousSnapshot != null) {
+        final carryForward = _balanceToOpening(previousSnapshot.finalBalance);
+        if (carryForward.hasValue) {
+          rows.add(
+            _buildCarryForwardRow(context, carryForward, compact: compact),
+          );
+        }
+      } else if (_hasOpeningBalance) {
+        rows.add(_buildOpeningBalanceRow(context, compact: compact));
       }
     }
 
     if (_snapshots.isEmpty && _hasOpeningBalance) {
       rows.add(_buildOpeningBalanceRow(context, compact: compact));
-    }
-
-    while (entryIndex < _entries.length) {
-      rows.add(_buildEntryRow(_entries[entryIndex], compact: compact));
-      entryIndex++;
     }
 
     return rows;
