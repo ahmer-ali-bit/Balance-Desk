@@ -499,6 +499,7 @@ class LedgerProvider extends ChangeNotifier {
     }
 
     _visibleEntries = <Entry>[
+      ..._entries,
       Entry(
         customerId: _customer.id ?? 0,
         entryDate: '-',
@@ -508,7 +509,6 @@ class LedgerProvider extends ChangeNotifier {
         debit: _openingBalance.debit,
         credit: _openingBalance.credit,
       ),
-      ..._entries,
     ];
   }
 

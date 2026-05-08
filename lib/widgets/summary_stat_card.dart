@@ -8,6 +8,8 @@ class SummaryStatCard extends StatelessWidget {
     this.stretch = false,
     this.compact = false,
     this.height,
+    this.backgroundColor,
+    this.labelColor,
   });
 
   final String label;
@@ -15,6 +17,8 @@ class SummaryStatCard extends StatelessWidget {
   final bool stretch;
   final bool compact;
   final double? height;
+  final Color? backgroundColor;
+  final Color? labelColor;
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +30,7 @@ class SummaryStatCard extends StatelessWidget {
     final valueStyle = compact
         ? theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800)
         : theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800);
-    final resolvedHeight = height ?? (compact ? 50.0 : 70.0);
+    final resolvedHeight = height ?? (compact ? 60.0 : 84.0);
 
     return SizedBox(
       width: stretch
@@ -37,6 +41,7 @@ class SummaryStatCard extends StatelessWidget {
       child: ConstrainedBox(
         constraints: BoxConstraints(minHeight: resolvedHeight),
         child: Card(
+          color: backgroundColor,
           child: Padding(
             padding: EdgeInsets.symmetric(
               horizontal: compact ? 12 : 16,
@@ -49,7 +54,7 @@ class SummaryStatCard extends StatelessWidget {
                 Text(
                   label,
                   style: labelStyle?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
+                    color: labelColor ?? colorScheme.onSurfaceVariant,
                   ),
                   maxLines: 1,
                 ),
@@ -59,7 +64,11 @@ class SummaryStatCard extends StatelessWidget {
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerLeft,
-                    child: Text(value, style: valueStyle, maxLines: 1),
+                    child: Text(
+                      value,
+                      style: valueStyle?.copyWith(color: labelColor),
+                      maxLines: 1,
+                    ),
                   ),
                 ),
               ],

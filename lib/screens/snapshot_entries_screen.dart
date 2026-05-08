@@ -52,6 +52,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   bool _showDailyLatestSnapshot = false;
   bool _showDailyOpeningBalance = false;
   static const int _snapshotPageSize = 800;
+  final Set<String> _expandedSnapshots = <String>{};
 
   SummarySnapshot? get _latestSnapshot =>
       _snapshots.isEmpty ? null : _snapshots.last;
@@ -1328,59 +1329,72 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
 
   Widget _buildCompactSnapshotCard(
     BuildContext context,
-    SummarySnapshot snapshot,
-  ) {
+    SummarySnapshot snapshot, {
+    required bool isExpanded,
+  }) {
     return Card(
       color: Theme.of(context).colorScheme.primaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                const Icon(Icons.bookmark_added_outlined),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Snapshot Total',
-                    style: Theme.of(context).textTheme.titleMedium,
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            if (isExpanded) {
+              _expandedSnapshots.remove(snapshot.savedAt);
+            } else {
+              _expandedSnapshots.add(snapshot.savedAt);
+            }
+          });
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Icon(isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Snapshot Total',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                   ),
-                ),
-                if (_linkedDevices.canEditWorkspace)
-                  IconButton(
-                    tooltip: 'Delete snapshot',
-                    onPressed: _isLoading || _isSavingSnapshot
-                        ? null
-                        : () => _deleteSnapshot(snapshot),
-                    icon: const Icon(Icons.delete_outline),
+                  if (_linkedDevices.canEditWorkspace)
+                    IconButton(
+                      tooltip: 'Delete snapshot',
+                      onPressed: _isLoading || _isSavingSnapshot
+                          ? null
+                          : () => _deleteSnapshot(snapshot),
+                      icon: const Icon(Icons.delete_outline),
+                    ),
+                ],
+              ),
+              Text(
+                _formatDateTime(snapshot.savedAt),
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: <Widget>[
+                  _CompactAmountChip(
+                    label: 'Debit',
+                    value: _formatEntryAmount(snapshot.overallDebit),
                   ),
-              ],
-            ),
-            Text(
-              _formatDateTime(snapshot.savedAt),
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: <Widget>[
-                _CompactAmountChip(
-                  label: 'Debit',
-                  value: _formatEntryAmount(snapshot.overallDebit),
-                ),
-                _CompactAmountChip(
-                  label: 'Credit',
-                  value: _formatEntryAmount(snapshot.overallCredit),
-                ),
-                _CompactAmountChip(
-                  label: 'Balance',
-                  value: _formatBalance(snapshot.finalBalance),
-                ),
-              ],
-            ),
-          ],
+                  _CompactAmountChip(
+                    label: 'Credit',
+                    value: _formatEntryAmount(snapshot.overallCredit),
+                  ),
+                  _CompactAmountChip(
+                    label: 'Balance',
+                    value: _formatBalance(snapshot.finalBalance),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1437,17 +1451,26 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     var entryIndex = 0;
 
     for (final snapshot in _snapshots) {
+      final isExpanded = _expandedSnapshots.contains(snapshot.savedAt);
+      final snapshotEntries = <Widget>[];
+
       while (entryIndex < _entries.length &&
           _compareMoments(
                 _entries[entryIndex].entry.createdAt,
                 snapshot.savedAt,
               ) <=
               0) {
-        items.add(_buildTimelineEntryCard(context, _entries[entryIndex]));
+        if (isExpanded) {
+          snapshotEntries.add(_buildTimelineEntryCard(context, _entries[entryIndex]));
+        }
         entryIndex++;
       }
 
-      items.add(_buildCompactSnapshotCard(context, snapshot));
+      items.add(_buildCompactSnapshotCard(context, snapshot, isExpanded: isExpanded));
+      if (isExpanded) {
+        items.addAll(snapshotEntries);
+      }
+
       final carryForward = _balanceToOpening(snapshot.finalBalance);
       if (carryForward.hasValue) {
         items.add(
@@ -1699,17 +1722,26 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     var entryIndex = 0;
 
     for (final snapshot in _snapshots) {
+      final isExpanded = _expandedSnapshots.contains(snapshot.savedAt);
+      final snapshotEntries = <DataRow>[];
+
       while (entryIndex < _entries.length &&
           _compareMoments(
                 _entries[entryIndex].entry.createdAt,
                 snapshot.savedAt,
               ) <=
               0) {
-        rows.add(_buildEntryRow(_entries[entryIndex], compact: compact));
+        if (isExpanded) {
+          snapshotEntries.add(_buildEntryRow(_entries[entryIndex], compact: compact));
+        }
         entryIndex++;
       }
 
-      rows.add(_buildSnapshotTotalRow(context, snapshot, compact: compact));
+      rows.add(_buildSnapshotTotalRow(context, snapshot, compact: compact, isExpanded: isExpanded));
+      if (isExpanded) {
+        rows.addAll(snapshotEntries);
+      }
+
       final carryForward = _balanceToOpening(snapshot.finalBalance);
       if (carryForward.hasValue) {
         rows.add(
@@ -1765,6 +1797,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     BuildContext context,
     SummarySnapshot snapshot, {
     required bool compact,
+    required bool isExpanded,
   }) {
     final totalStyle = Theme.of(context).textTheme.bodyLarge?.copyWith(
       fontSize: compact ? 14 : null,
@@ -1779,18 +1812,29 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         DataCell(
           SizedBox(
             width: compact ? 150 : 180,
-            child: Row(
-              children: <Widget>[
-                const Icon(Icons.bookmark_added_outlined, size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Snapshot Total',
-                    style: totalStyle,
-                    overflow: TextOverflow.ellipsis,
+            child: InkWell(
+              onTap: () {
+                setState(() {
+                  if (isExpanded) {
+                    _expandedSnapshots.remove(snapshot.savedAt);
+                  } else {
+                    _expandedSnapshots.add(snapshot.savedAt);
+                  }
+                });
+              },
+              child: Row(
+                children: <Widget>[
+                  Icon(isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Snapshot Total',
+                      style: totalStyle,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

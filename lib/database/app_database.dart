@@ -209,9 +209,11 @@ class DatabaseHelper {
         entryDate TEXT NOT NULL,
         createdAt TEXT NOT NULL,
         pageNo TEXT NOT NULL DEFAULT '',
+        dailyLogPageNo TEXT NOT NULL DEFAULT '',
         description TEXT NOT NULL,
         debit REAL NOT NULL DEFAULT 0,
         credit REAL NOT NULL DEFAULT 0,
+        showInDailyLog INTEGER NOT NULL DEFAULT 1,
         FOREIGN KEY(customerId) REFERENCES $customersTable(id) ON DELETE CASCADE
       )
     ''');
@@ -223,7 +225,8 @@ class DatabaseHelper {
         savedAt TEXT NOT NULL,
         overallDebit REAL NOT NULL DEFAULT 0,
         overallCredit REAL NOT NULL DEFAULT 0,
-        customerCount INTEGER NOT NULL DEFAULT 0
+        customerCount INTEGER NOT NULL DEFAULT 0,
+        dailyLogPageNo TEXT NOT NULL DEFAULT ''
       )
     ''');
   }
@@ -266,6 +269,24 @@ class DatabaseHelper {
       tableName: entriesTable,
       columnName: 'pageNo',
       definition: "TEXT NOT NULL DEFAULT ''",
+    );
+    await _ensureColumn(
+      db: db,
+      tableName: entriesTable,
+      columnName: 'dailyLogPageNo',
+      definition: "TEXT NOT NULL DEFAULT ''",
+    );
+    await _ensureColumn(
+      db: db,
+      tableName: summarySnapshotsTable,
+      columnName: 'dailyLogPageNo',
+      definition: "TEXT NOT NULL DEFAULT ''",
+    );
+    await _ensureColumn(
+      db: db,
+      tableName: entriesTable,
+      columnName: 'showInDailyLog',
+      definition: 'INTEGER NOT NULL DEFAULT 1',
     );
   }
 
@@ -644,13 +665,14 @@ class DatabaseHelper {
         'entryDate',
         'createdAt',
         'pageNo',
+        'dailyLogPageNo',
         'description',
         'debit',
         'credit',
       ],
       where: 'customerId = ?',
       whereArgs: <Object?>[customerId],
-      orderBy: 'createdAt ASC, entryDate ASC, id ASC',
+      orderBy: 'createdAt DESC, entryDate DESC, id DESC',
     );
   }
 
@@ -674,7 +696,7 @@ class DatabaseHelper {
       ],
       where: 'customerId = ? AND entryDate >= ? AND entryDate <= ?',
       whereArgs: <Object?>[customerId, startDate, endDate],
-      orderBy: 'createdAt ASC, entryDate ASC, id ASC',
+      orderBy: 'createdAt DESC, entryDate DESC, id DESC',
     );
   }
 
@@ -705,8 +727,8 @@ class DatabaseHelper {
         c.name AS customerName
       FROM $entriesTable e
       JOIN $customersTable c ON c.id = e.customerId
-      WHERE ${whereClause.toString()} AND c.ledgerYear = ?
-      ORDER BY e.createdAt ASC, e.entryDate ASC, e.id ASC
+      WHERE ${whereClause.toString()} AND c.ledgerYear = ? AND e.showInDailyLog = 1
+      ORDER BY e.createdAt DESC, e.entryDate DESC, e.id DESC
       ''',
       <Object?>[...whereArgs, _activeYear],
     );
@@ -741,8 +763,8 @@ class DatabaseHelper {
         c.name AS customerName
       FROM $entriesTable e
       JOIN $customersTable c ON c.id = e.customerId
-      WHERE ${whereClause.toString()} AND c.ledgerYear = ?
-      ORDER BY e.createdAt ASC, e.entryDate ASC, e.id ASC
+      WHERE ${whereClause.toString()} AND c.ledgerYear = ? AND e.showInDailyLog = 1
+      ORDER BY e.createdAt DESC, e.entryDate DESC, e.id DESC
       LIMIT ? OFFSET ?
       ''',
       <Object?>[...whereArgs, _activeYear, limit, offset],
@@ -786,6 +808,7 @@ class DatabaseHelper {
     required double overallDebit,
     required double overallCredit,
     required int customerCount,
+    String dailyLogPageNo = '',
   }) async {
     final db = await database;
     return db.insert(summarySnapshotsTable, <String, Object?>{
@@ -794,7 +817,33 @@ class DatabaseHelper {
       'overallDebit': overallDebit,
       'overallCredit': overallCredit,
       'customerCount': customerCount,
+      'dailyLogPageNo': dailyLogPageNo,
     });
+  }
+
+  Future<void> batchUpdateDailyLogPageNo({
+    required List<int> entryIds,
+    required String dailyLogPageNo,
+  }) async {
+    final db = await database;
+    final placeholders = entryIds.map((_) => '?').join(',');
+    await db.rawUpdate(
+      'UPDATE $entriesTable SET dailyLogPageNo = ? WHERE id IN ($placeholders)',
+      [dailyLogPageNo, ...entryIds],
+    );
+  }
+
+  Future<void> updateEntryDailyLogVisibility({
+    required int entryId,
+    required bool show,
+  }) async {
+    final db = await database;
+    await db.update(
+      entriesTable,
+      <String, Object?>{'showInDailyLog': show ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: <Object?>[entryId],
+    );
   }
 
   Future<List<Map<String, Object?>>> getSummarySnapshots() async {
@@ -808,10 +857,28 @@ class DatabaseHelper {
         'overallDebit',
         'overallCredit',
         'customerCount',
+        'dailyLogPageNo',
       ],
       where: 'ledgerYear = ?',
       whereArgs: <Object?>[_activeYear],
       orderBy: 'savedAt DESC, id DESC',
+    );
+  }
+
+  Future<int> updateSummarySnapshotTotals({
+    required int id,
+    required double overallDebit,
+    required double overallCredit,
+  }) async {
+    final db = await database;
+    return db.update(
+      summarySnapshotsTable,
+      <String, Object?>{
+        'overallDebit': overallDebit,
+        'overallCredit': overallCredit,
+      },
+      where: 'id = ?',
+      whereArgs: <Object?>[id],
     );
   }
 
@@ -1485,17 +1552,48 @@ class AppDatabase {
     required double overallDebit,
     required double overallCredit,
     required int customerCount,
+    String dailyLogPageNo = '',
   }) {
     return _helper.addSummarySnapshot(
       savedAt: savedAt,
       overallDebit: overallDebit,
       overallCredit: overallCredit,
       customerCount: customerCount,
+      dailyLogPageNo: dailyLogPageNo,
     );
+  }
+
+  Future<void> batchUpdateDailyLogPageNo({
+    required List<int> entryIds,
+    required String dailyLogPageNo,
+  }) {
+    return _helper.batchUpdateDailyLogPageNo(
+      entryIds: entryIds,
+      dailyLogPageNo: dailyLogPageNo,
+    );
+  }
+
+  Future<void> updateEntryDailyLogVisibility({
+    required int entryId,
+    required bool show,
+  }) {
+    return _helper.updateEntryDailyLogVisibility(entryId: entryId, show: show);
   }
 
   Future<List<Map<String, Object?>>> getSummarySnapshots() {
     return _helper.getSummarySnapshots();
+  }
+
+  Future<int> updateSummarySnapshotTotals({
+    required int id,
+    required double overallDebit,
+    required double overallCredit,
+  }) {
+    return _helper.updateSummarySnapshotTotals(
+      id: id,
+      overallDebit: overallDebit,
+      overallCredit: overallCredit,
+    );
   }
 
   Future<int> deleteSummarySnapshot(int id) {

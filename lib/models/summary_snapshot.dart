@@ -5,6 +5,7 @@ class SummarySnapshot {
     required this.overallDebit,
     required this.overallCredit,
     required this.customerCount,
+    this.dailyLogPageNo = '',
   });
 
   final int? id;
@@ -12,6 +13,7 @@ class SummarySnapshot {
   final double overallDebit;
   final double overallCredit;
   final int customerCount;
+  final String dailyLogPageNo;
 
   double get finalBalance => overallDebit - overallCredit;
 
@@ -22,6 +24,7 @@ class SummarySnapshot {
       overallDebit: (map['overallDebit'] as num).toDouble(),
       overallCredit: (map['overallCredit'] as num).toDouble(),
       customerCount: map['customerCount'] as int,
+      dailyLogPageNo: map['dailyLogPageNo'] as String? ?? '',
     );
   }
 
@@ -32,6 +35,7 @@ class SummarySnapshot {
       'overallDebit': overallDebit,
       'overallCredit': overallCredit,
       'customerCount': customerCount,
+      'dailyLogPageNo': dailyLogPageNo,
     };
   }
 }

@@ -8,6 +8,7 @@ class Entry {
     required this.description,
     required this.debit,
     required this.credit,
+    this.dailyLogPageNo = '',
   });
 
   final int? id;
@@ -18,6 +19,7 @@ class Entry {
   final String description;
   final double debit;
   final double credit;
+  final String dailyLogPageNo;
 
   String get displayDescription =>
       description.trim().isEmpty ? '-' : description.trim();
@@ -32,6 +34,7 @@ class Entry {
       description: map['description'] as String,
       debit: (map['debit'] as num).toDouble(),
       credit: (map['credit'] as num).toDouble(),
+      dailyLogPageNo: map['dailyLogPageNo'] as String? ?? '',
     );
   }
 
@@ -45,6 +48,7 @@ class Entry {
       'description': description,
       'debit': debit,
       'credit': credit,
+      'dailyLogPageNo': dailyLogPageNo,
     };
   }
 }

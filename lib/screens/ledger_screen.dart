@@ -14,6 +14,7 @@ import '../providers/ledger_provider.dart';
 import '../services/export_service.dart';
 import '../services/linked_devices_controller.dart';
 import '../services/pdf_service.dart';
+import '../utils/app_colors.dart';
 import '../utils/number_format_utils.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/amount_input_field.dart';
@@ -1332,7 +1333,7 @@ class _LedgerViewState extends State<_LedgerView> {
                         focusNode: _openingDebitFocusNode,
                         label: 'Debit Opening Balance',
                         icon: Icons.arrow_downward_rounded,
-                        accentColor: const Color(0xFF0F766E),
+                        accentColor: AppColors.debit,
                         readOnly: readOnly,
                         compact: compactForDesktop,
                       ),
@@ -1343,7 +1344,7 @@ class _LedgerViewState extends State<_LedgerView> {
                         focusNode: _openingCreditFocusNode,
                         label: 'Credit Opening Balance',
                         icon: Icons.arrow_upward_rounded,
-                        accentColor: const Color(0xFFB45309),
+                        accentColor: AppColors.credit,
                         readOnly: readOnly,
                         compact: compactForDesktop,
                       ),
@@ -1468,9 +1469,7 @@ class _LedgerViewState extends State<_LedgerView> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final customer = provider.customer;
-    final balanceAccent = provider.finalBalance >= 0
-        ? const Color(0xFF0F766E)
-        : const Color(0xFFB42318);
+    final balanceAccent = AppColors.balanceColor(provider.finalBalance);
 
     return Container(
       width: double.infinity,
@@ -1857,9 +1856,7 @@ class _LedgerViewState extends State<_LedgerView> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final customer = provider.customer;
-    final balanceAccent = provider.finalBalance >= 0
-        ? const Color(0xFF0F766E)
-        : const Color(0xFFB42318);
+    final balanceAccent = AppColors.balanceColor(provider.finalBalance);
 
     return Container(
       width: double.infinity,
@@ -2858,6 +2855,7 @@ class _LedgerViewState extends State<_LedgerView> {
                     DataColumn(label: Text('Entry Date')),
                     DataColumn(label: Text('Created Date')),
                     DataColumn(label: Text('Page No')),
+                    DataColumn(label: Text('Page No')),
                     DataColumn(label: Text('Description')),
                     DataColumn(label: Text('Debit'), numeric: true),
                     DataColumn(label: Text('Credit'), numeric: true),
@@ -2981,6 +2979,14 @@ class _LedgerViewState extends State<_LedgerView> {
                   icon: Icons.bookmark_border_rounded,
                   label: 'Page ${entry.pageNo}',
                   accentColor: accentColor,
+                ),
+              if (entry.dailyLogPageNo.trim().isNotEmpty)
+                _buildEntryMetaChip(
+                  context,
+                  icon: Icons.menu_book_outlined,
+                  label: 'DL Pg ${entry.dailyLogPageNo}',
+                  accentColor: colorScheme.tertiary,
+                  highlight: true,
                 ),
               if (isOpeningBalanceEntry)
                 _buildEntryMetaChip(
@@ -3387,9 +3393,7 @@ class _LedgerViewState extends State<_LedgerView> {
   Future<List<Map<String, Object?>>> _getOtherCustomers(
     int currentCustomerId,
   ) async {
-    if (_cachedLedgerCustomers == null) {
-      _cachedLedgerCustomers = await AppDatabase.instance.getCustomers();
-    }
+    _cachedLedgerCustomers ??= await AppDatabase.instance.getCustomers();
     return _cachedLedgerCustomers!
         .where(
           (Map<String, Object?> c) => (c['id'] as int) != currentCustomerId,
@@ -3419,10 +3423,11 @@ class _LedgerViewState extends State<_LedgerView> {
     }
 
     final otherCustomers = await _getOtherCustomers(currentCustomerId);
+    if (!mounted) {
+      return;
+    }
+
     if (otherCustomers.isEmpty) {
-      if (!mounted) {
-        return;
-      }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('No other customers available to transfer to.'),
@@ -3512,6 +3517,7 @@ class _LedgerViewState extends State<_LedgerView> {
     required LinkedDevicesController linkedDevices,
     required bool compact,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
     final rows = <DataRow>[];
     double? runningBalance;
 
@@ -3547,6 +3553,15 @@ class _LedgerViewState extends State<_LedgerView> {
               Text(entry.pageNo.isEmpty ? '-' : entry.pageNo, style: rowStyle),
             ),
             DataCell(
+              Text(
+                entry.dailyLogPageNo.isEmpty ? '-' : entry.dailyLogPageNo,
+                style: rowStyle?.copyWith(
+                  color: colorScheme.tertiary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            DataCell(
               SizedBox(
                 width: compact ? 220 : 260,
                 child: Text(
@@ -3557,9 +3572,30 @@ class _LedgerViewState extends State<_LedgerView> {
                 ),
               ),
             ),
-            DataCell(Text(provider.formatAmount(debit), style: rowStyle)),
-            DataCell(Text(provider.formatAmount(credit), style: rowStyle)),
-            DataCell(Text(balanceLabel, style: rowStyle)),
+            DataCell(
+              Text(
+                provider.formatAmount(debit),
+                style: (rowStyle ?? const TextStyle()).copyWith(
+                  color: AppColors.debit,
+                ),
+              ),
+            ),
+            DataCell(
+              Text(
+                provider.formatAmount(credit),
+                style: (rowStyle ?? const TextStyle()).copyWith(
+                  color: AppColors.credit,
+                ),
+              ),
+            ),
+            DataCell(
+              Text(
+                balanceLabel,
+                style: (rowStyle ?? const TextStyle()).copyWith(
+                  color: AppColors.balanceLabelColor(balanceLabel),
+                ),
+              ),
+            ),
             DataCell(
               isOpeningBalanceEntry
                   ? IconButton(

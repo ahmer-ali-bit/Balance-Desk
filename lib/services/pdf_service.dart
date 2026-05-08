@@ -98,11 +98,11 @@ class PdfService {
     required Customer customer,
     required List<Entry> entries,
   }) async {
+
     final bytes = await generateCustomerLedgerPdf(
       customer: customer,
       entries: entries,
     );
-
     await Printing.sharePdf(
       bytes: bytes,
       filename: _buildFileName(customer.name),
@@ -132,6 +132,7 @@ class PdfService {
     bool highlightFirstRow = false,
     List<String>? openingBalanceRow,
   }) async {
+
     final bytes = await generateSnapshotPdf(
       title: title,
       headers: headers,
@@ -263,7 +264,9 @@ class PdfService {
     required Map<int, pw.TableColumnWidth> columnWidths,
     List<String>? openingBalanceRow,
   }) {
-    final children = <pw.Widget>[_buildDocumentTitle(title: title)];
+    final children = <pw.Widget>[
+      if (context.pageNumber == 1) _buildDocumentTitle(title: title),
+    ];
 
     // Show Total Debit, Total Credit, Total Balance as cards at top (page 1 only)
     if (context.pageNumber == 1 && summaryItems.isNotEmpty) {
@@ -271,7 +274,7 @@ class PdfService {
         pw.SizedBox(height: 10),
         _buildSummaryItemRow(
           summaryItems,
-          tint: const PdfColor.fromInt(0xFFF2F7FF),
+          tint: const PdfColor.fromInt(0xFFF9FAFB),
         ),
       ]);
     }
@@ -377,21 +380,28 @@ class PdfService {
       return pw.SizedBox.shrink();
     }
 
-    return pw.Row(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: List<pw.Widget>.generate(items.length * 2 - 1, (int index) {
-        if (index.isOdd) {
-          return pw.SizedBox(width: 8);
-        }
+    final children = <pw.Widget>[];
+    for (var i = 0; i < items.length; i++) {
+      children.add(
+        _buildSummaryItemCard(
+          items[i],
+          tint: tint,
+          compact: true,
+        ),
+      );
+      if (i < items.length - 1) {
+        children.add(pw.SizedBox(width: 10));
+      }
+    }
 
-        return pw.Expanded(
-          child: _buildSummaryItemCard(
-            items[index ~/ 2],
-            tint: tint,
-            compact: true,
-          ),
-        );
-      }),
+    return pw.Table(
+      children: <pw.TableRow>[
+        pw.TableRow(
+          children: List<pw.Widget>.generate(children.length, (int i) {
+            return children[i];
+          }),
+        ),
+      ],
     );
   }
 
@@ -404,30 +414,33 @@ class PdfService {
     return pw.Container(
       width: width,
       padding: pw.EdgeInsets.symmetric(
-        horizontal: compact ? 12 : 10,
-        vertical: compact ? 8 : 10,
+        horizontal: 14,
+        vertical: 12,
       ),
       decoration: pw.BoxDecoration(
         color: tint ?? const PdfColor.fromInt(0xFFF7F9FC),
-        borderRadius: pw.BorderRadius.circular(compact ? 16 : 14),
-        border: pw.Border.all(color: PdfColors.blueGrey200),
+        borderRadius: pw.BorderRadius.circular(10),
+        border: pw.Border.all(color: PdfColors.blueGrey100, width: 0.8),
       ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
+        mainAxisAlignment: pw.MainAxisAlignment.center,
         children: <pw.Widget>[
           pw.Text(
             item.label,
             style: pw.TextStyle(
-              fontSize: compact ? 8.2 : 8.5,
-              color: PdfColors.blueGrey700,
+              fontSize: 9,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.blueGrey600,
             ),
           ),
-          pw.SizedBox(height: compact ? 3 : 4),
+          pw.SizedBox(height: 5),
           pw.Text(
             item.value,
             style: pw.TextStyle(
-              fontSize: compact ? 11.8 : 12.5,
+              fontSize: 14,
               fontWeight: pw.FontWeight.bold,
+              color: PdfColors.black,
             ),
           ),
         ],
@@ -489,30 +502,34 @@ class PdfService {
             ),
           ),
           pw.SizedBox(height: 6),
-          pw.Row(
-            children: <pw.Widget>[
-              _buildTotalCard(
-                label: 'Total Debit',
-                value: _formatAmount(totalDebit),
-                tint: const PdfColor.fromInt(0xFFE7F5FF),
-              ),
-              pw.SizedBox(width: 10),
-              _buildTotalCard(
-                label: 'Total Credit',
-                value: _formatAmount(totalCredit),
-                tint: const PdfColor.fromInt(0xFFEFFCF3),
-              ),
-              pw.SizedBox(width: 10),
-              _buildTotalCard(
-                label: 'Balance',
-                value: _formatBalance(finalBalance),
-                tint: const PdfColor.fromInt(0xFFFFF4E5),
-              ),
-              pw.SizedBox(width: 10),
-              _buildTotalCard(
-                label: 'Entries',
-                value: '$entryCount',
-                tint: const PdfColor.fromInt(0xFFF2F4F7),
+          pw.Table(
+            children: <pw.TableRow>[
+              pw.TableRow(
+                children: <pw.Widget>[
+                  _buildTotalCard(
+                    label: 'Total Debit',
+                    value: _formatAmount(totalDebit),
+                    tint: const PdfColor.fromInt(0xFFE7F5FF),
+                  ),
+                  pw.SizedBox(width: 10),
+                  _buildTotalCard(
+                    label: 'Total Credit',
+                    value: _formatAmount(totalCredit),
+                    tint: const PdfColor.fromInt(0xFFEFFCF3),
+                  ),
+                  pw.SizedBox(width: 10),
+                  _buildTotalCard(
+                    label: 'Balance',
+                    value: _formatBalance(finalBalance),
+                    tint: const PdfColor.fromInt(0xFFFFF4E5),
+                  ),
+                  pw.SizedBox(width: 10),
+                  _buildTotalCard(
+                    label: 'Entries',
+                    value: '$entryCount',
+                    tint: const PdfColor.fromInt(0xFFF2F4F7),
+                  ),
+                ],
               ),
             ],
           ),
@@ -666,26 +683,24 @@ class PdfService {
       border: pw.TableBorder.all(color: PdfColors.blueGrey200, width: 0.6),
       defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle,
       columnWidths: columnWidths,
-      children: rows
-          .map<pw.TableRow>((List<String> row) {
-            final isFirst = rows.indexOf(row) == 0 && highlightFirstRow;
-            return pw.TableRow(
-              decoration: isFirst
-                  ? pw.BoxDecoration(color: const PdfColor.fromInt(0xFFFFF3E0))
-                  : null,
-              children: List<pw.Widget>.generate(headers.length, (int index) {
-                return _buildTableCell(
-                  value: index < row.length ? row[index] : '',
-                  style: isFirst ? highlightStyle : cellStyle,
-                  padding: padding,
-                  alignment:
-                      cellAlignments[index] ??
-                      _defaultAlignmentForHeader(headers[index]),
-                );
-              }),
+      children: List<pw.TableRow>.generate(rows.length, (int rowIndex) {
+        final row = rows[rowIndex];
+        final isFirst = rowIndex == 0 && highlightFirstRow;
+        return pw.TableRow(
+          decoration: isFirst
+              ? const pw.BoxDecoration(color: PdfColor.fromInt(0xFFFFF3E0))
+              : null,
+          children: List<pw.Widget>.generate(headers.length, (int colIndex) {
+            return _buildTableCell(
+              value: colIndex < row.length ? row[colIndex] : '',
+              style: isFirst ? highlightStyle : cellStyle,
+              padding: padding,
+              alignment: cellAlignments[colIndex] ??
+                  _defaultAlignmentForHeader(headers[colIndex]),
             );
-          })
-          .toList(growable: false),
+          }),
+        );
+      }),
     );
   }
 

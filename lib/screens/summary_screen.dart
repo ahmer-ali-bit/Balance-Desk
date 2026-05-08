@@ -10,6 +10,7 @@ import '../models/snapshot_opening_balance.dart';
 import '../services/export_service.dart';
 import '../services/linked_devices_controller.dart';
 import '../services/pdf_service.dart';
+import '../utils/app_colors.dart';
 import '../utils/number_format_utils.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/customer_search_field.dart';
@@ -198,7 +199,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
           ),
         ],
       );
-    } catch (_) {
+    } catch (e, stack) {
+      debugPrint('SummaryScreen._exportSummaryPdf failed: $e');
+      debugPrint('$stack');
       if (!mounted) {
         return;
       }
@@ -687,14 +690,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
     BuildContext context, {
     required double overallBalance,
   }) {
-    final items = <({String label, String value})>[
-      (label: 'Overall Debit', value: _formatAmount(_summaryData.overallDebit)),
-      (
-        label: 'Overall Credit',
-        value: _formatAmount(_summaryData.overallCredit),
-      ),
-      (label: 'Final Balance', value: _formatBalance(overallBalance)),
-    ];
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
@@ -711,16 +706,43 @@ class _SummaryScreenState extends State<SummaryScreen> {
           spacing: spacing,
           runSpacing: spacing,
           children: <Widget>[
-            for (final item in items)
-              SizedBox(
-                width: width,
-                child: SummaryStatCard(
-                  label: item.label,
-                  value: item.value,
-                  stretch: true,
-                  height: 76,
-                ),
+            SizedBox(
+              width: width,
+              child: SummaryStatCard(
+                label: 'Overall Debit',
+                value: _formatAmount(_summaryData.overallDebit),
+                stretch: true,
+                height: 84,
+                backgroundColor: AppColors.debitSurface,
+                labelColor: AppColors.debit,
               ),
+            ),
+            SizedBox(
+              width: width,
+              child: SummaryStatCard(
+                label: 'Overall Credit',
+                value: _formatAmount(_summaryData.overallCredit),
+                stretch: true,
+                height: 84,
+                backgroundColor: AppColors.creditSurface,
+                labelColor: AppColors.credit,
+              ),
+            ),
+            SizedBox(
+              width: width,
+              child: SummaryStatCard(
+                label: 'Final Balance',
+                value: _formatBalance(overallBalance),
+                stretch: true,
+                height: 84,
+                backgroundColor: AppColors.balanceColor(overallBalance) == AppColors.debit
+                    ? AppColors.debitSurface
+                    : (AppColors.balanceColor(overallBalance) == AppColors.credit
+                        ? AppColors.creditSurface
+                        : Colors.grey.shade50),
+                labelColor: AppColors.balanceColor(overallBalance),
+              ),
+            ),
           ],
         );
       },
@@ -852,9 +874,25 @@ class _SummaryScreenState extends State<SummaryScreen> {
                           DataCell(
                             Text(item.pageNo.isEmpty ? '-' : item.pageNo),
                           ),
-                          DataCell(Text(_formatAmount(item.totalDebit))),
-                          DataCell(Text(_formatAmount(item.totalCredit))),
-                          DataCell(Text(_formatBalance(item.balance))),
+                          DataCell(
+                            Text(
+                              _formatAmount(item.totalDebit),
+                              style: const TextStyle(color: AppColors.debit),
+                            ),
+                          ),
+                          DataCell(
+                            Text(
+                              _formatAmount(item.totalCredit),
+                              style: const TextStyle(color: AppColors.credit),
+                            ),
+                          ),
+                          DataCell(
+                            Text(
+                              _formatBalance(item.balance),
+                              style: TextStyle(
+                                  color: AppColors.balanceColor(item.balance)),
+                            ),
+                          ),
                         ],
                       );
                     }),
@@ -886,9 +924,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
   Widget _buildSummaryListCard(BuildContext context, _CustomerSummary item) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final balanceColor = item.balance >= 0
-        ? colorScheme.primary
-        : colorScheme.secondary;
+    final balanceColor = AppColors.balanceColor(item.balance);
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -963,7 +999,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
             child: _SummaryStripItem(
               label: 'Debit',
               value: debit,
-              color: colorScheme.primary,
+              color: AppColors.debit,
             ),
           ),
           _summaryStripDivider(context),
@@ -971,7 +1007,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
             child: _SummaryStripItem(
               label: 'Credit',
               value: credit,
-              color: colorScheme.secondary,
+              color: AppColors.credit,
             ),
           ),
           _summaryStripDivider(context),
