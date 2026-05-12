@@ -1,13 +1,20 @@
 import 'package:flutter/foundation.dart';
 
+import 'dart:async';
+
 import '../database/app_database.dart';
 class LedgerYearProvider extends ChangeNotifier {
-  LedgerYearProvider({
-    AppDatabase? database,
-  }) : _database = database ?? AppDatabase.instance;
-
   final AppDatabase _database;
   bool _isDisposed = false;
+  StreamSubscription<void>? _dbSub;
+
+  LedgerYearProvider({
+    AppDatabase? database,
+  }) : _database = database ?? AppDatabase.instance {
+    _dbSub = _database.onDataChanged.listen((_) {
+      if (!_isDisposed) loadYears();
+    });
+  }
 
   List<int> _years = <int>[];
   int _activeYear = DateTime.now().year;
@@ -138,6 +145,7 @@ class LedgerYearProvider extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _dbSub?.cancel();
     super.dispose();
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../database/app_database.dart';
@@ -11,6 +12,14 @@ enum LedgerDateFilter { all, today, thisWeek, thisMonth, customRange }
 class LedgerProvider extends ChangeNotifier {
   static const String _openingBalanceDescription = 'Opening Balance';
 
+  final AppDatabase _database;
+  bool _isDisposed = false;
+  StreamSubscription<void>? _dbSub;
+  final Customer _customer;
+  String _customerName;
+  String _customerAddress;
+  String _customerPhone;
+
   LedgerProvider({
     required Customer customer,
     AppDatabase? database,
@@ -18,14 +27,11 @@ class LedgerProvider extends ChangeNotifier {
        _customerName = customer.name,
        _customerAddress = customer.address,
        _customerPhone = customer.phone,
-       _database = database ?? AppDatabase.instance;
-
-  final Customer _customer;
-  String _customerName;
-  String _customerAddress;
-  String _customerPhone;
-  final AppDatabase _database;
-  bool _isDisposed = false;
+       _database = database ?? AppDatabase.instance {
+    _dbSub = _database.onDataChanged.listen((_) {
+      if (!_isDisposed) loadEntries();
+    });
+  }
 
   List<Entry> _entries = <Entry>[];
   List<Entry> _visibleEntries = <Entry>[];
@@ -483,6 +489,7 @@ class LedgerProvider extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _dbSub?.cancel();
     super.dispose();
   }
 }

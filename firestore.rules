@@ -2,162 +2,30 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
+    
+    // 1. Linked Invites (Used for QR/Token sharing)
+    match /linked_invites/{inviteToken} {
+      allow read, write: if true;
     }
 
-    function memberDoc(workspaceId, uid) {
-      return get(
-        /databases/$(database)/documents/workspaces/$(workspaceId)/members/$(uid)
-      );
+    // 2. Linked Sessions (Used for active device links)
+    match /linked_sessions/{sessionId} {
+      allow read, write: if true;
     }
 
-    function workspaceDoc(workspaceId) {
-      return get(
-        /databases/$(database)/documents/workspaces/$(workspaceId)
-      );
+    // 3. Workspace Snapshots (Used for cross-device sync)
+    match /workspace_snapshots/{deviceId} {
+      allow read, write: if true;
     }
 
-    function currentMember(workspaceId) {
-      return memberDoc(workspaceId, request.auth.uid);
-    }
-
-    function isWorkspaceOwner(workspaceId) {
-      return signedIn() &&
-        workspaceDoc(workspaceId).data.ownerUid == request.auth.uid;
-    }
-
-    function isActiveMember(workspaceId) {
-      return signedIn() &&
-        currentMember(workspaceId).data.status == 'active';
-    }
-
-    function canWritePayload(workspaceId) {
-      return isActiveMember(workspaceId) &&
-        currentMember(workspaceId).data.role in ['owner', 'editor'];
-    }
-
-    function inviteDoc(workspaceId, inviteId) {
-      return get(
-        /databases/$(database)/documents/workspaces/$(workspaceId)/invites/$(inviteId)
-      );
-    }
-
-    function validInvite(workspaceId, inviteId, token) {
-      let invite = inviteDoc(workspaceId, inviteId);
-      return invite.data.status == 'active' &&
-        invite.data.token == token &&
-        invite.data.expiresAt > request.time;
-    }
-
-    function grantDoc(workspaceId, grantId) {
-      return get(
-        /databases/$(database)/documents/workspaces/$(workspaceId)/edit_grants/$(grantId)
-      );
-    }
-
-    function validGrant(workspaceId, memberUid, grantId, token) {
-      let grant = grantDoc(workspaceId, grantId);
-      return grant.data.status == 'active' &&
-        grant.data.targetUid == memberUid &&
-        grant.data.token == token &&
-        grant.data.expiresAt > request.time;
-    }
-
-    match /workspaces/{workspaceId} {
-      allow read: if isActiveMember(workspaceId);
-      allow create: if signedIn() &&
-        request.resource.data.ownerUid == request.auth.uid;
-      allow update: if canWritePayload(workspaceId) &&
-        request.resource.data.ownerUid == resource.data.ownerUid;
-
-      match /members/{memberUid} {
-        allow read: if signedIn() &&
-          (request.auth.uid == memberUid ||
-            currentMember(workspaceId).data.role == 'owner');
-
-        allow create: if signedIn() &&
-          request.auth.uid == memberUid &&
-          request.resource.data.uid == request.auth.uid &&
-          request.resource.data.status == 'active' &&
-          (
-            (
-              request.resource.data.role == 'owner' &&
-              isWorkspaceOwner(workspaceId)
-            ) ||
-            (
-              request.resource.data.role == 'viewer' &&
-              validInvite(
-                workspaceId,
-                request.resource.data.inviteId,
-                request.resource.data.inviteToken
-              )
-            )
-          );
-
-        allow update: if signedIn() && (
-          (
-            currentMember(workspaceId).data.role == 'owner'
-          ) ||
-          (
-            request.auth.uid == memberUid &&
-            resource.data.role in ['viewer', 'editor'] &&
-            request.resource.data.uid == request.auth.uid &&
-            request.resource.data.role == resource.data.role &&
-            request.resource.data.status == 'revoked'
-          ) ||
-          (
-            request.auth.uid == memberUid &&
-            request.resource.data.uid == request.auth.uid &&
-            request.resource.data.status == 'active' &&
-            request.resource.data.role == 'viewer' &&
-            validInvite(
-              workspaceId,
-              request.resource.data.inviteId,
-              request.resource.data.inviteToken
-            )
-          ) ||
-          (
-            request.auth.uid == memberUid &&
-            resource.data.role == 'viewer' &&
-            request.resource.data.role == 'editor' &&
-            request.resource.data.status == 'active' &&
-            validGrant(
-              workspaceId,
-              memberUid,
-              request.resource.data.grantId,
-              request.resource.data.grantToken
-            )
-          )
-        );
-
-        allow delete: if signedIn() &&
-          (
-            request.auth.uid == memberUid ||
-            isWorkspaceOwner(workspaceId) ||
-            currentMember(workspaceId).data.role == 'owner'
-          );
-      }
-
-      match /invites/{inviteId} {
-        allow read, write: if isActiveMember(workspaceId) &&
-          currentMember(workspaceId).data.role == 'owner';
-      }
-
-      match /edit_grants/{grantId} {
-        allow read, write: if isActiveMember(workspaceId) &&
-          currentMember(workspaceId).data.role == 'owner';
-      }
-
-      match /revisions/{revisionId} {
-        allow read: if isActiveMember(workspaceId);
-        allow write: if canWritePayload(workspaceId);
-
-        match /chunks/{chunkId} {
-          allow read: if isActiveMember(workspaceId);
-          allow write: if canWritePayload(workspaceId);
-        }
-      }
+    // Keep legacy collections for backward compatibility
+    match /devices_v2/{deviceId} { allow read, write: if true; }
+    match /linkedSessions_v2/{sessionId} { allow read, write: if true; }
+    match /inviteLinks_v2/{linkToken} { allow read, write: if true; }
+    
+    // Default Deny
+    match /{path=**} {
+       allow read, write: if false; 
     }
   }
 }

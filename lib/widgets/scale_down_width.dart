@@ -17,18 +17,30 @@ class ScaleDownWidth extends StatelessWidget {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final maxWidth = constraints.maxWidth;
-        if (!maxWidth.isFinite || maxWidth >= designWidth) {
+        final maxHeight = constraints.maxHeight;
+
+        // If width is infinite, non-positive, or already large enough, just return the child.
+        // non-positive width can cause invalid transformation matrices.
+        if (!maxWidth.isFinite || maxWidth <= 0 || maxWidth >= designWidth) {
           return child;
         }
+
+        // Calculate scale factor to maintain proportions.
+        final scale = maxWidth / designWidth;
 
         return Align(
           alignment: alignment,
           child: SizedBox(
             width: maxWidth,
+            height: maxHeight.isFinite ? maxHeight : null,
             child: FittedBox(
-              fit: BoxFit.fitWidth,
+              fit: BoxFit.contain,
               alignment: alignment,
-              child: SizedBox(width: designWidth, child: child),
+              child: SizedBox(
+                width: designWidth,
+                height: maxHeight.isFinite ? maxHeight / scale : null,
+                child: child,
+              ),
             ),
           ),
         );

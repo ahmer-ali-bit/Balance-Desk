@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
@@ -1392,6 +1393,13 @@ class AppDatabase {
   static final AppDatabase instance = AppDatabase._();
 
   final DatabaseHelper _helper = DatabaseHelper.instance;
+
+  final StreamController<void> _dataChangedController = StreamController<void>.broadcast();
+  Stream<void> get onDataChanged => _dataChangedController.stream;
+
+  void notifyDataChanged() {
+    _dataChangedController.add(null);
+  }
 
   int get activeYear => _helper.activeYear;
 

@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 
 class SummaryStatCard extends StatelessWidget {
@@ -10,6 +11,7 @@ class SummaryStatCard extends StatelessWidget {
     this.height,
     this.backgroundColor,
     this.labelColor,
+    this.icon,
   });
 
   final String label;
@@ -19,6 +21,7 @@ class SummaryStatCard extends StatelessWidget {
   final double? height;
   final Color? backgroundColor;
   final Color? labelColor;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -32,6 +35,9 @@ class SummaryStatCard extends StatelessWidget {
         : theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800);
     final resolvedHeight = height ?? (compact ? 60.0 : 84.0);
 
+    final bool isMetric = backgroundColor != null;
+    final borderRadius = BorderRadius.circular(compact ? 12 : 16);
+
     return SizedBox(
       width: stretch
           ? double.infinity
@@ -39,67 +45,120 @@ class SummaryStatCard extends StatelessWidget {
           ? 110
           : 176,
       child: ConstrainedBox(
-        constraints: BoxConstraints(minHeight: resolvedHeight),
-        child: Container(
-          decoration: BoxDecoration(
-            color: backgroundColor ?? theme.cardTheme.color ?? colorScheme.surfaceContainerLow,
-            gradient: backgroundColor != null
-                ? LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: <Color>[
-                      backgroundColor!.withValues(alpha: 0.85),
-                      backgroundColor!,
-                      backgroundColor!.withValues(alpha: 0.95),
-                    ],
-                  )
-                : null,
-            borderRadius: BorderRadius.circular(compact ? 12 : 16),
-            border: backgroundColor == null
-                ? Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.5))
-                : null,
-            boxShadow: backgroundColor != null
-                ? <BoxShadow>[
-                    BoxShadow(
-                      color: backgroundColor!.withValues(alpha: 0.3),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: compact ? 12 : 16,
-              vertical: compact ? 8 : 14,
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  label,
-                  style: labelStyle?.copyWith(
-                    color: labelColor ?? (backgroundColor != null ? Colors.white70 : colorScheme.onSurfaceVariant),
-                  ),
-                  maxLines: 1,
-                ),
-                SizedBox(height: compact ? 4 : 6),
-                SizedBox(
-                  width: double.infinity,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      value,
-                      style: valueStyle?.copyWith(
-                        color: labelColor ?? (backgroundColor != null ? Colors.white : null),
+        constraints: BoxConstraints(
+          minHeight: resolvedHeight,
+          maxHeight: height != null ? height! : double.infinity,
+        ),
+        child: ClipRRect(
+          borderRadius: borderRadius,
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(
+              decoration: BoxDecoration(
+                color: isMetric
+                    ? backgroundColor!.withValues(alpha: 0.15)
+                    : theme.cardTheme.color?.withValues(alpha: 0.1) ??
+                        colorScheme.surfaceContainerLow.withValues(alpha: 0.1),
+                gradient: isMetric
+                    ? LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: <Color>[
+                          backgroundColor!.withValues(alpha: 0.25),
+                          backgroundColor!.withValues(alpha: 0.15),
+                          backgroundColor!.withValues(alpha: 0.2),
+                        ],
+                      )
+                    : LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: <Color>[
+                          colorScheme.surface.withValues(alpha: 0.2),
+                          colorScheme.surfaceContainerLow.withValues(alpha: 0.1),
+                        ],
                       ),
-                      maxLines: 1,
-                    ),
-                  ),
+                borderRadius: borderRadius,
+                border: Border.all(
+                  color: isMetric
+                      ? backgroundColor!.withValues(alpha: 0.4)
+                      : colorScheme.outlineVariant.withValues(alpha: 0.2),
+                  width: 1.5,
                 ),
-              ],
+                boxShadow: isMetric
+                    ? <BoxShadow>[
+                        BoxShadow(
+                          color: backgroundColor!.withValues(alpha: 0.15),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: compact ? 12 : 16,
+                  vertical: height != null ? (compact ? 4 : 6) : (compact ? 8 : 14),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    if (icon != null) ...<Widget>[
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: (isMetric ? Colors.white : colorScheme.primary).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          icon,
+                          size: compact ? 16 : 20,
+                          color: labelColor ??
+                              (isMetric ? Colors.white : colorScheme.primary),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                    ],
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            label.toUpperCase(),
+                            style: labelStyle?.copyWith(
+                              letterSpacing: 0.5,
+                              fontSize: compact ? 9 : 10,
+                              color: labelColor ??
+                                  (isMetric
+                                      ? Colors.white.withValues(alpha: 0.7)
+                                      : colorScheme.onSurfaceVariant),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          SizedBox(height: height != null ? 1 : (compact ? 2 : 4)),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                value,
+                                style: valueStyle?.copyWith(
+                                  fontSize: compact ? 14 : 16,
+                                  color: labelColor ??
+                                      (isMetric ? Colors.white : null),
+                                ),
+                                maxLines: 1,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),

@@ -1,9 +1,10 @@
-import 'dart:math' as math;
-
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
 import '../database/app_database.dart';
+import '../features/linked_devices/providers/linked_session_provider.dart';
 import '../models/entry.dart';
 import '../models/snapshot_opening_balance.dart';
 import '../models/summary_snapshot.dart';
@@ -21,6 +22,8 @@ class SnapshotEntriesScreen extends StatefulWidget {
 }
 
 enum _SnapshotExportChoice { pdf, excel }
+
+enum _EntryDeletionOption { dailyLogOnly, both }
 
 class _ScrollIntent extends Intent {
   const _ScrollIntent(this.delta);
@@ -258,6 +261,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       }
 
       final pageNoController = TextEditingController();
+      if (!mounted) return;
       final shouldSave = await showDialog<bool>(
         context: context,
         builder: (BuildContext context) {
@@ -292,6 +296,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           );
         },
       );
+
+      if (!mounted) return;
 
       if (shouldSave != true) {
         return;
@@ -380,22 +386,63 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   Future<void> _removeEntryFromDailyLog(Entry entry) async {
     if (entry.id == null) return;
 
+    final option = await showDialog<_EntryDeletionOption>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Entry'),
+          content: const Text(
+            'Do you want to remove this entry only from Daily Logs, or delete it permanently from the Customer Ledger as well?',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(_EntryDeletionOption.dailyLogOnly),
+              child: const Text('Daily Logs Only'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(_EntryDeletionOption.both),
+              child: const Text('Delete Permanently'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (option == null || !mounted) return;
+
     try {
-      await _database.updateEntryDailyLogVisibility(
-        entryId: entry.id!,
-        show: false,
-      );
+      if (option == _EntryDeletionOption.dailyLogOnly) {
+        await _database.updateEntryDailyLogVisibility(
+          entryId: entry.id!,
+          show: false,
+        );
+      } else {
+        await _database.deleteEntry(entry.id!);
+      }
+
       await _loadTimeline();
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Entry removed from Daily Logs')),
+        SnackBar(
+          content: Text(
+            option == _EntryDeletionOption.dailyLogOnly
+                ? 'Entry removed from Daily Logs.'
+                : 'Entry deleted permanently.',
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to remove entry: $e')));
+      ).showSnackBar(SnackBar(content: Text('Failed to delete entry: $e')));
     }
   }
 
@@ -774,9 +821,11 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         actions: <Type, Action<Intent>>{
           ActivateIntent: CallbackAction<Intent>(
             onInvoke: (_) {
+              final canEdit = context.read<LinkedSessionProvider>().canEdit;
               if (!_isLoading &&
                   !_isSavingSnapshot &&
-                  _hasCurrentPeriodEntries) {
+                  _hasCurrentPeriodEntries &&
+                  canEdit) {
                 _saveSnapshot();
               }
               return null;
@@ -793,11 +842,12 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           autofocus: true,
           child: LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) {
+              final canEdit = context.watch<LinkedSessionProvider>().canEdit;
               final isCompact =
                   !PlatformHelper.isDesktop && constraints.maxWidth < 760;
               final isDesktop = PlatformHelper.isDesktop;
               final latestSnapshot = _latestSnapshot;
-              final headerActions = _buildHeaderActions(isCompact: isCompact);
+              final headerActions = _buildHeaderActions(isCompact: isCompact, canEdit: canEdit);
               final bottomPadding =
                   12.0 + MediaQuery.viewInsetsOf(context).bottom;
 
@@ -935,7 +985,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     );
   }
 
-  Widget _buildHeaderActions({required bool isCompact}) {
+  Widget _buildHeaderActions({required bool isCompact, required bool canEdit}) {
     final isDesktop = PlatformHelper.isDesktop;
     final actions = Wrap(
       alignment: isCompact ? WrapAlignment.start : WrapAlignment.end,
@@ -949,7 +999,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         ),
         if (_snapshots.isNotEmpty)
           OutlinedButton.icon(
-            onPressed: _isLoading || _isSavingSnapshot ? null : _recalculateSnapshots,
+            onPressed: _isLoading || _isSavingSnapshot || !canEdit ? null : _recalculateSnapshots,
             icon: const Icon(Icons.calculate_outlined),
             label: const Text('Recalculate'),
           ),
@@ -960,13 +1010,13 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         ),
         if (_snapshots.isNotEmpty)
           TextButton.icon(
-            onPressed: _isLoading || _isSavingSnapshot ? null : _clearAllSnapshots,
+            onPressed: _isLoading || _isSavingSnapshot || !canEdit ? null : _clearAllSnapshots,
             icon: const Icon(Icons.delete_sweep_outlined),
             label: Text(isDesktop ? 'Clear Snapshots' : 'Clear'),
           ),
         FilledButton.icon(
           onPressed:
-              _isLoading || _isSavingSnapshot || !_hasCurrentPeriodEntries
+              _isLoading || _isSavingSnapshot || !_hasCurrentPeriodEntries || !canEdit
               ? null
               : _saveSnapshot,
           icon: _isSavingSnapshot
@@ -1099,16 +1149,23 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 _CompactAmountChip(
                   label: 'Debit',
                   value: _formatEntryAmount(snapshot.overallDebit),
+                  icon: Icons.arrow_downward_rounded,
                   color: AppColors.debit,
                 ),
                 _CompactAmountChip(
                   label: 'Credit',
                   value: _formatEntryAmount(snapshot.overallCredit),
+                  icon: Icons.arrow_upward_rounded,
                   color: AppColors.credit,
                 ),
                 _CompactAmountChip(
                   label: 'Balance',
                   value: _formatBalance(snapshot.finalBalance),
+                  icon: snapshot.finalBalance > 0
+                      ? Icons.arrow_downward_rounded
+                      : (snapshot.finalBalance < 0
+                          ? Icons.arrow_upward_rounded
+                          : Icons.account_balance_wallet_outlined),
                   color: AppColors.balanceColor(snapshot.finalBalance),
                 ),
               ],
@@ -1165,15 +1222,19 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                   context,
                   label: 'Balance',
                   value: _formatBalance(snapshot.finalBalance),
-                  icon: Icons.account_balance_wallet_outlined,
+                  icon: snapshot.finalBalance > 0
+                      ? Icons.arrow_downward_rounded
+                      : (snapshot.finalBalance < 0
+                          ? Icons.arrow_upward_rounded
+                          : Icons.account_balance_wallet_outlined),
                   accentColor:
                       AppColors.balanceColor(snapshot.finalBalance) ==
-                          AppColors.debit
-                      ? AppColors.debit
-                      : (AppColors.balanceColor(snapshot.finalBalance) ==
-                                AppColors.credit
-                            ? AppColors.credit
-                            : Colors.grey.shade600),
+                              AppColors.debit
+                          ? AppColors.debit
+                          : (AppColors.balanceColor(snapshot.finalBalance) ==
+                                    AppColors.credit
+                                ? AppColors.credit
+                                : Colors.grey.shade600),
                 ),
               ),
             ],
@@ -1193,85 +1254,107 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isMetric = accentColor != null;
+    final borderRadius = BorderRadius.circular(14);
 
-    return Container(
-      height: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: accentColor ?? colorScheme.surfaceContainerHighest,
-        gradient: isMetric
-            ? LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: <Color>[
-                  accentColor.withValues(alpha: 0.85),
-                  accentColor,
-                  accentColor.withValues(alpha: 0.95),
-                ],
-              )
-            : null,
-        boxShadow: isMetric
-            ? <BoxShadow>[
-                BoxShadow(
-                  color: accentColor.withValues(alpha: 0.3),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ]
-            : null,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isMetric ? Colors.transparent : colorScheme.outlineVariant,
-        ),
-      ),
-      child: Row(
-        children: <Widget>[
-          Icon(
-            icon,
-            size: 18,
-            color: isMetric ? Colors.white : colorScheme.primary,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: isMetric
-                        ? Colors.white70
-                        : colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
+    return ClipRRect(
+      borderRadius: borderRadius,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          height: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: isMetric
+                ? accentColor.withValues(alpha: 0.15)
+                : colorScheme.surfaceContainerHighest.withValues(alpha: 0.1),
+            gradient: isMetric
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: <Color>[
+                      accentColor.withValues(alpha: 0.25),
+                      accentColor.withValues(alpha: 0.15),
+                      accentColor.withValues(alpha: 0.2),
+                    ],
+                  )
+                : LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: <Color>[
+                      colorScheme.surface.withValues(alpha: 0.2),
+                      colorScheme.surfaceContainerLow.withValues(alpha: 0.1),
+                    ],
                   ),
+            boxShadow: isMetric
+                ? <BoxShadow>[
+                    BoxShadow(
+                      color: accentColor.withValues(alpha: 0.1),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    ),
+                  ]
+                : null,
+            borderRadius: borderRadius,
+            border: Border.all(
+              color: isMetric 
+                  ? accentColor.withValues(alpha: 0.3) 
+                  : colorScheme.outlineVariant.withValues(alpha: 0.2),
+              width: 1.2,
+            ),
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: (isMetric ? Colors.white : colorScheme.primary).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                const SizedBox(height: 2),
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: FittedBox(
+                child: Icon(
+                  icon,
+                  size: 16,
+                  color: isMetric ? Colors.white : colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      label.toUpperCase(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: isMetric
+                            ? Colors.white.withValues(alpha: 0.7)
+                            : colorScheme.onSurfaceVariant,
+                        fontSize: 9,
+                        letterSpacing: 0.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
                       child: Text(
                         value,
                         maxLines: 1,
                         style: theme.textTheme.titleSmall?.copyWith(
-                          color: isMetric
-                              ? Colors.white
-                              : colorScheme.onSurface,
+                          color: isMetric ? Colors.white : colorScheme.onSurface,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1398,12 +1481,13 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     required IconData icon,
     required bool readOnly,
   }) {
+    final canEdit = context.watch<LinkedSessionProvider>().canEdit;
     return TextField(
       controller: controller,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       scrollPadding: const EdgeInsets.only(bottom: 180),
-      readOnly: readOnly,
-      onChanged: readOnly
+      readOnly: readOnly || !canEdit,
+      onChanged: (readOnly || !canEdit)
           ? null
           : (_) {
               setState(() {});
@@ -1515,11 +1599,13 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 _CompactAmountChip(
                   label: 'Debit',
                   value: _formatEntryAmount(item.entry.debit),
+                  icon: Icons.arrow_downward_rounded,
                   color: AppColors.debit,
                 ),
                 _CompactAmountChip(
                   label: 'Credit',
                   value: _formatEntryAmount(item.entry.credit),
+                  icon: Icons.arrow_upward_rounded,
                   color: AppColors.credit,
                 ),
               ],
@@ -1589,13 +1675,16 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    IconButton(
-                      tooltip: 'Delete snapshot',
-                      onPressed: _isLoading || _isSavingSnapshot
-                          ? null
-                          : () => _deleteSnapshot(snapshot),
-                      icon: const Icon(Icons.delete_outline),
-                    ),
+                    if (context.watch<LinkedSessionProvider>().canEdit) ...[
+                      const SizedBox(width: 8),
+                      IconButton(
+                        tooltip: 'Delete snapshot',
+                        onPressed: _isLoading || _isSavingSnapshot
+                            ? null
+                            : () => _deleteSnapshot(snapshot),
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ],
                   ],
                 ],
               ),
@@ -1611,16 +1700,23 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                   _CompactAmountChip(
                     label: 'Debit',
                     value: _formatEntryAmount(snapshot.overallDebit),
+                    icon: Icons.arrow_downward_rounded,
                     color: AppColors.debit,
                   ),
                   _CompactAmountChip(
                     label: 'Credit',
                     value: _formatEntryAmount(snapshot.overallCredit),
+                    icon: Icons.arrow_upward_rounded,
                     color: AppColors.credit,
                   ),
                   _CompactAmountChip(
                     label: 'Balance',
                     value: _formatBalance(snapshot.finalBalance),
+                    icon: snapshot.finalBalance > 0
+                        ? Icons.arrow_downward_rounded
+                        : (snapshot.finalBalance < 0
+                            ? Icons.arrow_upward_rounded
+                            : Icons.account_balance_wallet_outlined),
                     color: AppColors.balanceColor(snapshot.finalBalance),
                   ),
                 ],
@@ -1661,16 +1757,23 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 _CompactAmountChip(
                   label: 'Debit',
                   value: _formatEntryAmount(balance.debit),
+                  icon: Icons.arrow_downward_rounded,
                   color: AppColors.debit,
                 ),
                 _CompactAmountChip(
                   label: 'Credit',
                   value: _formatEntryAmount(balance.credit),
+                  icon: Icons.arrow_upward_rounded,
                   color: AppColors.credit,
                 ),
                 _CompactAmountChip(
                   label: 'Balance',
                   value: _formatBalance(balance.finalBalance),
+                  icon: balance.finalBalance > 0
+                      ? Icons.arrow_downward_rounded
+                      : (balance.finalBalance < 0
+                          ? Icons.arrow_upward_rounded
+                          : Icons.account_balance_wallet_outlined),
                   color: AppColors.balanceColor(balance.finalBalance),
                 ),
               ],
@@ -1817,13 +1920,14 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 ),
                 const SizedBox(width: 8),
               ],
-              IconButton(
-                tooltip: 'Remove from Daily Logs',
-                icon: const Icon(Icons.remove_circle_outline),
-                color: Theme.of(context).colorScheme.error,
-                onPressed: () => _removeEntryFromDailyLog(item.entry),
-                visualDensity: VisualDensity.compact,
-              ),
+              if (context.watch<LinkedSessionProvider>().canEdit)
+                IconButton(
+                  tooltip: 'Delete or Remove Entry',
+                  icon: const Icon(Icons.remove_circle_outline),
+                  color: Theme.of(context).colorScheme.error,
+                  onPressed: () => _removeEntryFromDailyLog(item.entry),
+                  visualDensity: VisualDensity.compact,
+                ),
             ],
           ),
           const SizedBox(height: 8),
@@ -1869,6 +1973,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
               context,
               label: 'Debit',
               value: debit,
+              icon: Icons.arrow_downward_rounded,
               color: AppColors.debit,
             ),
           ),
@@ -1878,6 +1983,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
               context,
               label: 'Credit',
               value: credit,
+              icon: Icons.arrow_upward_rounded,
               color: AppColors.credit,
             ),
           ),
@@ -1888,6 +1994,11 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 context,
                 label: 'Balance',
                 value: balance,
+                icon: balance.startsWith('-')
+                    ? Icons.arrow_upward_rounded
+                    : (balance == '-' || balance == '0'
+                        ? Icons.account_balance_wallet_outlined
+                        : Icons.arrow_downward_rounded),
                 color: balanceColor ?? colorScheme.tertiary,
               ),
             ),
@@ -1910,6 +2021,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     BuildContext context, {
     required String label,
     required String value,
+    required IconData icon,
     required Color color,
   }) {
     final theme = Theme.of(context);
@@ -1917,14 +2029,22 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: color,
-            fontWeight: FontWeight.w800,
-          ),
+        Row(
+          children: <Widget>[
+            Icon(icon, size: 12, color: color),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 4),
         FittedBox(
@@ -1949,9 +2069,6 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         if (isCompactTable) {
           return _buildCompactTimeline(context);
         }
-        final tableMinWidth = PlatformHelper.isDesktop
-            ? math.max(1060.0, constraints.maxWidth - 16)
-            : 1060.0;
 
         final dataTextStyle = Theme.of(
           context,
@@ -1961,32 +2078,29 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           clipBehavior: Clip.antiAlias,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minWidth: tableMinWidth),
-                child: DataTable(
-                  dataTextStyle: dataTextStyle,
-                  horizontalMargin: 12,
-                  columnSpacing: 16,
-                  headingRowHeight: 56,
-                  dataRowMinHeight: 52,
-                  dataRowMaxHeight: 64,
-                  headingRowColor: WidgetStatePropertyAll(
-                    Theme.of(context).colorScheme.surfaceContainerHighest,
-                  ),
-                  columns: const <DataColumn>[
-                    DataColumn(label: Text('Customer')),
-                    DataColumn(label: Text('Entry Date')),
-                    DataColumn(label: Text('Description')),
-                    DataColumn(label: Text('Debit'), numeric: true),
-                    DataColumn(label: Text('Credit'), numeric: true),
-                    DataColumn(label: Text('Balance')),
-                    DataColumn(label: Text('Page No')),
-                    DataColumn(label: Text('Action')),
-                  ],
-                  rows: _buildTimelineRows(context, compact: false),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: DataTable(
+                dataTextStyle: dataTextStyle,
+                horizontalMargin: 12,
+                columnSpacing: 16,
+                headingRowHeight: 56,
+                dataRowMinHeight: 52,
+                dataRowMaxHeight: 64,
+                headingRowColor: WidgetStatePropertyAll(
+                  Theme.of(context).colorScheme.surfaceContainerHighest,
                 ),
+                columns: const <DataColumn>[
+                  DataColumn(label: Text('Customer')),
+                  DataColumn(label: Text('Entry Date')),
+                  DataColumn(label: Text('Description')),
+                  DataColumn(label: Text('Debit'), numeric: true),
+                  DataColumn(label: Text('Credit'), numeric: true),
+                  DataColumn(label: Text('Balance')),
+                  DataColumn(label: Text('Page No')),
+                  DataColumn(label: Text('Action')),
+                ],
+                rows: _buildTimelineRows(context, compact: false),
               ),
             ),
           ),
@@ -2125,13 +2239,15 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         const DataCell(Text('')),
         DataCell(Text(item.entry.pageNo.isEmpty ? '-' : item.entry.pageNo)),
         DataCell(
-          IconButton(
-            tooltip: 'Remove from Daily Logs',
-            icon: const Icon(Icons.remove_circle_outline),
-            color: Theme.of(context).colorScheme.error,
-            onPressed: () => _removeEntryFromDailyLog(item.entry),
-            visualDensity: VisualDensity.compact,
-          ),
+          context.watch<LinkedSessionProvider>().canEdit
+              ? IconButton(
+                  tooltip: 'Delete or Remove Entry',
+                  icon: const Icon(Icons.remove_circle_outline),
+                  color: Theme.of(context).colorScheme.error,
+                  onPressed: () => _removeEntryFromDailyLog(item.entry),
+                  visualDensity: VisualDensity.compact,
+                )
+              : const SizedBox.shrink(),
         ),
       ],
     );
@@ -2220,14 +2336,16 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
               : const Text('-'),
         ),
         DataCell(
-          IconButton(
-            tooltip: 'Delete snapshot',
-            onPressed: _isLoading || _isSavingSnapshot
-                ? null
-                : () => _deleteSnapshot(snapshot),
-            icon: const Icon(Icons.delete_outline),
-            visualDensity: VisualDensity.compact,
-          ),
+          context.watch<LinkedSessionProvider>().canEdit
+              ? IconButton(
+                  tooltip: 'Delete snapshot',
+                  onPressed: _isLoading || _isSavingSnapshot
+                      ? null
+                      : () => _deleteSnapshot(snapshot),
+                  icon: const Icon(Icons.delete_outline),
+                  visualDensity: VisualDensity.compact,
+                )
+              : const SizedBox.shrink(),
         ),
       ],
     );
@@ -2322,6 +2440,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   }
 
   Future<void> _deleteSnapshot(SummarySnapshot snapshot) async {
+    if (!context.read<LinkedSessionProvider>().canEdit) return;
 
     final snapshotId = snapshot.id;
     if (snapshotId == null) {
@@ -2369,6 +2488,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   }
 
   Future<void> _clearAllSnapshots() async {
+    if (!context.read<LinkedSessionProvider>().canEdit) return;
 
     if (_snapshots.isEmpty) {
       return;
@@ -2448,11 +2568,13 @@ class _CompactAmountChip extends StatelessWidget {
   const _CompactAmountChip({
     required this.label,
     required this.value,
+    required this.icon,
     this.color,
   });
 
   final String label;
   final String value;
+  final IconData icon;
   final Color? color;
 
   @override
@@ -2472,12 +2594,18 @@ class _CompactAmountChip extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(
-            label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: primaryColor,
-              fontWeight: FontWeight.w800,
-            ),
+          Row(
+            children: <Widget>[
+              Icon(icon, size: 14, color: primaryColor),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: primaryColor,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 4),
           Text(

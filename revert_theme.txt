@@ -1,0 +1,2 @@
+"import 'package:flutter/material.dart';\n\nclass BalanceDeskTheme {\n  BalanceDeskTheme._();\n\n  static const ColorScheme _desktopColorScheme = ColorScheme(\n    brightness: Brightness.dark,\n    primary: Color(0xFF56C48D),\n    onPrimary: Color(0xFF071B
+<truncated 14074 bytes>

@@ -9,6 +9,7 @@ import '../widgets/app_empty_state.dart';
 import '../widgets/customer_search_field.dart';
 import '../widgets/scale_down_width.dart';
 import 'ledger_screen.dart';
+import '../features/linked_devices/providers/linked_session_provider.dart';
 
 class CustomerListScreen extends StatefulWidget {
   const CustomerListScreen({super.key});
@@ -179,7 +180,8 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
               ),
               _CustomerIntent: CallbackAction<_CustomerIntent>(
                 onInvoke: (_CustomerIntent intent) {
-                  if (intent.action == _CustomerShortcut.add) {
+                  final canEdit = context.read<LinkedSessionProvider>().canEdit;
+                  if (intent.action == _CustomerShortcut.add && canEdit) {
                       _showAddCustomerDialog();
                   } else if (intent.action == _CustomerShortcut.refresh) {
                     if (!provider.isLoading) {
@@ -355,7 +357,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
           label: const Text('Refresh'),
         ),
         FilledButton.icon(
-          onPressed: _showAddCustomerDialog,
+          onPressed: context.watch<LinkedSessionProvider>().canEdit ? _showAddCustomerDialog : null,
           icon: const Icon(Icons.person_add_alt_1_rounded),
           label: const Text('Add Customer'),
         ),
@@ -407,8 +409,8 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
         icon: Icons.people_outline,
         title: 'No customers yet',
         message: 'Add your first customer to start managing ledgers.',
-        actionLabel: 'Add Customer',
-        onAction: _showAddCustomerDialog,
+        actionLabel: context.watch<LinkedSessionProvider>().canEdit ? 'Add Customer' : null,
+        onAction: context.watch<LinkedSessionProvider>().canEdit ? _showAddCustomerDialog : null,
       );
     }
 
@@ -552,11 +554,13 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                               ),
                             ),
                             DataCell(
-                              IconButton(
-                                tooltip: 'Delete customer',
-                                onPressed: () => _confirmDelete(customer),
-                                icon: const Icon(Icons.delete_outline),
-                              ),
+                              context.watch<LinkedSessionProvider>().canEdit
+                                  ? IconButton(
+                                      tooltip: 'Delete customer',
+                                      onPressed: () => _confirmDelete(customer),
+                                      icon: const Icon(Icons.delete_outline),
+                                    )
+                                  : const SizedBox.shrink(),
                             ),
                           ],
                         );
@@ -648,11 +652,12 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                     onPressed: () => _openLedger(customer),
                     icon: const Icon(Icons.chevron_right_rounded),
                   ),
-                  IconButton(
-                    tooltip: 'Delete customer',
-                    onPressed: () => _confirmDelete(customer),
-                    icon: const Icon(Icons.delete_outline_rounded),
-                  ),
+                  if (context.watch<LinkedSessionProvider>().canEdit)
+                    IconButton(
+                      tooltip: 'Delete customer',
+                      onPressed: () => _confirmDelete(customer),
+                      icon: const Icon(Icons.delete_outline_rounded),
+                    ),
                 ],
               ),
             ),

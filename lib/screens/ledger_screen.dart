@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -20,6 +21,7 @@ import '../widgets/amount_input_field.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/decimal_text_input_formatter.dart';
 import '../widgets/scale_down_width.dart';
+import '../features/linked_devices/providers/linked_session_provider.dart';
 
 enum _ExportChoice { pdf, excel }
 
@@ -259,10 +261,10 @@ class _LedgerViewState extends State<_LedgerView> {
                     child: Icon(Icons.edit_outlined, color: colorScheme.onPrimaryContainer),
                   ),
                   title: const Text('Edit Entry', style: TextStyle(fontWeight: FontWeight.w600)),
-                  onTap: () {
+                  onTap: context.read<LinkedSessionProvider>().canEdit ? () {
                     Navigator.pop(context);
                     _showEditEntryDialog(entry);
-                  },
+                  } : null,
                 ),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 24),
@@ -275,10 +277,10 @@ class _LedgerViewState extends State<_LedgerView> {
                     child: Icon(Icons.swap_horiz_rounded, color: colorScheme.onSecondaryContainer),
                   ),
                   title: const Text('Transfer to another customer', style: TextStyle(fontWeight: FontWeight.w600)),
-                  onTap: () {
+                  onTap: context.read<LinkedSessionProvider>().canEdit ? () {
                     Navigator.pop(context);
                     _showTransferDialog(provider, entry);
-                  },
+                  } : null,
                 ),
                 if (!entry.showInDailyLog)
                   ListTile(
@@ -292,10 +294,11 @@ class _LedgerViewState extends State<_LedgerView> {
                       child: Icon(Icons.playlist_add_rounded, color: colorScheme.onTertiaryContainer),
                     ),
                     title: const Text('Add to Daily Log', style: TextStyle(fontWeight: FontWeight.w600)),
-                    onTap: () {
+                    onTap: context.read<LinkedSessionProvider>().canEdit ? () {
                       Navigator.pop(context);
                       _addEntryToDailyLog(provider, entry);
-                    },
+                    } : null,
+                    enabled: context.read<LinkedSessionProvider>().canEdit,
                   ),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 24),
@@ -308,10 +311,11 @@ class _LedgerViewState extends State<_LedgerView> {
                     child: Icon(Icons.delete_outline, color: colorScheme.onErrorContainer),
                   ),
                   title: Text('Delete Entry', style: TextStyle(color: colorScheme.error, fontWeight: FontWeight.w600)),
-                  onTap: () {
+                  onTap: context.read<LinkedSessionProvider>().canEdit ? () {
                     Navigator.pop(context);
                     _confirmDeleteEntry(entry);
-                  },
+                  } : null,
+                  enabled: context.read<LinkedSessionProvider>().canEdit,
                 ),
               ],
             ),
@@ -827,7 +831,9 @@ class _LedgerViewState extends State<_LedgerView> {
         await _printPdf();
         break;
       case _LedgerAppBarAction.editCustomer:
+        if (context.read<LinkedSessionProvider>().canEdit) {
           await _showEditCustomerDialog(provider);
+        }
         break;
     }
   }
@@ -877,6 +883,7 @@ class _LedgerViewState extends State<_LedgerView> {
                 ),
                   PopupMenuItem<_LedgerAppBarAction>(
                     value: _LedgerAppBarAction.editCustomer,
+                    enabled: context.read<LinkedSessionProvider>().canEdit,
                     child: _buildAppBarMenuItem(
                       context,
                       icon: Icons.edit_outlined,
@@ -921,7 +928,7 @@ class _LedgerViewState extends State<_LedgerView> {
                 ),
                 const SizedBox(width: 10),
                 FilledButton.icon(
-                  onPressed: _showAddEntryDialog,
+                  onPressed: context.watch<LinkedSessionProvider>().canEdit ? _showAddEntryDialog : null,
                   icon: const Icon(Icons.add_rounded),
                   label: const Text('Add Entry'),
                 ),
@@ -1275,7 +1282,7 @@ class _LedgerViewState extends State<_LedgerView> {
                       IconButton(
                         tooltip: 'Clear opening balance',
                         onPressed:
-                            !provider.hasOpeningBalance
+                            !provider.hasOpeningBalance || !context.read<LinkedSessionProvider>().canEdit
                                 ? null
                                 : () => _clearOpeningBalance(provider),
                         style: IconButton.styleFrom(
@@ -1291,7 +1298,7 @@ class _LedgerViewState extends State<_LedgerView> {
                       IconButton.filled(
                         tooltip: 'Save opening balance',
                         onPressed:
-                            hasInvalidAmount || !hasChanges
+                            hasInvalidAmount || !hasChanges || !context.read<LinkedSessionProvider>().canEdit
                                 ? null
                                 : _saveOpeningBalance,
                         style: IconButton.styleFrom(
@@ -1372,7 +1379,8 @@ class _LedgerViewState extends State<_LedgerView> {
                     onPressed:
                         readOnly ||
                             provider.isLoading ||
-                            !_readOpeningBalance(provider).hasValue
+                            !_readOpeningBalance(provider).hasValue ||
+                            !context.read<LinkedSessionProvider>().canEdit
                         ? null
                         : () => _clearOpeningBalance(provider),
                     style: TextButton.styleFrom(
@@ -1393,7 +1401,8 @@ class _LedgerViewState extends State<_LedgerView> {
                         readOnly ||
                             provider.isLoading ||
                             hasInvalidAmount ||
-                            !hasChanges
+                            !hasChanges ||
+                            !context.read<LinkedSessionProvider>().canEdit
                         ? null
                         : _saveOpeningBalance,
                     style: FilledButton.styleFrom(
@@ -2626,14 +2635,8 @@ class _LedgerViewState extends State<_LedgerView> {
             final useWideTopLayout = isDesktop || constraints.maxWidth >= 980;
             final useCardLayout = !isDesktop && constraints.maxWidth < 920;
             final hasFab = isCompact;
-            const desktopContentWidth = 1400.0;
             const desktopHorizontalPadding = 20.0;
-            const desktopMinViewportWidth =
-                desktopContentWidth + (desktopHorizontalPadding * 2);
-            final desktopPageWidth = math.max(
-              desktopContentWidth,
-              constraints.maxWidth.toDouble() - (desktopHorizontalPadding * 2),
-            );
+            final desktopPageWidth = constraints.maxWidth;
             const desktopTopCardHeight = 112.0;
             final bottomPadding =
                 24.0 +
@@ -2749,7 +2752,7 @@ class _LedgerViewState extends State<_LedgerView> {
                   isCompact: isCompact,
                 ),
               ),
-              floatingActionButton: hasFab
+              floatingActionButton: hasFab && context.watch<LinkedSessionProvider>().canEdit
                   ? FloatingActionButton.extended(
                       onPressed: _showAddEntryDialog,
                       icon: const Icon(Icons.add_rounded),
@@ -2786,7 +2789,8 @@ class _LedgerViewState extends State<_LedgerView> {
                     actions: <Type, Action<Intent>>{
                       _LedgerIntent: CallbackAction<_LedgerIntent>(
                         onInvoke: (_LedgerIntent intent) {
-                          if (intent.action == _LedgerShortcut.addEntry) {
+                          final canEdit = context.read<LinkedSessionProvider>().canEdit;
+                          if (intent.action == _LedgerShortcut.addEntry && canEdit) {
                               _showAddEntryDialog();
                           } else if (intent.action == _LedgerShortcut.export) {
                             _exportWithOptions();
@@ -2814,31 +2818,20 @@ class _LedgerViewState extends State<_LedgerView> {
                           ),
                           if (isDesktop)
                             SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  minWidth: math.max(
-                                    desktopMinViewportWidth,
-                                    constraints.maxWidth.toDouble(),
-                                  ),
-                                ),
-                                child: SingleChildScrollView(
-                                  controller: _tableVerticalController,
-                                  keyboardDismissBehavior:
-                                      ScrollViewKeyboardDismissBehavior.onDrag,
-                                  padding: const EdgeInsets.fromLTRB(
-                                    desktopHorizontalPadding,
-                                    12,
-                                    desktopHorizontalPadding,
-                                    0,
-                                  ).copyWith(bottom: bottomPadding),
-                                  child: Align(
-                                    alignment: Alignment.topCenter,
-                                    child: SizedBox(
-                                      width: desktopPageWidth,
-                                      child: pageContent,
-                                    ),
-                                  ),
+                              controller: _tableVerticalController,
+                              keyboardDismissBehavior:
+                                  ScrollViewKeyboardDismissBehavior.onDrag,
+                              padding: const EdgeInsets.fromLTRB(
+                                desktopHorizontalPadding,
+                                12,
+                                desktopHorizontalPadding,
+                                0,
+                              ).copyWith(bottom: bottomPadding),
+                              child: Align(
+                                alignment: Alignment.topCenter,
+                                child: SizedBox(
+                                  width: desktopPageWidth,
+                                  child: pageContent,
                                 ),
                               ),
                             )
@@ -2873,7 +2866,6 @@ class _LedgerViewState extends State<_LedgerView> {
     required LedgerProvider provider,
     required bool compactLayout,
   }) {
-
     if (provider.isLoading && provider.entries.isEmpty) {
       return const SizedBox(
         height: 240,
@@ -2904,56 +2896,50 @@ class _LedgerViewState extends State<_LedgerView> {
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final tableMinWidth = PlatformHelper.isDesktop
-            ? math.max(1180.0, constraints.maxWidth.toDouble())
-            : 1040.0;
         final horizontalMargin = PlatformHelper.isDesktop
             ? constraints.maxWidth >= 1700
-                  ? 22.0
-                  : constraints.maxWidth >= 1450
-                  ? 16.0
-                  : 12.0
+                ? 22.0
+                : constraints.maxWidth >= 1450
+                    ? 16.0
+                    : 12.0
             : 12.0;
         final columnSpacing = PlatformHelper.isDesktop
             ? constraints.maxWidth >= 1700
-                  ? 42.0
-                  : constraints.maxWidth >= 1450
-                  ? 28.0
-                  : 18.0
+                ? 42.0
+                : constraints.maxWidth >= 1450
+                    ? 28.0
+                    : 18.0
             : 18.0;
 
         return Card(
           clipBehavior: Clip.antiAlias,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minWidth: tableMinWidth),
-                child: DataTable(
-                  dataTextStyle: dataTextStyle,
-                  horizontalMargin: horizontalMargin,
-                  columnSpacing: columnSpacing,
-                  headingRowHeight: 54,
-                  dataRowMinHeight: 50,
-                  dataRowMaxHeight: 56,
-                  headingRowColor: WidgetStatePropertyAll(
-                    Theme.of(context).colorScheme.surfaceContainerHighest,
-                  ),
-                  columns: const <DataColumn>[
-                    DataColumn(label: Text('Entry Date')),
-                    DataColumn(label: Text('Created Date')),
-                    DataColumn(label: Text('Page No')),
-                    DataColumn(label: Text('Description')),
-                    DataColumn(label: Text('Debit'), numeric: true),
-                    DataColumn(label: Text('Credit'), numeric: true),
-                    DataColumn(label: Text('Balance')),
-                    DataColumn(label: Text('Actions')),
-                  ],
-                  rows: _buildLedgerRows(
-                    provider,
-                    compact: false,
-                  ),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: DataTable(
+                dataTextStyle: dataTextStyle,
+                horizontalMargin: horizontalMargin,
+                columnSpacing: columnSpacing,
+                headingRowHeight: 54,
+                dataRowMinHeight: 50,
+                dataRowMaxHeight: 56,
+                headingRowColor: WidgetStatePropertyAll(
+                  Theme.of(context).colorScheme.surfaceContainerHighest,
+                ),
+                columns: const <DataColumn>[
+                  DataColumn(label: Text('Entry Date')),
+                  DataColumn(label: Text('Created Date')),
+                  DataColumn(label: Text('Page No')),
+                  DataColumn(label: Text('Description')),
+                  DataColumn(label: Text('Debit'), numeric: true),
+                  DataColumn(label: Text('Credit'), numeric: true),
+                  DataColumn(label: Text('Balance')),
+                  DataColumn(label: Text('Actions')),
+                ],
+                rows: _buildLedgerRows(
+                  provider,
+                  compact: false,
                 ),
               ),
             ),
@@ -3156,7 +3142,7 @@ class _LedgerViewState extends State<_LedgerView> {
               if (isOpeningBalanceEntry)
                 IconButton(
                   tooltip: 'Clear opening balance',
-                  onPressed: () => _clearOpeningBalance(provider),
+                  onPressed: context.watch<LinkedSessionProvider>().canEdit ? () => _clearOpeningBalance(provider) : null,
                   icon: const Icon(Icons.delete_outline, size: 18),
                 )
               else ...<Widget>[
@@ -4037,6 +4023,101 @@ class _LedgerEntryDateCard extends StatelessWidget {
   }
 }
 
+Future<DateTime?> _showAutoClosingDatePicker({
+  required BuildContext context,
+  required DateTime initialDate,
+}) async {
+  final theme = Theme.of(context);
+  final colorScheme = theme.colorScheme;
+
+  String formatDate(DateTime date) {
+    final months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    final dayOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.weekday % 7];
+    return '$dayOfWeek, ${months[date.month - 1]} ${date.day}';
+  }
+
+  return showDialog<DateTime>(
+    context: context,
+    builder: (BuildContext dialogContext) {
+      return Dialog(
+        backgroundColor: colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 328),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+                decoration: BoxDecoration(
+                  color: colorScheme.primary,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'SELECT DATE',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: colorScheme.onPrimary.withValues(alpha: 0.7),
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      formatDate(initialDate),
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        color: colorScheme.onPrimary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Body
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                child: CalendarDatePicker(
+                  initialDate: initialDate,
+                  firstDate: DateTime(2000),
+                  lastDate: DateTime(2100),
+                  onDateChanged: (DateTime date) {
+                    Navigator.of(dialogContext).pop(date);
+                  },
+                ),
+              ),
+              // Footer
+              Padding(
+                padding: const EdgeInsets.fromLTRB(0, 0, 12, 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      style: TextButton.styleFrom(
+                        foregroundColor: colorScheme.primary,
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                      ),
+                      child: const Text('CANCEL'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
 class _AddEntryDialog extends StatefulWidget {
   const _AddEntryDialog();
 
@@ -4052,14 +4133,12 @@ class _AddEntryDialogState extends State<_AddEntryDialog> {
   final TextEditingController _creditController = TextEditingController();
 
   DateTime _selectedDate = DateTime.now();
-  DatePickerEntryMode _datePickerEntryMode = DatePickerEntryMode.calendar;
   String? _amountError;
 
   @override
   void initState() {
     super.initState();
     _loadSelectedDate();
-    _loadDatePickerEntryMode();
   }
 
   @override
@@ -4072,13 +4151,9 @@ class _AddEntryDialogState extends State<_AddEntryDialog> {
   }
 
   Future<void> _pickEntryDate() async {
-    final pickedDate = await showDatePicker(
+    final pickedDate = await _showAutoClosingDatePicker(
       context: context,
       initialDate: _selectedDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-      initialEntryMode: _datePickerEntryMode,
-      onDatePickerModeChange: _handleDatePickerModeChange,
     );
 
     if (pickedDate != null && mounted) {
@@ -4097,26 +4172,6 @@ class _AddEntryDialogState extends State<_AddEntryDialog> {
     setState(() {
       _selectedDate = savedDate;
     });
-  }
-
-  Future<void> _loadDatePickerEntryMode() async {
-    final mode = await _LedgerDatePickerPreference.load();
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _datePickerEntryMode = mode;
-    });
-  }
-
-  void _handleDatePickerModeChange(DatePickerEntryMode mode) {
-    if (_datePickerEntryMode == mode) {
-      return;
-    }
-    setState(() {
-      _datePickerEntryMode = mode;
-    });
-    unawaited(_LedgerDatePickerPreference.save(mode));
   }
 
   void _submit() {
@@ -4348,7 +4403,6 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
   final TextEditingController _creditController = TextEditingController();
 
   late DateTime _selectedDate;
-  DatePickerEntryMode _datePickerEntryMode = DatePickerEntryMode.calendar;
   String? _amountError;
 
   @override
@@ -4361,7 +4415,6 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
     _debitController.text = _formatAmount(widget.entry.debit);
     _creditController.text = _formatAmount(widget.entry.credit);
     _selectedDate = DateTime.tryParse(widget.entry.entryDate) ?? DateTime.now();
-    _loadDatePickerEntryMode();
   }
 
   @override
@@ -4374,13 +4427,9 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
   }
 
   Future<void> _pickEntryDate() async {
-    final pickedDate = await showDatePicker(
+    final pickedDate = await _showAutoClosingDatePicker(
       context: context,
       initialDate: _selectedDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-      initialEntryMode: _datePickerEntryMode,
-      onDatePickerModeChange: _handleDatePickerModeChange,
     );
 
     if (pickedDate != null && mounted) {
@@ -4389,26 +4438,6 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
       });
       unawaited(_LedgerSelectedDatePreference.save(pickedDate));
     }
-  }
-
-  Future<void> _loadDatePickerEntryMode() async {
-    final mode = await _LedgerDatePickerPreference.load();
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _datePickerEntryMode = mode;
-    });
-  }
-
-  void _handleDatePickerModeChange(DatePickerEntryMode mode) {
-    if (_datePickerEntryMode == mode) {
-      return;
-    }
-    setState(() {
-      _datePickerEntryMode = mode;
-    });
-    unawaited(_LedgerDatePickerPreference.save(mode));
   }
 
   void _submit() {
@@ -4741,100 +4770,111 @@ class _CustomerInfoTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final borderRadius = BorderRadius.circular(22);
 
     final resolvedBg = backgroundColor ?? colorScheme.surfaceContainerLowest;
 
     return ConstrainedBox(
       constraints: const BoxConstraints(minWidth: 120, maxWidth: 240),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: resolvedBg,
-          gradient: isMetric
-              ? LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: <Color>[
-                    resolvedBg.withValues(alpha: 0.85),
-                    resolvedBg,
-                    resolvedBg.withValues(alpha: 0.95),
-                  ],
-                )
-              : null,
-          boxShadow: isMetric
-              ? <BoxShadow>[
-                  BoxShadow(
-                    color: resolvedBg.withValues(alpha: 0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ]
-              : null,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: borderColor ?? colorScheme.outlineVariant),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            if (icon != null) ...<Widget>[
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: (valueColor ?? colorScheme.primary).withValues(
-                    alpha: 0.12,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, size: 18, color: valueColor ?? Colors.white),
-              ),
-              const SizedBox(width: 12),
-            ],
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    label,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: labelColor ?? colorScheme.onSurfaceVariant,
-                      fontSize: 11,
+      child: ClipRRect(
+        borderRadius: borderRadius,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: isMetric 
+                  ? resolvedBg.withValues(alpha: 0.15) 
+                  : resolvedBg.withValues(alpha: 0.1),
+              gradient: isMetric
+                  ? LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: <Color>[
+                        resolvedBg.withValues(alpha: 0.25),
+                        resolvedBg.withValues(alpha: 0.15),
+                        resolvedBg.withValues(alpha: 0.2),
+                      ],
+                    )
+                  : LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: <Color>[
+                        colorScheme.surface.withValues(alpha: 0.2),
+                        colorScheme.surfaceContainerLow.withValues(alpha: 0.1),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    value,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: valueColor ?? colorScheme.onSurface,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
+              boxShadow: isMetric
+                  ? <BoxShadow>[
+                      BoxShadow(
+                        color: resolvedBg.withValues(alpha: 0.1),
+                        blurRadius: 15,
+                        offset: const Offset(0, 5),
+                      ),
+                    ]
+                  : null,
+              borderRadius: borderRadius,
+              border: Border.all(
+                color: isMetric 
+                    ? resolvedBg.withValues(alpha: 0.3) 
+                    : borderColor ?? colorScheme.outlineVariant.withValues(alpha: 0.2),
+                width: 1.2,
               ),
             ),
-          ],
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                if (icon != null) ...<Widget>[
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: (valueColor ?? colorScheme.primary).withValues(
+                        alpha: 0.1,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      icon, 
+                      size: 18, 
+                      color: isMetric ? Colors.white : (valueColor ?? colorScheme.primary),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        label.toUpperCase(),
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: isMetric 
+                              ? Colors.white.withValues(alpha: 0.7) 
+                              : labelColor ?? colorScheme.onSurfaceVariant,
+                          fontSize: 9,
+                          letterSpacing: 0.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        value,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: isMetric ? Colors.white : (valueColor ?? colorScheme.onSurface),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
-  }
-}
-
-class _LedgerDatePickerPreference {
-  const _LedgerDatePickerPreference._();
-
-  static const String _settingKey = 'ledger.datePickerEntryMode';
-
-  static Future<DatePickerEntryMode> load() async {
-    final rawValue = await AppDatabase.instance.getAppSetting(_settingKey);
-    return rawValue == 'input'
-        ? DatePickerEntryMode.input
-        : DatePickerEntryMode.calendar;
-  }
-
-  static Future<void> save(DatePickerEntryMode mode) {
-    final value = mode == DatePickerEntryMode.input ? 'input' : 'calendar';
-    return AppDatabase.instance.setAppSetting(key: _settingKey, value: value);
   }
 }
 

@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -697,7 +697,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 label: 'Overall Debit',
                 value: _formatAmount(_summaryData.overallDebit),
                 stretch: true,
-                height: 84,
+                height: 56,
+                icon: Icons.arrow_downward_rounded,
                 backgroundColor: AppColors.debit,
                 labelColor: Colors.white,
               ),
@@ -708,7 +709,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 label: 'Overall Credit',
                 value: _formatAmount(_summaryData.overallCredit),
                 stretch: true,
-                height: 84,
+                height: 56,
+                icon: Icons.arrow_upward_rounded,
                 backgroundColor: AppColors.credit,
                 labelColor: Colors.white,
               ),
@@ -719,7 +721,12 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 label: 'Final Balance',
                 value: _formatBalance(overallBalance),
                 stretch: true,
-                height: 84,
+                height: 56,
+                icon: overallBalance > 0
+                    ? Icons.arrow_downward_rounded
+                    : (overallBalance < 0
+                        ? Icons.arrow_upward_rounded
+                        : Icons.account_balance_wallet_rounded),
                 backgroundColor: AppColors.balanceColor(overallBalance) == AppColors.debit
                     ? AppColors.debit
                     : (AppColors.balanceColor(overallBalance) == AppColors.credit
@@ -809,9 +816,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
         if (isCompactTable) {
           return _buildSummaryCardList(context, customers);
         }
-        final tableMinWidth = PlatformHelper.isDesktop
-            ? math.max(940.0, constraints.maxWidth - 16)
-            : 940.0;
 
         final dataTextStyle = Theme.of(
           context,
@@ -821,68 +825,65 @@ class _SummaryScreenState extends State<SummaryScreen> {
           clipBehavior: Clip.antiAlias,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minWidth: tableMinWidth),
-                child: DataTable(
-                  dataTextStyle: dataTextStyle,
-                  horizontalMargin: 12,
-                  columnSpacing: 18,
-                  headingRowHeight: 56,
-                  dataRowMinHeight: 52,
-                  dataRowMaxHeight: 58,
-                  headingRowColor: WidgetStatePropertyAll<Color?>(
-                    Theme.of(context).colorScheme.surfaceContainerHighest,
-                  ),
-                  columns: const <DataColumn>[
-                    DataColumn(label: Text('Customer')),
-                    DataColumn(label: Text('Page No')),
-                    DataColumn(label: Text('Total Debit'), numeric: true),
-                    DataColumn(label: Text('Total Credit'), numeric: true),
-                    DataColumn(label: Text('Balance')),
-                  ],
-                  rows: <DataRow>[
-                    ...customers.map((item) {
-                      return DataRow(
-                        cells: <DataCell>[
-                          DataCell(
-                            SizedBox(
-                              width: 240,
-                              child: Text(
-                                item.customer.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                          DataCell(
-                            Text(item.pageNo.isEmpty ? '-' : item.pageNo),
-                          ),
-                          DataCell(
-                            Text(
-                              _formatAmount(item.totalDebit),
-                              style: const TextStyle(color: AppColors.debit),
-                            ),
-                          ),
-                          DataCell(
-                            Text(
-                              _formatAmount(item.totalCredit),
-                              style: const TextStyle(color: AppColors.credit),
-                            ),
-                          ),
-                          DataCell(
-                            Text(
-                              _formatBalance(item.balance),
-                              style: TextStyle(
-                                  color: AppColors.balanceColor(item.balance)),
-                            ),
-                          ),
-                        ],
-                      );
-                    }),
-                  ],
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: DataTable(
+                dataTextStyle: dataTextStyle,
+                horizontalMargin: 12,
+                columnSpacing: 18,
+                headingRowHeight: 56,
+                dataRowMinHeight: 52,
+                dataRowMaxHeight: 58,
+                headingRowColor: WidgetStatePropertyAll<Color?>(
+                  Theme.of(context).colorScheme.surfaceContainerHighest,
                 ),
+                columns: const <DataColumn>[
+                  DataColumn(label: Text('Customer')),
+                  DataColumn(label: Text('Page No')),
+                  DataColumn(label: Text('Total Debit'), numeric: true),
+                  DataColumn(label: Text('Total Credit'), numeric: true),
+                  DataColumn(label: Text('Balance')),
+                ],
+                rows: <DataRow>[
+                  ...customers.map((item) {
+                    return DataRow(
+                      cells: <DataCell>[
+                        DataCell(
+                          SizedBox(
+                            width: 240,
+                            child: Text(
+                              item.customer.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Text(item.pageNo.isEmpty ? '-' : item.pageNo),
+                        ),
+                        DataCell(
+                          Text(
+                            _formatAmount(item.totalDebit),
+                            style: const TextStyle(color: AppColors.debit),
+                          ),
+                        ),
+                        DataCell(
+                          Text(
+                            _formatAmount(item.totalCredit),
+                            style: const TextStyle(color: AppColors.credit),
+                          ),
+                        ),
+                        DataCell(
+                          Text(
+                            _formatBalance(item.balance),
+                            style: TextStyle(
+                                color: AppColors.balanceColor(item.balance)),
+                          ),
+                        ),
+                      ],
+                    );
+                  }),
+                ],
               ),
             ),
           ),

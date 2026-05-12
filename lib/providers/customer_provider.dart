@@ -1,14 +1,21 @@
 import 'package:flutter/foundation.dart';
 
+import 'dart:async';
+
 import '../database/app_database.dart';
 import '../models/customer.dart';
 class CustomerProvider extends ChangeNotifier {
-  CustomerProvider({
-    AppDatabase? database,
-  }) : _database = database ?? AppDatabase.instance;
-
   final AppDatabase _database;
   bool _isDisposed = false;
+  StreamSubscription<void>? _dbSub;
+
+  CustomerProvider({
+    AppDatabase? database,
+  }) : _database = database ?? AppDatabase.instance {
+    _dbSub = _database.onDataChanged.listen((_) {
+      if (!_isDisposed) loadCustomers();
+    });
+  }
 
   List<Customer> _customers = <Customer>[];
   bool _isLoading = false;
@@ -224,6 +231,7 @@ class CustomerProvider extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _dbSub?.cancel();
     super.dispose();
   }
 }

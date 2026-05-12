@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -18,6 +19,8 @@ import '../widgets/scale_down_width.dart';
 import 'customer_list_screen.dart';
 import 'snapshot_entries_screen.dart';
 import 'summary_screen.dart';
+import '../features/linked_devices/screens/linked_devices_screen.dart';
+import '../features/linked_devices/providers/linked_session_provider.dart';
 
 class AppShellScreen extends StatefulWidget {
   const AppShellScreen({super.key});
@@ -93,15 +96,18 @@ class _AppShellScreenState extends State<AppShellScreen> {
     );
 
     if (PlatformHelper.isDesktop) {
-      return DesktopDrawerLayout(
-        title: _destinations[_selectedIndex].label,
-        drawerChild: _buildSidebarContent(
-          dark: true,
-          subtitle: 'Accounting command center',
-          closeDrawerOnAction: true,
-          showDestinations: false,
+      return ScaleDownWidth(
+        designWidth: 1100,
+        child: DesktopDrawerLayout(
+          title: _destinations[_selectedIndex].label,
+          drawerChild: _buildSidebarContent(
+            dark: true,
+            subtitle: 'Accounting command center',
+            closeDrawerOnAction: true,
+            showDestinations: false,
+          ),
+          content: _buildDesktopMain(content),
         ),
-        content: _buildDesktopMain(content),
       );
     }
 
@@ -137,57 +143,87 @@ class _AppShellScreenState extends State<AppShellScreen> {
     final destination = _destinations[_selectedIndex];
 
     return Scaffold(
-      extendBody: true,
       resizeToAvoidBottomInset: true,
-      drawer: Drawer(child: SafeArea(child: drawerChild)),
-      appBar: AppBar(
-        toolbarHeight: 68,
-        titleSpacing: 0,
-        title: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              destination.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            Text(
-              'Balance Desk',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
+      backgroundColor: colorScheme.surface,
+      extendBodyBehindAppBar: true,
+      drawer: Drawer(
+        backgroundColor: colorScheme.surface,
+        elevation: 0,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.horizontal(right: Radius.circular(32)),
         ),
+        child: SafeArea(top: false, child: drawerChild),
       ),
-      body: SafeArea(bottom: false, child: _buildMobileMain(content)),
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        child: DecoratedBox(
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight + 10),
+        child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(26),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 24,
-                offset: const Offset(0, 12),
-              ),
-            ],
+            color: colorScheme.surface.withValues(alpha: 0.8),
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(26),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              child: AppBar(
+                backgroundColor: Colors.transparent,
+                surfaceTintColor: Colors.transparent,
+                elevation: 0,
+                centerTitle: true,
+                leading: Builder(
+                  builder: (context) => IconButton(
+                    icon: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: colorScheme.outlineVariant),
+                      ),
+                      child: const Icon(Icons.menu_rounded, size: 20),
+                    ),
+                    onPressed: () => Scaffold.of(context).openDrawer(),
+                  ),
+                ),
+                title: Text(
+                  destination.label,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: colorScheme.onSurface,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                actions: const [
+                  // SyncStatusIndicator(), // Temporarily hidden
+                  SizedBox(width: 16),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+      body: _buildMobileMain(content),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          border: Border(
+            top: BorderSide(color: colorScheme.outlineVariant, width: 1),
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: NavigationBar(
+              backgroundColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              elevation: 0,
+              height: 64,
               selectedIndex: _selectedIndex,
               onDestinationSelected: _selectIndex,
+              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+              indicatorColor: colorScheme.primary.withValues(alpha: 0.1),
               destinations: <NavigationDestination>[
                 for (final item in _destinations)
                   NavigationDestination(
-                    icon: Icon(item.icon),
-                    selectedIcon: Icon(item.selectedIcon),
+                    icon: Icon(item.icon, size: 22),
+                    selectedIcon: Icon(item.selectedIcon, size: 24, color: colorScheme.primary),
                     label: item.label,
                   ),
               ],
@@ -221,21 +257,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
       key: const ValueKey<String>('mobile-content'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        if (!_companyProfile.isEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: _CompanyHeaderCard(
-              name: _companyProfile.name,
-              logoPath: _companyProfile.logoPath,
-            ),
-          ),
-        if (!_companyProfile.isEmpty) const SizedBox(height: 8),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 86),
-            child: content,
-          ),
-        ),
+        Expanded(child: content),
       ],
     );
   }
@@ -285,6 +307,10 @@ class _AppShellScreenState extends State<AppShellScreen> {
       onNotesRequested: () => _runDrawerAction(
         closeDrawerOnAction: closeDrawerOnAction,
         action: _openNotesEditor,
+      ),
+      onLinkedDevicesRequested: () => _runDrawerAction(
+        closeDrawerOnAction: closeDrawerOnAction,
+        action: _openLinkedDevices,
       ),
 
       onCheckUpdateRequested: () => _runDrawerAction(
@@ -497,6 +523,12 @@ class _AppShellScreenState extends State<AppShellScreen> {
     }
 
     await _disablePin();
+  }
+
+  Future<void> _openLinkedDevices() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const LinkedDevicesScreen()),
+    );
   }
 
   Future<void> _setPin() async {
@@ -1049,6 +1081,7 @@ class _SidebarContent extends StatefulWidget {
     required this.onRestoreBackupRequested,
     required this.onCompanyProfileRequested,
     required this.onNotesRequested,
+    required this.onLinkedDevicesRequested,
     required this.onCheckUpdateRequested,
     required this.pinButtonLabel,
     required this.companyName,
@@ -1070,6 +1103,7 @@ class _SidebarContent extends StatefulWidget {
   final Future<void> Function() onRestoreBackupRequested;
   final Future<void> Function() onCompanyProfileRequested;
   final Future<void> Function() onNotesRequested;
+  final Future<void> Function() onLinkedDevicesRequested;
   final Future<void> Function() onCheckUpdateRequested;
   final String pinButtonLabel;
   final String companyName;
@@ -1085,12 +1119,6 @@ class _SidebarContent extends StatefulWidget {
 class _SidebarContentState extends State<_SidebarContent> {
   final ScrollController _scrollController = ScrollController();
 
-  static const Color _sidebarTop = Color(0xFF081A13);
-  static const Color _sidebarBottom = Color(0xFF103526);
-  static const Color _sidebarAccent = Color(0xFF22C55E);
-  static const Color _sidebarText = Color(0xFFF3F7F4);
-  static const Color _sidebarMutedText = Color(0xFFB8C8BF);
-
   @override
   void dispose() {
     _scrollController.dispose();
@@ -1099,153 +1127,172 @@ class _SidebarContentState extends State<_SidebarContent> {
 
   @override
   Widget build(BuildContext context) {
-    final sidebarTop = widget.dark ? _sidebarTop : const Color(0xFF0E241A);
-    final sidebarBottom = widget.dark
-        ? _sidebarBottom
-        : const Color(0xFF174432);
-    final dividerAlpha = widget.dark ? 0.08 : 0.10;
-    final shadowAlpha = widget.dark ? 0.16 : 0.12;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final canEdit = context.watch<LinkedSessionProvider>().canEdit;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[sidebarTop, sidebarBottom],
-        ),
-        border: Border(
-          right: BorderSide(
-            color: Colors.white.withValues(alpha: dividerAlpha),
-          ),
-        ),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: shadowAlpha),
-            blurRadius: 28,
-            offset: const Offset(10, 0),
-          ),
-        ],
-      ),
-      child: ScrollbarTheme(
-        data: ScrollbarTheme.of(context).copyWith(
-          thumbColor: WidgetStatePropertyAll(
-            Colors.white.withValues(alpha: 0.18),
-          ),
-          trackColor: const WidgetStatePropertyAll(Colors.transparent),
-        ),
-        child: Scrollbar(
-          controller: _scrollController,
-          child: SingleChildScrollView(
-            controller: _scrollController,
-            padding: const EdgeInsets.fromLTRB(22, 26, 22, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                _SidebarBrandHeader(subtitle: widget.subtitle),
-                const SizedBox(height: 26),
-                _DrawerProfileCard(
-                  title: widget.companyName,
-                  subtitle: 'Local Workspace',
-                  logoPath: widget.companyLogoPath,
-                  badge: 'Active',
-                ),
-                const SizedBox(height: 18),
-                Consumer<LedgerYearProvider>(
-                  builder:
-                      (BuildContext context, LedgerYearProvider provider, _) {
-                        return _buildYearSwitcher(
-                          context: context,
-                          provider: provider,
-                          onDeleteRequested: widget.onDeleteYearRequested,
-                        );
-                      },
-                ),
-                if (widget.showDestinations) ...<Widget>[
-                  const SizedBox(height: 26),
-                  const _SettingsSectionLabel(title: 'Main Navigation'),
-                  const SizedBox(height: 12),
-                  ...List<Widget>.generate(widget.destinations.length, (
-                    int index,
-                  ) {
-                    final destination = widget.destinations[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _SidebarNavItem(
-                        icon: index == widget.selectedIndex
-                            ? destination.selectedIcon
-                            : destination.icon,
-                        label: destination.label,
-                        isSelected: index == widget.selectedIndex,
-                        onTap: () => widget.onSelected(index),
-                      ),
-                    );
-                  }),
-                ],
-                const SizedBox(height: 26),
-                const _SettingsSectionLabel(title: 'Settings'),
-                const SizedBox(height: 12),
-                _SidebarActionItem(
-                  icon: Icons.business_outlined,
-                  label: 'Company Profile',
-                  onTap: () {
-                    widget.onCompanyProfileRequested();
-                  },
-                ),
-                const SizedBox(height: 8),
-                _SidebarActionItem(
-                  icon: Icons.edit_note_outlined,
-                  label: 'Add Notes',
-                  trailingText: widget.hasNotes ? 'Saved' : null,
-                  onTap: () {
-                    widget.onNotesRequested();
-                  },
-                ),
-                const SizedBox(height: 8),
-
-                const SizedBox(height: 8),
-                _SidebarActionItem(
-                  icon: Icons.system_update_alt_outlined,
-                  label: 'Check for Update',
-                  onTap: () {
-                    widget.onCheckUpdateRequested();
-                  },
-                ),
-                const SizedBox(height: 8),
-                _SidebarActionItem(
-                  icon: Icons.backup_outlined,
-                  label: 'Backup',
-                  onTap: () {
-                    widget.onBackupRequested();
-                  },
-                ),
-                const SizedBox(height: 8),
-                _SidebarActionItem(
-                  icon: Icons.restore_page_outlined,
-                  label: 'Restore Backup',
-                  onTap: () {
-                    widget.onRestoreBackupRequested();
-                  },
-                ),
-                const SizedBox(height: 26),
-                const _SettingsSectionLabel(title: 'Security'),
-                const SizedBox(height: 12),
-                _SidebarActionItem(
-                  icon: Icons.lock_outline_rounded,
-                  label: widget.pinButtonLabel,
-                  subtle: true,
-                  onTap: () {
-                    widget.onPinRequested();
-                  },
-                ),
-                const SizedBox(height: 28),
-                Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
-                const SizedBox(height: 16),
-                const _SidebarFooter(),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Header with Gradient
+        Container(
+          padding: const EdgeInsets.fromLTRB(20, 60, 20, 24),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                colorScheme.primaryContainer,
+                colorScheme.surface,
               ],
             ),
           ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: colorScheme.primary,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: colorScheme.primary.withValues(alpha: 0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 28),
+                  ),
+                  const Spacer(),
+                  // const SyncStatusIndicator(), // Temporarily hidden
+                ],
+              ),
+              const SizedBox(height: 20),
+              Text(
+                widget.companyName,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: colorScheme.onSurface,
+                  letterSpacing: -1.0,
+                ),
+              ),
+              Text(
+                'Professional Accounting Command',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
+        // Year Switcher
+        Consumer<LedgerYearProvider>(
+          builder: (BuildContext context, LedgerYearProvider provider, _) {
+            return _buildYearSwitcher(
+              context: context,
+              provider: provider,
+              onDeleteRequested: canEdit ? widget.onDeleteYearRequested : () {},
+            );
+          },
+        ),
+        Divider(height: 1, color: colorScheme.outlineVariant),
+        // Menu items
+        Expanded(
+          child: Scrollbar(
+            controller: _scrollController,
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _DrawerSectionLabel('Settings'),
+                  _DrawerListTile(
+                    icon: Icons.business_outlined,
+                    label: 'Company Profile',
+                    onTap: canEdit ? widget.onCompanyProfileRequested : null,
+                  ),
+                  /*
+                  _DrawerListTile(
+                    icon: Icons.devices_other_outlined,
+                    label: 'Linked Devices',
+                    onTap: widget.onLinkedDevicesRequested,
+                  ),
+                  */
+                  _DrawerListTile(
+                    icon: Icons.edit_note_outlined,
+                    label: 'Notes',
+                    trailing: widget.hasNotes ? '●' : null,
+                    onTap: canEdit ? widget.onNotesRequested : null,
+                  ),
+                  Divider(height: 1, color: colorScheme.outlineVariant, indent: 16, endIndent: 16),
+                  _DrawerSectionLabel('Data'),
+                  _DrawerListTile(
+                    icon: Icons.backup_outlined,
+                    label: 'Backup',
+                    onTap: canEdit ? widget.onBackupRequested : null,
+                  ),
+                  _DrawerListTile(
+                    icon: Icons.restore_page_outlined,
+                    label: 'Restore Backup',
+                    onTap: canEdit ? widget.onRestoreBackupRequested : null,
+                  ),
+                  Divider(height: 1, color: colorScheme.outlineVariant, indent: 16, endIndent: 16),
+                  _DrawerSectionLabel('Security'),
+                  _DrawerListTile(
+                    icon: Icons.lock_outline_rounded,
+                    label: widget.pinButtonLabel,
+                    onTap: canEdit ? widget.onPinRequested : null,
+                  ),
+                  Divider(height: 1, color: colorScheme.outlineVariant, indent: 16, endIndent: 16),
+                  _DrawerSectionLabel('App'),
+                  _DrawerListTile(
+                    icon: Icons.system_update_alt_outlined,
+                    label: 'Check for Update',
+                    onTap: widget.onCheckUpdateRequested,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        // Footer
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(color: colorScheme.outlineVariant),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Balance Desk',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Developer: Ahmer Abid',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
+                  fontSize: 10,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -1255,150 +1302,66 @@ class _SidebarContentState extends State<_SidebarContent> {
     required VoidCallback onDeleteRequested,
   }) {
     final theme = Theme.of(context);
-    final years = provider.years.isEmpty
-        ? <int>[provider.activeYear]
-        : provider.years;
-    final totalYears = years.length;
-    final helperText = totalYears == 1 ? '1 active year' : '$totalYears years';
+    final colorScheme = theme.colorScheme;
+    final years = provider.years.isEmpty ? <int>[provider.activeYear] : provider.years;
+    final canEdit = context.read<LinkedSessionProvider>().canEdit;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.10),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
+    return Padding(
+      padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: _sidebarAccent.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.calendar_month_rounded,
-                  size: 18,
-                  color: _sidebarAccent,
-                ),
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            child: Text(
+              'LEDGER YEAR',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                letterSpacing: 1.0,
+                fontWeight: FontWeight.w600,
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'Ledger Year',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        color: _sidebarText,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      helperText,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: _sidebarMutedText,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  '${provider.activeYear}',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: _sidebarText,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-          const SizedBox(height: 14),
           Row(
-            children: <Widget>[
+            children: [
               Expanded(
                 child: PopupMenuButton<int>(
                   enabled: !provider.isLoading,
                   onSelected: widget.onYearSelected,
                   itemBuilder: (BuildContext context) {
-                    return years
-                        .map<PopupMenuEntry<int>>(
-                          (int year) => PopupMenuItem<int>(
-                            value: year,
-                            child: Text('$year'),
-                          ),
-                        )
-                        .toList(growable: false);
+                    return years.map<PopupMenuEntry<int>>(
+                      (int year) => PopupMenuItem<int>(
+                        value: year,
+                        child: Text('$year'),
+                      ),
+                    ).toList(growable: false);
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.04),
-                      borderRadius: BorderRadius.circular(14),
+                      color: colorScheme.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: colorScheme.outlineVariant),
                     ),
                     child: Row(
-                      children: <Widget>[
-                        Container(
-                          width: 30,
-                          height: 30,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.06),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(
-                            Icons.event_note_rounded,
-                            size: 16,
-                            color: _sidebarAccent,
-                          ),
-                        ),
+                      children: [
+                        Icon(Icons.calendar_month_outlined, size: 18, color: colorScheme.primary),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             '${provider.activeYear}',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: _sidebarText,
+                            style: theme.textTheme.titleSmall?.copyWith(
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 180),
-                          child: provider.isLoading
-                              ? SizedBox(
-                                  key: const ValueKey<String>('loading'),
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.2,
-                                    color: _sidebarAccent,
-                                  ),
-                                )
-                              : Icon(
-                                  key: const ValueKey<String>('menu'),
-                                  Icons.unfold_more_rounded,
-                                  color: _sidebarMutedText,
-                                ),
-                        ),
+                        if (provider.isLoading)
+                          SizedBox(
+                            width: 16, height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: colorScheme.primary),
+                          )
+                        else
+                          Icon(Icons.unfold_more_rounded, size: 18, color: colorScheme.onSurfaceVariant),
                       ],
                     ),
                   ),
@@ -1407,48 +1370,94 @@ class _SidebarContentState extends State<_SidebarContent> {
               const SizedBox(width: 8),
               IconButton(
                 tooltip: 'Add year',
-                onPressed: provider.isLoading
-                    ? null
-                    : widget.onAddYearRequested,
+                onPressed: (provider.isLoading || !canEdit) ? null : widget.onAddYearRequested,
                 style: IconButton.styleFrom(
-                  minimumSize: const Size(44, 44),
-                  backgroundColor: _sidebarAccent.withValues(alpha: 0.14),
-                  foregroundColor: _sidebarAccent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                  backgroundColor: colorScheme.surfaceContainerHigh,
+                  foregroundColor: colorScheme.primary,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  side: BorderSide(color: colorScheme.outlineVariant),
                 ),
-                icon: const Icon(Icons.add_rounded),
+                icon: const Icon(Icons.add_rounded, size: 20),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 4),
               IconButton(
                 tooltip: 'Delete year',
-                onPressed: provider.isLoading || provider.years.length <= 1
-                    ? null
-                    : onDeleteRequested,
+                onPressed: (provider.isLoading || provider.years.length <= 1 || !canEdit) ? null : onDeleteRequested,
                 style: IconButton.styleFrom(
-                  minimumSize: const Size(44, 44),
-                  backgroundColor: Colors.white.withValues(alpha: 0.06),
-                  foregroundColor: const Color(0xFFFCA5A5),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                  backgroundColor: colorScheme.surfaceContainerHigh,
+                  foregroundColor: colorScheme.error,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  side: BorderSide(color: colorScheme.outlineVariant),
                 ),
-                icon: const Icon(Icons.delete_outline),
+                icon: const Icon(Icons.delete_outline_rounded, size: 20),
               ),
             ],
           ),
-          if (provider.errorMessage != null) ...<Widget>[
-            const SizedBox(height: 10),
-            Text(
-              provider.errorMessage!,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: const Color(0xFFFCA5A5),
+          if (provider.errorMessage != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                provider.errorMessage!,
+                style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.error),
               ),
             ),
-          ],
         ],
       ),
+    );
+  }
+}
+
+class _DrawerSectionLabel extends StatelessWidget {
+  const _DrawerSectionLabel(this.label);
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      child: Text(
+        label.toUpperCase(),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+          letterSpacing: 1.0,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class _DrawerListTile extends StatelessWidget {
+  const _DrawerListTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.trailing,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  final String? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return ListTile(
+      leading: Icon(icon, size: 22, color: onTap != null ? colorScheme.onSurface : colorScheme.onSurfaceVariant),
+      title: Text(
+        label,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: onTap != null ? colorScheme.onSurface : colorScheme.onSurfaceVariant,
+        ),
+      ),
+      trailing: trailing != null
+          ? Text(trailing!, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colorScheme.primary))
+          : null,
+      onTap: onTap,
+      enabled: onTap != null,
+      dense: true,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     );
   }
 }
@@ -1619,284 +1628,6 @@ class _ShellNavigationPill extends StatelessWidget {
   }
 }
 
-class _SettingsSectionLabel extends StatelessWidget {
-  const _SettingsSectionLabel({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: <Widget>[
-          Text(
-            title.toUpperCase(),
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: const Color(0xFF87A193),
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CompanyHeaderCard extends StatelessWidget {
-  const _CompanyHeaderCard({required this.name, required this.logoPath});
-
-  final String name;
-  final String? logoPath;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final displayName = name.trim().isEmpty ? 'Balance Desk' : name.trim();
-    final logoFile = logoPath == null || logoPath!.trim().isEmpty
-        ? null
-        : File(logoPath!);
-    const cardPadding = 10.0;
-    const avatarRadius = 20.0;
-    final titleStyle = theme.textTheme.titleMedium?.copyWith(
-      fontWeight: FontWeight.w700,
-    );
-    const badgePadding = EdgeInsets.symmetric(horizontal: 10, vertical: 4);
-
-    return Card(
-      child: Padding(
-        padding: EdgeInsets.all(cardPadding),
-        child: Row(
-          children: <Widget>[
-            CircleAvatar(
-              radius: avatarRadius,
-              backgroundColor: colorScheme.primary.withValues(alpha: 0.12),
-              backgroundImage: logoFile != null && logoFile.existsSync()
-                  ? FileImage(logoFile)
-                  : null,
-              child: logoFile != null && logoFile.existsSync()
-                  ? null
-                  : Icon(Icons.business_outlined, color: colorScheme.primary),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: titleStyle,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Accounting Workspace',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: badgePadding,
-              decoration: BoxDecoration(
-                color: colorScheme.primary.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                'Active',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: colorScheme.primary,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-
-class _DrawerProfileCard extends StatelessWidget {
-  const _DrawerProfileCard({
-    required this.title,
-    required this.subtitle,
-    required this.badge,
-    this.logoPath,
-  });
-
-  final String title;
-  final String subtitle;
-  final String badge;
-  final String? logoPath;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    final logoFile = logoPath == null || logoPath!.trim().isEmpty
-        ? null
-        : File(logoPath!);
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.10),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: const Color(
-                  0xFF22C55E,
-                ).withValues(alpha: 0.14),
-                backgroundImage: logoFile != null && logoFile.existsSync()
-                    ? FileImage(logoFile)
-                    : null,
-                child: logoFile != null && logoFile.existsSync()
-                    ? null
-                    : const Icon(
-                        Icons.apartment_rounded,
-                        color: Color(0xFF22C55E),
-                      ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'Workspace',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: const Color(0xFF87A193),
-                        letterSpacing: 1.1,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF22C55E).withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  badge,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: const Color(0xFFDCFCE7),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            subtitle,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFFB8C8BF),
-              height: 1.35,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SidebarBrandHeader extends StatelessWidget {
-  const _SidebarBrandHeader({required this.subtitle});
-
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Row(
-      children: <Widget>[
-        Container(
-          width: 46,
-          height: 46,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: <Color>[Color(0xFF22C55E), Color(0xFF14532D)],
-            ),
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: const Color(0xFF22C55E).withValues(alpha: 0.24),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: const Icon(Icons.auto_graph_rounded, color: Colors.white),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                'BalanceDesk',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                subtitle,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: const Color(0xFFB8C8BF),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _SidebarNavItem extends StatefulWidget {
   const _SidebarNavItem({
     required this.icon,
@@ -2001,15 +1732,11 @@ class _SidebarActionItem extends StatefulWidget {
     required this.icon,
     required this.label,
     required this.onTap,
-    this.trailingText,
-    this.subtle = false,
   });
 
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
-  final String? trailingText;
-  final bool subtle;
+  final VoidCallback? onTap;
 
   @override
   State<_SidebarActionItem> createState() => _SidebarActionItemState();
@@ -2021,102 +1748,55 @@ class _SidebarActionItemState extends State<_SidebarActionItem> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final baseOpacity = widget.subtle ? 0.03 : 0.05;
-    final hoverOpacity = widget.subtle ? 0.06 : 0.08;
+    final bool isEnabled = widget.onTap != null;
+    const baseOpacity = 0.05;
+    const hoverOpacity = 0.08;
 
     return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
+      onEnter: isEnabled ? (_) => setState(() => _isHovered = true) : null,
+      onExit: isEnabled ? (_) => setState(() => _isHovered = false) : null,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: widget.onTap,
           borderRadius: BorderRadius.circular(16),
           hoverColor: Colors.transparent,
-          splashColor: const Color(0xFF22C55E).withValues(alpha: 0.14),
+          splashColor: isEnabled ? const Color(0xFF22C55E).withValues(alpha: 0.14) : Colors.transparent,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 170),
             curve: Curves.easeOutCubic,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               color: Colors.white.withValues(
-                alpha: _isHovered ? hoverOpacity : baseOpacity,
+                alpha: isEnabled ? (_isHovered ? hoverOpacity : baseOpacity) : 0.02,
               ),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Row(
-              children: <Widget>[
-                Icon(
-                  widget.icon,
-                  size: 18,
-                  color: widget.subtle
-                      ? const Color(0xFFB8C8BF)
-                      : const Color(0xFFE5E7EB),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    widget.label,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: widget.subtle
-                          ? const Color(0xFFD1D5DB)
-                          : Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
+            child: Opacity(
+              opacity: isEnabled ? 1.0 : 0.4,
+              child: Row(
+                children: <Widget>[
+                  Icon(
+                    widget.icon,
+                    size: 18,
+                    color: const Color(0xFFE5E7EB),
                   ),
-                ),
-                if ((widget.trailingText ?? '').trim().isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
+                  const SizedBox(width: 12),
+                  Expanded(
                     child: Text(
-                      widget.trailingText!,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: const Color(0xFFB8C8BF),
-                        fontWeight: FontWeight.w700,
+                      widget.label,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ),
-    );
-  }
-}
-
-class _SidebarFooter extends StatelessWidget {
-  const _SidebarFooter();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          'BalanceDesk v1.0.0+1',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: const Color(0xFFB8C8BF),
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Developer: Ahmer Abid',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: const Color(0xFF87A193),
-          ),
-        ),
-      ],
     );
   }
 }

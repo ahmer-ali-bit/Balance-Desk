@@ -3,10 +3,12 @@ import 'package:provider/provider.dart';
 
 import 'providers/customer_provider.dart';
 import 'providers/ledger_year_provider.dart';
-import 'screens/app_shell_screen.dart';
+import 'features/linked_devices/providers/linked_session_provider.dart';
 
 class AppRoot extends StatelessWidget {
-  const AppRoot({super.key});
+  const AppRoot({super.key, required this.child});
+
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
@@ -20,8 +22,12 @@ class AppRoot extends StatelessWidget {
           create: (_) =>
               CustomerProvider()..loadCustomers(),
         ),
+        ChangeNotifierProvider(
+          create: (_) =>
+              LinkedSessionProvider()..loadSession(),
+        ),
       ],
-      child: const AppShellScreen(),
+      child: child,
     );
   }
 }
