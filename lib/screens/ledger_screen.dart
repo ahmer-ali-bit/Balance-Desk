@@ -15,7 +15,7 @@ import '../providers/ledger_provider.dart';
 import '../services/export_service.dart';
 import '../services/pdf_service.dart';
 import '../utils/app_colors.dart';
-import '../utils/number_format_utils.dart';
+import '../utils/number_format_utils.dart' as number_format_utils;
 import '../utils/platform_helper.dart';
 import '../widgets/amount_input_field.dart';
 import '../widgets/app_empty_state.dart';
@@ -25,7 +25,7 @@ import '../features/linked_devices/providers/linked_session_provider.dart';
 
 enum _ExportChoice { pdf, excel }
 
-enum _LedgerShortcut { addEntry, export, print }
+enum _LedgerShortcut { addEntry, export, print, goBack }
 
 enum _LedgerAppBarAction { export, print, editCustomer }
 
@@ -42,9 +42,14 @@ class _ScrollIntent extends Intent {
 }
 
 class LedgerScreen extends StatelessWidget {
-  const LedgerScreen({super.key, required this.customer});
+  const LedgerScreen({
+    super.key,
+    required this.customer,
+    this.autoOpenAddEntry = true,
+  });
 
   final Customer customer;
+  final bool autoOpenAddEntry;
 
   @override
   Widget build(BuildContext context) {
@@ -52,15 +57,22 @@ class LedgerScreen extends StatelessWidget {
       create: (_) => LedgerProvider(
         customer: customer,
       )..loadEntries(),
-      child: _LedgerView(customer: customer),
+      child: _LedgerView(
+        customer: customer,
+        autoOpenAddEntry: autoOpenAddEntry,
+      ),
     );
   }
 }
 
 class _LedgerView extends StatefulWidget {
-  const _LedgerView({required this.customer});
+  const _LedgerView({
+    required this.customer,
+    required this.autoOpenAddEntry,
+  });
 
   final Customer customer;
+  final bool autoOpenAddEntry;
 
   @override
   State<_LedgerView> createState() => _LedgerViewState();
@@ -78,6 +90,21 @@ class _LedgerViewState extends State<_LedgerView> {
   String _lastOpeningBalanceSignature = '';
   bool _showOpeningBalancePanel = false;
   bool _showDateFilterPanel = false;
+  bool _didAutoOpenAddEntry = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Feature 3: Auto-open Add Entry dialog when ledger opens
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _didAutoOpenAddEntry || !widget.autoOpenAddEntry) return;
+      _didAutoOpenAddEntry = true;
+      final canEdit = context.read<LinkedSessionProvider>().canEdit;
+      if (canEdit) {
+        _showAddEntryDialog();
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -90,9 +117,10 @@ class _LedgerViewState extends State<_LedgerView> {
   }
 
   Future<void> _showAddEntryDialog() async {
+    final customerId = widget.customer.id;
     final draft = await showDialog<_EntryDraft>(
       context: context,
-      builder: (BuildContext context) => const _AddEntryDialog(),
+      builder: (BuildContext context) => _AddEntryDialog(customerId: customerId),
     );
 
     if (!mounted || draft == null) {
@@ -2780,6 +2808,9 @@ class _LedgerViewState extends State<_LedgerView> {
                     ): const _LedgerIntent(
                       _LedgerShortcut.print,
                     ),
+                    // Feature 5: Esc key to go back to customer list
+                    LogicalKeySet(LogicalKeyboardKey.escape):
+                        const _LedgerIntent(_LedgerShortcut.goBack),
                     LogicalKeySet(LogicalKeyboardKey.arrowDown):
                         const _ScrollIntent(80),
                     LogicalKeySet(LogicalKeyboardKey.arrowUp):
@@ -2796,6 +2827,8 @@ class _LedgerViewState extends State<_LedgerView> {
                             _exportWithOptions();
                           } else if (intent.action == _LedgerShortcut.print) {
                             _printPdf();
+                          } else if (intent.action == _LedgerShortcut.goBack) {
+                            Navigator.of(context).maybePop();
                           }
                           return null;
                         },
@@ -4122,7 +4155,9 @@ Future<DateTime?> _showAutoClosingDatePicker({
 }
 
 class _AddEntryDialog extends StatefulWidget {
-  const _AddEntryDialog();
+  const _AddEntryDialog({this.customerId});
+
+  final int? customerId;
 
   @override
   State<_AddEntryDialog> createState() => _AddEntryDialogState();
@@ -4142,6 +4177,18 @@ class _AddEntryDialogState extends State<_AddEntryDialog> {
   void initState() {
     super.initState();
     _loadSelectedDate();
+    // Feature 4: Load persistent page number for this customer
+    _loadSavedPageNo();
+  }
+
+  Future<void> _loadSavedPageNo() async {
+    final customerId = widget.customerId;
+    if (customerId == null) return;
+    final savedPageNo = await AppDatabase.instance.getAppSetting(
+      'ledger.pageNo:$customerId',
+    );
+    if (!mounted || savedPageNo == null || savedPageNo.isEmpty) return;
+    _pageNoController.text = savedPageNo;
   }
 
   @override
@@ -4183,8 +4230,8 @@ class _AddEntryDialogState extends State<_AddEntryDialog> {
       return;
     }
 
-    final debit = double.tryParse(_debitController.text.trim()) ?? 0;
-    final credit = double.tryParse(_creditController.text.trim()) ?? 0;
+    final debit = _parseAmount(_debitController.text);
+    final credit = _parseAmount(_creditController.text);
 
     if (debit == 0 && credit == 0) {
       setState(() {
@@ -4195,10 +4242,20 @@ class _AddEntryDialogState extends State<_AddEntryDialog> {
 
     unawaited(_LedgerSelectedDatePreference.save(_selectedDate));
 
+    // Feature 4: Save page number for this customer
+    final customerId = widget.customerId;
+    final pageNoValue = _pageNoController.text.trim();
+    if (customerId != null) {
+      unawaited(AppDatabase.instance.setAppSetting(
+        key: 'ledger.pageNo:$customerId',
+        value: pageNoValue,
+      ));
+    }
+
     Navigator.of(context).pop(
       _EntryDraft(
         entryDate: _selectedDate,
-        pageNo: _pageNoController.text.trim(),
+        pageNo: pageNoValue,
         description: _descriptionController.text.trim(),
         debit: debit,
         credit: credit,
@@ -4211,9 +4268,11 @@ class _AddEntryDialogState extends State<_AddEntryDialog> {
       return null;
     }
 
-    final parsedValue = double.tryParse(value.trim());
-    if (parsedValue == null) {
-      return 'Enter a valid number';
+    final parsedValue = _parseAmount(value);
+    if (parsedValue == 0 && value.trim().isNotEmpty && value.trim() != '0') {
+      if (double.tryParse(value.replaceAll(',', '').trim()) == null) {
+        return 'Enter a valid number';
+      }
     }
 
     if (parsedValue < 0) {
@@ -4221,6 +4280,11 @@ class _AddEntryDialogState extends State<_AddEntryDialog> {
     }
 
     return null;
+  }
+
+  double _parseAmount(String value) {
+    final cleaned = value.replaceAll(',', '').trim();
+    return double.tryParse(cleaned) ?? 0;
   }
 
   String _formatDate(DateTime date) {
@@ -4415,8 +4479,9 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
     _descriptionController.text = widget.entry.description == '-'
         ? ''
         : widget.entry.description;
-    _debitController.text = _formatAmount(widget.entry.debit);
-    _creditController.text = _formatAmount(widget.entry.credit);
+    // Feature 1: Use formatted numbers (with commas) for consistency
+    _debitController.text = widget.entry.debit == 0 ? '' : _formatInitialAmount(widget.entry.debit);
+    _creditController.text = widget.entry.credit == 0 ? '' : _formatInitialAmount(widget.entry.credit);
     _selectedDate = DateTime.tryParse(widget.entry.entryDate) ?? DateTime.now();
   }
 
@@ -4449,8 +4514,8 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
       return;
     }
 
-    final debit = double.tryParse(_debitController.text.trim()) ?? 0;
-    final credit = double.tryParse(_creditController.text.trim()) ?? 0;
+    final debit = _parseAmount(_debitController.text);
+    final credit = _parseAmount(_creditController.text);
 
     if (debit == 0 && credit == 0) {
       setState(() {
@@ -4477,9 +4542,11 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
       return null;
     }
 
-    final parsedValue = double.tryParse(value.trim());
-    if (parsedValue == null) {
-      return 'Enter a valid number';
+    final parsedValue = _parseAmount(value);
+    if (parsedValue == 0 && value.trim().isNotEmpty && value.trim() != '0') {
+      if (double.tryParse(value.replaceAll(',', '').trim()) == null) {
+        return 'Enter a valid number';
+      }
     }
 
     if (parsedValue < 0) {
@@ -4489,13 +4556,20 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
     return null;
   }
 
+  double _parseAmount(String value) {
+    final cleaned = value.replaceAll(',', '').trim();
+    return double.tryParse(cleaned) ?? 0;
+  }
+
   String _formatDate(DateTime date) {
     final month = date.month.toString().padLeft(2, '0');
     final day = date.day.toString().padLeft(2, '0');
     return '${date.year}-$month-$day';
   }
 
-  String _formatAmount(double amount) => formatAmount(amount);
+  String _formatInitialAmount(double amount) {
+    return number_format_utils.formatAmount(amount);
+  }
 
   @override
   Widget build(BuildContext context) {

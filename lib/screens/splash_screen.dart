@@ -250,13 +250,28 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
             child: Padding(
               padding: const EdgeInsets.only(bottom: 40),
               child: Opacity(
-                opacity: 0.4,
-                child: Text(
-                  'DESIGNED FOR PRECISION',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    letterSpacing: 2.5,
-                    fontWeight: FontWeight.w600,
-                  ),
+                opacity: 0.7,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'DEVELOPED BY AHMER ABID',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        letterSpacing: 1.5,
+                        fontWeight: FontWeight.w800,
+                        color: colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'DESIGNED FOR PRECISION',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        letterSpacing: 2.5,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 8,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

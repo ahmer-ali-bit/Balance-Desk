@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'decimal_text_input_formatter.dart';
+import 'number_format_text_input_formatter.dart';
 
 class AmountInputField extends StatelessWidget {
   const AmountInputField({
@@ -22,7 +22,7 @@ class AmountInputField extends StatelessWidget {
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       scrollPadding: const EdgeInsets.only(bottom: 180),
       inputFormatters: <TextInputFormatter>[
-        DecimalTextInputFormatter(decimalRange: 2),
+        NumberFormatTextInputFormatter(decimalRange: 2),
       ],
       decoration: InputDecoration(labelText: label, prefixText: 'Rs '),
       validator: validator,

@@ -5,14 +5,17 @@ import 'package:provider/provider.dart';
 
 import '../database/app_database.dart';
 import '../features/linked_devices/providers/linked_session_provider.dart';
+import '../models/customer.dart';
 import '../models/entry.dart';
 import '../models/snapshot_opening_balance.dart';
 import '../models/summary_snapshot.dart';
+import '../providers/customer_provider.dart';
 import '../services/export_service.dart';
 import '../services/pdf_service.dart';
 import '../utils/app_colors.dart';
 import '../utils/number_format_utils.dart';
 import '../utils/platform_helper.dart';
+import 'ledger_screen.dart';
 
 class SnapshotEntriesScreen extends StatefulWidget {
   const SnapshotEntriesScreen({super.key});
@@ -444,6 +447,120 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text('Failed to delete entry: $e')));
     }
+  }
+
+  // Feature 7: Edit daily log page number on a saved snapshot
+  Future<void> _editSnapshotPageNo(SummarySnapshot snapshot) async {
+    final controller = TextEditingController(text: snapshot.dailyLogPageNo);
+    final newPageNo = await showDialog<String>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Edit DL Page Number'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Page No',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.menu_book_outlined),
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(controller.text.trim()),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+
+    if (!mounted || newPageNo == null) return;
+    final snapshotId = snapshot.id;
+    if (snapshotId == null) return;
+
+    try {
+      await _database.updateSnapshotDailyLogPageNo(
+        id: snapshotId,
+        dailyLogPageNo: newPageNo,
+      );
+
+      // Also batch-update entries in that snapshot period with the new page no
+      if (newPageNo.isNotEmpty) {
+        final snapshotIndex = _snapshots.indexOf(snapshot);
+        final previousSnapshot = snapshotIndex > 0
+            ? _snapshots[snapshotIndex - 1]
+            : null;
+        final periodEntries = await _loadEntriesPaged(
+          startDate: previousSnapshot?.savedAt,
+          endDate: snapshot.savedAt,
+        );
+        final entryIds = periodEntries
+            .map((e) => e.entry.id)
+            .where((id) => id != null)
+            .cast<int>()
+            .toList();
+        if (entryIds.isNotEmpty) {
+          await _database.batchUpdateDailyLogPageNo(
+            entryIds: entryIds,
+            dailyLogPageNo: newPageNo,
+          );
+        }
+      }
+
+      await _loadTimeline();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(newPageNo.isEmpty
+              ? 'DL page number cleared.'
+              : 'DL page number updated to "$newPageNo".'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update page number: $e')),
+      );
+    }
+  }
+
+  // Feature 8: Navigate to customer ledger on long-press
+  Future<void> _navigateToCustomerLedger(_SnapshotEntry item) async {
+    final customerId = item.entry.customerId;
+    final customerRows = await _database.getCustomers();
+    final customers = customerRows
+        .map<Customer>((Map<String, Object?> row) => Customer.fromMap(row))
+        .toList(growable: false);
+    final customer = customers.cast<Customer?>().firstWhere(
+      (Customer? c) => c?.id == customerId,
+      orElse: () => null,
+    );
+    if (!mounted || customer == null) return;
+
+    final customerProvider = context.read<CustomerProvider>();
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => MultiProvider(
+          providers: [
+            ChangeNotifierProvider<CustomerProvider>.value(
+              value: customerProvider,
+            ),
+          ],
+          child: LedgerScreen(
+            customer: customer,
+            autoOpenAddEntry: false,
+          ),
+        ),
+      ),
+    );
   }
 
   Future<List<_SnapshotEntry>> _loadEntriesPaged({
@@ -1675,16 +1792,31 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    if (context.watch<LinkedSessionProvider>().canEdit) ...[
-                      const SizedBox(width: 8),
-                      IconButton(
-                        tooltip: 'Delete snapshot',
-                        onPressed: _isLoading || _isSavingSnapshot
-                            ? null
-                            : () => _deleteSnapshot(snapshot),
-                        icon: const Icon(Icons.delete_outline),
+                  ],
+                  // Feature 7: Edit DL page number icon
+                  if (context.watch<LinkedSessionProvider>().canEdit) ...[
+                    IconButton(
+                      tooltip: snapshot.dailyLogPageNo.isEmpty
+                          ? 'Add DL Page No'
+                          : 'Edit DL Page No',
+                      onPressed: _isLoading || _isSavingSnapshot
+                          ? null
+                          : () => _editSnapshotPageNo(snapshot),
+                      icon: Icon(
+                        snapshot.dailyLogPageNo.isEmpty
+                            ? Icons.post_add_rounded
+                            : Icons.edit_note_rounded,
+                        size: 20,
                       ),
-                    ],
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    IconButton(
+                      tooltip: 'Delete snapshot',
+                      onPressed: _isLoading || _isSavingSnapshot
+                          ? null
+                          : () => _deleteSnapshot(snapshot),
+                      icon: const Icon(Icons.delete_outline),
+                    ),
                   ],
                 ],
               ),
@@ -1881,7 +2013,10 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Container(
+    // Feature 8: Long-press to navigate to customer ledger
+    return GestureDetector(
+      onLongPress: () => _navigateToCustomerLedger(item),
+      child: Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: colorScheme.surface,
@@ -1947,6 +2082,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           ),
         ],
       ),
+    ),
     );
   }
 
@@ -2199,12 +2335,16 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     return DataRow(
       cells: <DataCell>[
         DataCell(
-          SizedBox(
-            width: compact ? 160 : 200,
-            child: Text(
-              item.customerName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+          GestureDetector(
+            onLongPress: () => _navigateToCustomerLedger(item),
+            child: SizedBox(
+              width: compact ? 160 : 200,
+              child: Text(
+                item.customerName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(decoration: TextDecoration.underline),
+              ),
             ),
           ),
         ),
@@ -2336,8 +2476,27 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
               : const Text('-'),
         ),
         DataCell(
-          context.watch<LinkedSessionProvider>().canEdit
-              ? IconButton(
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (context.watch<LinkedSessionProvider>().canEdit)
+                IconButton(
+                  tooltip: snapshot.dailyLogPageNo.isEmpty
+                      ? 'Add DL Page No'
+                      : 'Edit DL Page No',
+                  onPressed: _isLoading || _isSavingSnapshot
+                      ? null
+                      : () => _editSnapshotPageNo(snapshot),
+                  icon: Icon(
+                    snapshot.dailyLogPageNo.isEmpty
+                        ? Icons.post_add_rounded
+                        : Icons.edit_note_rounded,
+                    size: 20,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                ),
+              if (context.watch<LinkedSessionProvider>().canEdit)
+                IconButton(
                   tooltip: 'Delete snapshot',
                   onPressed: _isLoading || _isSavingSnapshot
                       ? null
@@ -2345,7 +2504,10 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                   icon: const Icon(Icons.delete_outline),
                   visualDensity: VisualDensity.compact,
                 )
-              : const SizedBox.shrink(),
+              else
+                const SizedBox.shrink(),
+            ],
+          ),
         ),
       ],
     );

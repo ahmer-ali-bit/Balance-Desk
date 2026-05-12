@@ -95,6 +95,7 @@ class CsvBackupService {
               'description': row['description'],
               'debit': row['debit'],
               'credit': row['credit'],
+              'dailyLogPageNo': row['dailyLogPageNo'],
             },
           )
           .toList(growable: false),
@@ -107,6 +108,7 @@ class CsvBackupService {
               'overallDebit': row['overallDebit'],
               'overallCredit': row['overallCredit'],
               'customerCount': row['customerCount'],
+              'dailyLogPageNo': row['dailyLogPageNo'],
             },
           )
           .toList(growable: false),
@@ -294,6 +296,7 @@ class CsvBackupService {
           'description',
           'debit',
           'credit',
+          'dailyLogPageNo',
         ],
         ...entries.map<List<String>>((Map<String, dynamic> row) {
           return <String>[
@@ -305,6 +308,7 @@ class CsvBackupService {
             '${row['description'] ?? ''}',
             '${row['debit'] ?? ''}',
             '${row['credit'] ?? ''}',
+            '${row['dailyLogPageNo'] ?? ''}',
           ];
         }),
       ],
@@ -316,6 +320,7 @@ class CsvBackupService {
           'overallDebit',
           'overallCredit',
           'customerCount',
+          'dailyLogPageNo',
         ],
         ...snapshots.map<List<String>>((Map<String, dynamic> row) {
           return <String>[
@@ -325,6 +330,7 @@ class CsvBackupService {
             '${row['overallDebit'] ?? ''}',
             '${row['overallCredit'] ?? ''}',
             '${row['customerCount'] ?? ''}',
+            '${row['dailyLogPageNo'] ?? ''}',
           ];
         }),
       ],

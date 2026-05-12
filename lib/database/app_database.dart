@@ -864,6 +864,21 @@ class DatabaseHelper {
     );
   }
 
+  Future<int> updateSnapshotDailyLogPageNo({
+    required int id,
+    required String dailyLogPageNo,
+  }) async {
+    final db = await database;
+    return db.update(
+      summarySnapshotsTable,
+      <String, Object?>{
+        'dailyLogPageNo': dailyLogPageNo,
+      },
+      where: 'id = ?',
+      whereArgs: <Object?>[id],
+    );
+  }
+
   Future<int> deleteSummarySnapshot(int id) async {
     final db = await database;
     return db.delete(
@@ -1585,6 +1600,16 @@ class AppDatabase {
 
   Future<int> deleteSummarySnapshot(int id) {
     return _helper.deleteSummarySnapshot(id);
+  }
+
+  Future<int> updateSnapshotDailyLogPageNo({
+    required int id,
+    required String dailyLogPageNo,
+  }) {
+    return _helper.updateSnapshotDailyLogPageNo(
+      id: id,
+      dailyLogPageNo: dailyLogPageNo,
+    );
   }
 
   Future<int> clearSummarySnapshots() {
