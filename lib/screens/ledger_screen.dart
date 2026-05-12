@@ -2632,8 +2632,8 @@ class _LedgerViewState extends State<_LedgerView> {
           builder: (BuildContext context, BoxConstraints constraints) {
             final isDesktop = PlatformHelper.isDesktop;
             final isCompact = !isDesktop && constraints.maxWidth < 760;
-            final useWideTopLayout = isDesktop || constraints.maxWidth >= 980;
-            final useCardLayout = !isDesktop && constraints.maxWidth < 920;
+            final useWideTopLayout = constraints.maxWidth >= 980;
+            final useCardLayout = constraints.maxWidth < 760;
             final hasFab = isCompact;
             const desktopHorizontalPadding = 20.0;
             final desktopPageWidth = constraints.maxWidth;
@@ -3190,11 +3190,14 @@ class _LedgerViewState extends State<_LedgerView> {
             color: highlight ? accentColor : colorScheme.onSurfaceVariant,
           ),
           const SizedBox(width: 8),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: highlight ? accentColor : colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w700,
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: highlight ? accentColor : colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
