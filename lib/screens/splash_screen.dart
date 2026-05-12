@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../services/company_profile_service.dart';
 
@@ -244,35 +245,41 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
             ),
           ),
           
-          // Subtle Bottom Branding (Now closer to center if needed, but keeping it elegant)
+          // Clean Developer Branding
           Align(
             alignment: Alignment.bottomCenter,
             child: Padding(
-              padding: const EdgeInsets.only(bottom: 40),
-              child: Opacity(
-                opacity: 0.7,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'DEVELOPED BY AHMER ABID',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        letterSpacing: 1.5,
-                        fontWeight: FontWeight.w800,
-                        color: colorScheme.primary,
-                      ),
+              padding: const EdgeInsets.only(bottom: 45),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'DEVELOPED BY AHMER ABID',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      letterSpacing: 2.5,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF0D1B2A), // Dark Navy Blue
+                      fontSize: 10,
+                      shadows: [
+                        Shadow(
+                          color: colorScheme.primary.withValues(alpha: 0.15),
+                          offset: const Offset(0, 1),
+                          blurRadius: 2,
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'DESIGNED FOR PRECISION',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        letterSpacing: 2.5,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 8,
-                      ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'DESIGNED FOR PRECISION',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      letterSpacing: 3.0,
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+                      fontSize: 8,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
