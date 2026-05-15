@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'app_root.dart';
 import 'database/app_database.dart';
 import 'services/app_deep_link_service.dart';
+import 'services/workspace_service.dart';
 import 'screens/app_pin_gate_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/app_shell_screen.dart';
@@ -12,6 +13,8 @@ import 'utils/platform_helper.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Initialize workspace service first so the database knows which file to open
+  await WorkspaceService.instance.initialize();
   await AppDatabase.instance.initialize();
   await AppDeepLinkService.instance.initialize();
   runApp(const ShopDesktopApp());

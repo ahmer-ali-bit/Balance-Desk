@@ -17,6 +17,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart'
 import 'package:flutter/foundation.dart';
 
 import '../models/snapshot_opening_balance.dart';
+import '../services/workspace_service.dart';
 
 class DatabaseHelper {
   DatabaseHelper._();
@@ -31,7 +32,6 @@ class DatabaseHelper {
   static const String appSettingsTable = 'app_settings';
   static const String _activeYearSettingKey = 'activeYear';
   static const int _databaseVersion = 5;
-  static const String _databaseName = 'shop_desktop.db';
 
   Database? _database;
   int _activeYear = DateTime.now().year;
@@ -128,7 +128,36 @@ class DatabaseHelper {
       await databaseFolder.create(recursive: true);
     }
 
-    return path.join(databaseFolder.path, _databaseName);
+    final dbName = WorkspaceService.instance.activeDatabaseName;
+    return path.join(databaseFolder.path, dbName);
+  }
+
+  /// Closes the current database and reopens with the active workspace's DB.
+  Future<void> switchDatabase() async {
+    await close();
+    await initialize();
+  }
+
+  /// Deletes the database file for a specific workspace.
+  Future<void> deleteWorkspaceDatabase(String workspaceId) async {
+    // If it's the default, we don't delete it (or we could, but it's risky)
+    if (workspaceId == 'default') return;
+
+    final basePath = await _resolveDatabaseBasePath();
+    final dbName =
+        WorkspaceService.instance.databaseNameForWorkspace(workspaceId);
+    final fullPath = path.join(basePath, 'local', dbName);
+    final file = File(fullPath);
+    if (await file.exists()) {
+      // Ensure current DB is not this one
+      if (_database != null) {
+        final currentPath = await _resolveDatabasePath();
+        if (currentPath == fullPath) {
+          await close();
+        }
+      }
+      await file.delete();
+    }
   }
 
   Future<String> _resolveDatabaseBasePath() async {
@@ -1575,6 +1604,13 @@ class AppDatabase {
   int get activeYear => _helper.activeYear;
 
   Future<void> initialize() => _helper.initialize();
+
+  /// Closes the current database and reopens with the active workspace's DB.
+  Future<void> switchDatabase() => _helper.switchDatabase();
+
+  /// Deletes the database file for a specific workspace.
+  Future<void> deleteWorkspaceDatabase(String workspaceId) =>
+      _helper.deleteWorkspaceDatabase(workspaceId);
 
   Future<Database> get database => _helper.database;
 

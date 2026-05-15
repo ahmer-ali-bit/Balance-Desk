@@ -6,8 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../database/app_database.dart';
+import '../models/workspace.dart';
 import '../providers/customer_provider.dart';
 import '../providers/ledger_year_provider.dart';
+import '../providers/workspace_provider.dart';
 import '../services/app_pin_service.dart';
 import '../services/company_profile_service.dart';
 import '../services/csv_backup_service.dart';
@@ -73,6 +75,43 @@ class _AppShellScreenState extends State<AppShellScreen> {
     _loadPinStatus();
     _loadCompanyProfile();
     _loadSidebarNotes();
+    _setupWorkspaceProvider();
+  }
+
+  void _setupWorkspaceProvider() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final workspaceProvider = context.read<WorkspaceProvider>();
+      workspaceProvider.onWorkspaceSwitch = _performWorkspaceSwitch;
+    });
+  }
+
+  Future<void> _performWorkspaceSwitch(String workspaceId) async {
+    // Capture providers before async gap
+    final yearProvider = context.read<LedgerYearProvider>();
+    final customerProvider = context.read<CustomerProvider>();
+
+    // Close and reopen database for new workspace
+    await AppDatabase.instance.switchDatabase();
+
+    if (!mounted) return;
+
+    // Reload all providers with new database data
+    await yearProvider.loadYears();
+
+    customerProvider.updateSearchQuery('');
+    await customerProvider.loadCustomers();
+
+    // Reload sidebar data
+    await _loadPinStatus();
+    await _loadCompanyProfile();
+    await _loadSidebarNotes();
+
+    if (!mounted) return;
+    setState(() {
+      _selectedIndex = 0;
+      _reloadRevision++;
+    });
   }
 
   @override
@@ -312,11 +351,13 @@ class _AppShellScreenState extends State<AppShellScreen> {
         closeDrawerOnAction: closeDrawerOnAction,
         action: _openLinkedDevices,
       ),
-
       onCheckUpdateRequested: () => _runDrawerAction(
         closeDrawerOnAction: closeDrawerOnAction,
         action: _openManualUpdateDialog,
       ),
+      onWorkspaceSwitched: () {
+        _closeDrawerIfNeeded(closeDrawerOnAction);
+      },
       pinButtonLabel: _isPinEnabled ? 'Manage App PIN' : 'Set App PIN',
       companyName: _companyProfile.name.trim().isEmpty
           ? 'Balance Desk'
@@ -404,44 +445,17 @@ class _AppShellScreenState extends State<AppShellScreen> {
 
   Future<void> _openNotesEditor() async {
 
-    final controller = TextEditingController(text: _sidebarNotes);
     final notes = await showDialog<String>(
       context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text('Add Notes'),
-          content: SizedBox(
-            width: 420,
-            child: TextField(
-              controller: controller,
-              autofocus: true,
-              maxLines: 12,
-              minLines: 6,
-              textInputAction: TextInputAction.newline,
-              decoration: const InputDecoration(
-                hintText: 'Write any note you want to keep in the sidebar.',
-              ),
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(''),
-              child: const Text('Clear'),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.of(dialogContext).pop(controller.text.trim()),
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
+      builder: (BuildContext context) => _TextInputDialog(
+        title: 'Add Notes',
+        label: 'Notes',
+        initialValue: _sidebarNotes,
+        isMultiline: true,
+        actionLabel: 'Save',
+        hint: 'Write any note you want to keep in the sidebar.',
+      ),
     );
-    controller.dispose();
 
     if (!mounted || notes == null) {
       return;
@@ -642,9 +656,10 @@ class _AppShellScreenState extends State<AppShellScreen> {
 
   Widget _buildActivePage() {
     final activeYear = context.watch<LedgerYearProvider>().activeYear;
+    final workspaceId = context.watch<WorkspaceProvider>().activeWorkspaceId;
 
     return KeyedSubtree(
-      key: ValueKey<String>('$_selectedIndex-$_reloadRevision-$activeYear'),
+      key: ValueKey<String>('$_selectedIndex-$_reloadRevision-$activeYear-$workspaceId'),
       child: PlatformHelper.isDesktop
           ? _PageSurface(child: _destinations[_selectedIndex].child)
           : _destinations[_selectedIndex].child,
@@ -1083,6 +1098,7 @@ class _SidebarContent extends StatefulWidget {
     required this.onNotesRequested,
     required this.onLinkedDevicesRequested,
     required this.onCheckUpdateRequested,
+    required this.onWorkspaceSwitched,
     required this.pinButtonLabel,
     required this.companyName,
     required this.companyLogoPath,
@@ -1105,6 +1121,7 @@ class _SidebarContent extends StatefulWidget {
   final Future<void> Function() onNotesRequested;
   final Future<void> Function() onLinkedDevicesRequested;
   final Future<void> Function() onCheckUpdateRequested;
+  final VoidCallback onWorkspaceSwitched;
   final String pinButtonLabel;
   final String companyName;
   final String? companyLogoPath;
@@ -1201,6 +1218,9 @@ class _SidebarContentState extends State<_SidebarContent> {
             );
           },
         ),
+        Divider(height: 1, color: colorScheme.outlineVariant),
+        // Workspace Switcher
+        _WorkspaceSwitcher(onWorkspaceSwitched: widget.onWorkspaceSwitched),
         Divider(height: 1, color: colorScheme.outlineVariant),
         // Menu items
         Expanded(
@@ -1981,4 +2001,373 @@ class _ShellDestination {
   final IconData icon;
   final IconData selectedIcon;
   final Widget child;
+}
+
+class _WorkspaceSwitcher extends StatelessWidget {
+  const _WorkspaceSwitcher({required this.onWorkspaceSwitched});
+
+  final VoidCallback onWorkspaceSwitched;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Consumer<WorkspaceProvider>(
+      builder: (BuildContext context, WorkspaceProvider provider, _) {
+        final workspaces = provider.workspaces;
+        final active = provider.activeWorkspace;
+
+        return Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'WORKSPACE',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          letterSpacing: 1.0,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: IconButton(
+                        padding: EdgeInsets.zero,
+                        tooltip: 'Add Workspace',
+                        onPressed: () => _showAddWorkspaceDialog(context, provider),
+                        style: IconButton.styleFrom(
+                          backgroundColor: colorScheme.surfaceContainerHigh,
+                          foregroundColor: colorScheme.primary,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          side: BorderSide(color: colorScheme.outlineVariant),
+                        ),
+                        icon: const Icon(Icons.add_rounded, size: 16),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Active workspace chip
+              PopupMenuButton<String>(
+                enabled: !provider.isSwitching,
+                onSelected: (String workspaceId) async {
+                  if (workspaceId == active.id) return;
+                  final switched = await provider.switchWorkspace(workspaceId);
+                  if (switched) {
+                    onWorkspaceSwitched();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Switched to ${provider.activeWorkspace.name}',
+                          ),
+                        ),
+                      );
+                    }
+                  }
+                },
+                itemBuilder: (BuildContext context) {
+                  return workspaces.map<PopupMenuEntry<String>>((Workspace w) {
+                    final isActive = w.id == active.id;
+                    return PopupMenuItem<String>(
+                      value: w.id,
+                      child: Row(
+                        children: [
+                          Icon(
+                            isActive
+                                ? Icons.check_circle_rounded
+                                : Icons.circle_outlined,
+                            size: 18,
+                            color: isActive
+                                ? colorScheme.primary
+                                : colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              w.name,
+                              style: TextStyle(
+                                fontWeight: isActive
+                                    ? FontWeight.w700
+                                    : FontWeight.w400,
+                              ),
+                            ),
+                          ),
+                          if (!isActive && w.id != 'default')
+                            PopupMenuButton<_WorkspaceMenuAction>(
+                              padding: EdgeInsets.zero,
+                              icon: Icon(
+                                Icons.more_vert,
+                                size: 18,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                              onSelected: (_WorkspaceMenuAction action) {
+                                Navigator.of(context).pop();
+                                switch (action) {
+                                  case _WorkspaceMenuAction.rename:
+                                    _showRenameDialog(context, provider, w);
+                                    break;
+                                  case _WorkspaceMenuAction.delete:
+                                    _showDeleteDialog(context, provider, w);
+                                    break;
+                                }
+                              },
+                              itemBuilder: (_) => [
+                                const PopupMenuItem(
+                                  value: _WorkspaceMenuAction.rename,
+                                  child: Text('Rename'),
+                                ),
+                                const PopupMenuItem(
+                                  value: _WorkspaceMenuAction.delete,
+                                  child: Text('Delete'),
+                                ),
+                              ],
+                            ),
+                          if (w.id == 'default' && !isActive)
+                            const SizedBox(width: 40),
+                        ],
+                      ),
+                    );
+                  }).toList(growable: false);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: colorScheme.outlineVariant),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.workspaces_outlined,
+                        size: 18,
+                        color: colorScheme.primary,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          active.name,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (provider.isSwitching)
+                        SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: colorScheme.primary,
+                          ),
+                        )
+                      else
+                        Icon(
+                          Icons.unfold_more_rounded,
+                          size: 18,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showAddWorkspaceDialog(
+    BuildContext context,
+    WorkspaceProvider provider,
+  ) async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) => const _TextInputDialog(
+        title: 'Add Workspace',
+        label: 'Workspace name',
+        hint: 'e.g. Shop 2, Warehouse',
+        actionLabel: 'Add',
+      ),
+    );
+
+    if (name == null || name.isEmpty || !context.mounted) return;
+
+    final workspace = await provider.addWorkspace(name);
+    // Auto-switch to the new workspace
+    final switched = await provider.switchWorkspace(workspace.id);
+    if (switched && context.mounted) {
+      onWorkspaceSwitched();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Workspace "$name" created & activated.')),
+      );
+    }
+  }
+
+  Future<void> _showRenameDialog(
+    BuildContext context,
+    WorkspaceProvider provider,
+    Workspace workspace,
+  ) async {
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) => _TextInputDialog(
+        title: 'Rename Workspace',
+        label: 'New name',
+        initialValue: workspace.name,
+        actionLabel: 'Rename',
+      ),
+    );
+
+    if (newName == null || newName.isEmpty || !context.mounted) return;
+
+    await provider.renameWorkspace(workspace.id, newName);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Workspace renamed to "$newName".')),
+      );
+    }
+  }
+
+
+  Future<void> _showDeleteDialog(
+    BuildContext context,
+    WorkspaceProvider provider,
+    Workspace workspace,
+  ) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete Workspace'),
+          content: Text(
+            'Delete "${workspace.name}"? All data in this workspace will be lost. This cannot be undone.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(dialogContext).colorScheme.error,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    ) ?? false;
+
+    if (!shouldDelete || !context.mounted) return;
+
+    final deleted = await provider.deleteWorkspace(workspace.id);
+    if (deleted && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('"${workspace.name}" deleted.')),
+      );
+    }
+  }
+}
+
+enum _WorkspaceMenuAction { rename, delete }
+
+class _TextInputDialog extends StatefulWidget {
+  const _TextInputDialog({
+    super.key,
+    required this.title,
+    required this.label,
+    required this.actionLabel,
+    this.initialValue = '',
+    this.isMultiline = false,
+    this.hint,
+  });
+
+  final String title;
+  final String label;
+  final String actionLabel;
+  final String initialValue;
+  final bool isMultiline;
+  final String? hint;
+
+  @override
+  State<_TextInputDialog> createState() => _TextInputDialogState();
+}
+
+class _TextInputDialogState extends State<_TextInputDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final text = _controller.text.trim();
+    if (text.isNotEmpty || widget.initialValue.isNotEmpty) {
+      Navigator.of(context).pop(text);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: SizedBox(
+        width: widget.isMultiline ? 420 : 320,
+        child: TextField(
+          controller: _controller,
+          autofocus: true,
+          maxLines: widget.isMultiline ? 12 : 1,
+          minLines: widget.isMultiline ? 6 : 1,
+          textInputAction: widget.isMultiline ? TextInputAction.newline : TextInputAction.done,
+          decoration: InputDecoration(
+            labelText: widget.label,
+            hintText: widget.hint,
+          ),
+          onSubmitted: (_) => _submit(),
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        if (widget.isMultiline)
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(''),
+            child: const Text('Clear'),
+          ),
+        FilledButton(
+          onPressed: _submit,
+          child: Text(widget.actionLabel),
+        ),
+      ],
+    );
+  }
 }

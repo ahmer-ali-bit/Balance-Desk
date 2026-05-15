@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'providers/customer_provider.dart';
 import 'providers/ledger_year_provider.dart';
+import 'providers/workspace_provider.dart';
 import 'features/linked_devices/providers/linked_session_provider.dart';
 
 class AppRoot extends StatelessWidget {
@@ -14,6 +15,9 @@ class AppRoot extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(
+          create: (_) => WorkspaceProvider(),
+        ),
         ChangeNotifierProvider(
           create: (_) =>
               LedgerYearProvider()..loadYears(),
