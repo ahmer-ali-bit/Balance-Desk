@@ -3271,7 +3271,7 @@ class _LedgerViewState extends State<_LedgerView> {
               (runningRemainingBags ?? 0) + (double.tryParse(buyBags) ?? 0) - (double.tryParse(sellBags) ?? 0);
           runningRemainingBags = currentRemainingBags;
           remainingBagsLabel =
-              number_format_utils.formatAmount(currentRemainingBags);
+              number_format_utils.formatBags(currentRemainingBags);
         }
       }
 
@@ -3422,7 +3422,7 @@ class _LedgerViewState extends State<_LedgerView> {
                         child: _buildEntryMetricTile(
                           context,
                           label: 'Buy',
-                          value: number_format_utils.formatBags(double.tryParse(entry.buyBags) ?? 0),
+                          value: number_format_utils.formatBagsString(entry.buyBags),
                           accentColor: AppColors.debit,
                         ),
                       ),
@@ -3442,7 +3442,7 @@ class _LedgerViewState extends State<_LedgerView> {
                         child: _buildEntryMetricTile(
                           context,
                           label: 'Sell',
-                          value: number_format_utils.formatBags(double.tryParse(entry.sellBags) ?? 0),
+                          value: number_format_utils.formatBagsString(entry.sellBags),
                           accentColor: AppColors.credit,
                         ),
                       ),
@@ -4046,7 +4046,7 @@ class _LedgerViewState extends State<_LedgerView> {
           final currentRemainingBags =
               (runningRemainingBags ?? 0) + (double.tryParse(buyBags) ?? 0) - (double.tryParse(sellBags) ?? 0);
           runningRemainingBags = currentRemainingBags;
-          remainingBagsLabel = number_format_utils.formatAmount(
+          remainingBagsLabel = number_format_utils.formatBags(
             currentRemainingBags,
           );
         }
@@ -4080,9 +4080,7 @@ class _LedgerViewState extends State<_LedgerView> {
         cells.addAll(<DataCell>[
           DataCell(
             Text(
-              (buyBags.trim().isEmpty || buyBags.trim() == '0') 
-                  ? '' 
-                  : number_format_utils.formatBags(double.tryParse(buyBags) ?? 0),
+              number_format_utils.formatBagsString(buyBags),
               style: (rowStyle ?? const TextStyle()).copyWith(
                 color: AppColors.debit,
               ),
@@ -4098,9 +4096,7 @@ class _LedgerViewState extends State<_LedgerView> {
           ),
           DataCell(
             Text(
-              (sellBags.trim().isEmpty || sellBags.trim() == '0') 
-                  ? '' 
-                  : number_format_utils.formatBags(double.tryParse(sellBags) ?? 0),
+              number_format_utils.formatBagsString(sellBags),
               style: (rowStyle ?? const TextStyle()).copyWith(
                 color: AppColors.credit,
               ),

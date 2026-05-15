@@ -1019,13 +1019,9 @@ List<List<String>> _buildLedgerRows(
       rows.add(<String>[
         _formatDate(entry.entryDate),
         combinedPageNo.isEmpty ? '-' : combinedPageNo,
-        (entry.buyBags.trim().isEmpty || entry.buyBags.trim() == '0')
-            ? ''
-            : _formatBags(double.tryParse(entry.buyBags) ?? 0),
+        _formatBagsString(entry.buyBags),
         entry.debit == 0 ? '' : _formatAmount(entry.debit), // Buy Amt (UI: debit)
-        (entry.sellBags.trim().isEmpty || entry.sellBags.trim() == '0')
-            ? ''
-            : _formatBags(double.tryParse(entry.sellBags) ?? 0),
+        _formatBagsString(entry.sellBags),
         entry.credit == 0
             ? ''
             : _formatAmount(entry.credit), // Sell Amt (UI: credit)
@@ -1337,6 +1333,8 @@ String _formatAmount(double amount) => formatAmount(amount);
 String _formatBalance(double balance) => formatBalance(balance);
 
 String _formatBags(double bags) => formatBags(bags);
+
+String _formatBagsString(String bags) => formatBagsString(bags);
 
 String _formatDate(String value) {
   final parsedDate = DateTime.tryParse(value);

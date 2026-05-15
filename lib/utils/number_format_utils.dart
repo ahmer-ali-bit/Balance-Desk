@@ -28,3 +28,10 @@ String formatBags(double bags) {
   final formatter = NumberFormat('#,##,##0', 'en_IN');
   return formatter.format(bags.round());
 }
+
+String formatBagsString(String bags) {
+  if (bags.trim().isEmpty) return '';
+  final d = double.tryParse(bags);
+  if (d == null) return bags; // Return original string if not a number
+  return formatBags(d);
+}
