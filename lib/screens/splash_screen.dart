@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../services/company_profile_service.dart';
 

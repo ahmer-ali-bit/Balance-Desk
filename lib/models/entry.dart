@@ -8,6 +8,8 @@ class Entry {
     required this.description,
     required this.debit,
     required this.credit,
+    this.buyBags = '',
+    this.sellBags = '',
     this.dailyLogPageNo = '',
     this.showInDailyLog = true,
   });
@@ -20,6 +22,8 @@ class Entry {
   final String description;
   final double debit;
   final double credit;
+  final String buyBags;
+  final String sellBags;
   final String dailyLogPageNo;
   final bool showInDailyLog;
 
@@ -36,9 +40,20 @@ class Entry {
       description: map['description'] as String,
       debit: (map['debit'] as num).toDouble(),
       credit: (map['credit'] as num).toDouble(),
+      buyBags: _cleanBagsString(map['buyBags']?.toString() ?? ''),
+      sellBags: _cleanBagsString(map['sellBags']?.toString() ?? ''),
       dailyLogPageNo: map['dailyLogPageNo'] as String? ?? '',
       showInDailyLog: (map['showInDailyLog'] as int? ?? 1) == 1,
     );
+  }
+
+  /// Removes trailing decimal point and zeros from purely numeric strings.
+  /// e.g. "5.0" → "5", "10.00" → "10", "abc" → "abc", "5.5" → "5.5"
+  static String _cleanBagsString(String raw) {
+    if (raw.isEmpty) return raw;
+    final d = double.tryParse(raw);
+    if (d != null && d % 1 == 0) return d.toInt().toString();
+    return raw;
   }
 
   Map<String, Object?> toMap() {
@@ -51,6 +66,8 @@ class Entry {
       'description': description,
       'debit': debit,
       'credit': credit,
+      'buyBags': buyBags,
+      'sellBags': sellBags,
       'dailyLogPageNo': dailyLogPageNo,
       'showInDailyLog': showInDailyLog ? 1 : 0,
     };

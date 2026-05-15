@@ -51,6 +51,16 @@ class DatabaseHelper {
     required int customerId,
   }) => 'ledgerOpeningCredit:$year:$customerId';
 
+  String _customerLedgerOpeningBuyBagsSettingKey({
+    required int year,
+    required int customerId,
+  }) => 'ledgerOpeningBuyBags:$year:$customerId';
+
+  String _customerLedgerOpeningSellBagsSettingKey({
+    required int year,
+    required int customerId,
+  }) => 'ledgerOpeningSellBags:$year:$customerId';
+
   Future<void> initialize() async {
     await database;
   }
@@ -177,7 +187,8 @@ class DatabaseHelper {
         name TEXT NOT NULL,
         address TEXT NOT NULL DEFAULT '',
         phone TEXT NOT NULL DEFAULT '',
-        ledgerYear INTEGER NOT NULL DEFAULT $defaultYear
+        ledgerYear INTEGER NOT NULL DEFAULT $defaultYear,
+        isStockLedger INTEGER NOT NULL DEFAULT 0
       )
     ''');
 
@@ -192,6 +203,8 @@ class DatabaseHelper {
         description TEXT NOT NULL,
         debit REAL NOT NULL DEFAULT 0,
         credit REAL NOT NULL DEFAULT 0,
+        buyBags REAL NOT NULL DEFAULT 0,
+        sellBags REAL NOT NULL DEFAULT 0,
         showInDailyLog INTEGER NOT NULL DEFAULT 1,
         FOREIGN KEY(customerId) REFERENCES $customersTable(id) ON DELETE CASCADE
       )
@@ -266,6 +279,24 @@ class DatabaseHelper {
       tableName: entriesTable,
       columnName: 'showInDailyLog',
       definition: 'INTEGER NOT NULL DEFAULT 1',
+    );
+    await _ensureColumn(
+      db: db,
+      tableName: entriesTable,
+      columnName: 'buyBags',
+      definition: 'REAL NOT NULL DEFAULT 0',
+    );
+    await _ensureColumn(
+      db: db,
+      tableName: entriesTable,
+      columnName: 'sellBags',
+      definition: 'REAL NOT NULL DEFAULT 0',
+    );
+    await _ensureColumn(
+      db: db,
+      tableName: customersTable,
+      columnName: 'isStockLedger',
+      definition: 'INTEGER NOT NULL DEFAULT 0',
     );
   }
 
@@ -380,6 +411,8 @@ class DatabaseHelper {
     return SnapshotOpeningBalance(
       debit: double.tryParse(debitSetting ?? '') ?? 0,
       credit: double.tryParse(creditSetting ?? '') ?? 0,
+      buyBags: 0,
+      sellBags: 0,
     );
   }
 
@@ -426,13 +459,31 @@ class DatabaseHelper {
       ),
     );
 
-    if (debitSetting == null && creditSetting == null) {
+    final buyBagsSetting = await getAppSetting(
+      _customerLedgerOpeningBuyBagsSettingKey(
+        year: _activeYear,
+        customerId: customerId,
+      ),
+    );
+    final sellBagsSetting = await getAppSetting(
+      _customerLedgerOpeningSellBagsSettingKey(
+        year: _activeYear,
+        customerId: customerId,
+      ),
+    );
+
+    if (debitSetting == null &&
+        creditSetting == null &&
+        buyBagsSetting == null &&
+        sellBagsSetting == null) {
       return null;
     }
 
     return SnapshotOpeningBalance(
       debit: double.tryParse(debitSetting ?? '') ?? 0,
       credit: double.tryParse(creditSetting ?? '') ?? 0,
+      buyBags: double.tryParse(buyBagsSetting ?? '') ?? 0,
+      sellBags: double.tryParse(sellBagsSetting ?? '') ?? 0,
     );
   }
 
@@ -440,6 +491,8 @@ class DatabaseHelper {
     required int customerId,
     required double debit,
     required double credit,
+    double buyBags = 0,
+    double sellBags = 0,
   }) async {
     final db = await database;
     await db.insert(appSettingsTable, <String, Object?>{
@@ -456,19 +509,41 @@ class DatabaseHelper {
       ),
       'settingValue': credit.toString(),
     }, conflictAlgorithm: ConflictAlgorithm.replace);
+    await db.insert(appSettingsTable, <String, Object?>{
+      'settingKey': _customerLedgerOpeningBuyBagsSettingKey(
+        year: _activeYear,
+        customerId: customerId,
+      ),
+      'settingValue': buyBags.toString(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    await db.insert(appSettingsTable, <String, Object?>{
+      'settingKey': _customerLedgerOpeningSellBagsSettingKey(
+        year: _activeYear,
+        customerId: customerId,
+      ),
+      'settingValue': sellBags.toString(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<void> clearCustomerLedgerOpeningBalance(int customerId) async {
     final db = await database;
     await db.delete(
       appSettingsTable,
-      where: 'settingKey IN (?, ?)',
+      where: 'settingKey IN (?, ?, ?, ?)',
       whereArgs: <Object?>[
         _customerLedgerOpeningDebitSettingKey(
           year: _activeYear,
           customerId: customerId,
         ),
         _customerLedgerOpeningCreditSettingKey(
+          year: _activeYear,
+          customerId: customerId,
+        ),
+        _customerLedgerOpeningBuyBagsSettingKey(
+          year: _activeYear,
+          customerId: customerId,
+        ),
+        _customerLedgerOpeningSellBagsSettingKey(
           year: _activeYear,
           customerId: customerId,
         ),
@@ -496,6 +571,7 @@ class DatabaseHelper {
         'address': address.trim(),
         'phone': phone.trim(),
         'ledgerYear': _activeYear,
+        'isStockLedger': 0,
       };
 
       if (totalCustomers == 0) {
@@ -541,7 +617,7 @@ class DatabaseHelper {
     final db = await database;
     return db.query(
       customersTable,
-      columns: <String>['id', 'name', 'address', 'phone'],
+      columns: <String>['id', 'name', 'address', 'phone', 'isStockLedger'],
       where: 'ledgerYear = ?',
       whereArgs: <Object?>[_activeYear],
       orderBy: 'name COLLATE NOCASE',
@@ -566,6 +642,33 @@ class DatabaseHelper {
       'description': description.trim(),
       'debit': debit,
       'credit': credit,
+      'buyBags': 0,
+      'sellBags': 0,
+    });
+  }
+
+  Future<int> addStockEntry({
+    required int customerId,
+    required String entryDate,
+    required String createdAt,
+    required String pageNo,
+    required String description,
+    required String buyBags,
+    required double buyAmount,
+    required String sellBags,
+    required double sellAmount,
+  }) async {
+    final db = await database;
+    return db.insert(entriesTable, <String, Object?>{
+      'customerId': customerId,
+      'entryDate': entryDate,
+      'createdAt': createdAt,
+      'pageNo': pageNo.trim(),
+      'description': description.trim(),
+      'debit': buyAmount,
+      'credit': sellAmount,
+      'buyBags': buyBags,
+      'sellBags': sellBags,
     });
   }
 
@@ -586,6 +689,8 @@ class DatabaseHelper {
         'description': description.trim(),
         'debit': debit,
         'credit': credit,
+        'buyBags': 0,
+        'sellBags': 0,
       },
       where: 'id = ?',
       whereArgs: <Object?>[id],
@@ -610,6 +715,33 @@ class DatabaseHelper {
     return db.delete(entriesTable, where: 'id = ?', whereArgs: <Object?>[id]);
   }
 
+  Future<int> updateStockEntry({
+    required int id,
+    required String entryDate,
+    required String pageNo,
+    required String description,
+    required String buyBags,
+    required double buyAmount,
+    required String sellBags,
+    required double sellAmount,
+  }) async {
+    final db = await database;
+    return db.update(
+      entriesTable,
+      <String, Object?>{
+        'entryDate': entryDate,
+        'pageNo': pageNo.trim(),
+        'description': description.trim(),
+        'debit': buyAmount,
+        'credit': sellAmount,
+        'buyBags': buyBags,
+        'sellBags': sellBags,
+      },
+      where: 'id = ?',
+      whereArgs: <Object?>[id],
+    );
+  }
+
   Future<int> updateCustomer({
     required int id,
     required String name,
@@ -632,6 +764,16 @@ class DatabaseHelper {
     );
   }
 
+  Future<void> updateCustomerStockMode(int id, bool isStockLedger) async {
+    final db = await database;
+    await db.update(
+      customersTable,
+      <String, Object?>{'isStockLedger': isStockLedger ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: <Object?>[id],
+    );
+  }
+
   Future<List<Map<String, Object?>>> getEntriesByCustomer(
     int customerId,
   ) async {
@@ -648,6 +790,8 @@ class DatabaseHelper {
         'description',
         'debit',
         'credit',
+        'buyBags',
+        'sellBags',
         'showInDailyLog',
       ],
       where: 'customerId = ?',
@@ -704,6 +848,9 @@ class DatabaseHelper {
         e.description,
         e.debit,
         e.credit,
+        e.buyBags,
+        e.sellBags,
+        e.dailyLogPageNo,
         e.showInDailyLog,
         c.name AS customerName
       FROM $entriesTable e
@@ -741,6 +888,9 @@ class DatabaseHelper {
         e.description,
         e.debit,
         e.credit,
+        e.buyBags,
+        e.sellBags,
+        e.dailyLogPageNo,
         e.showInDailyLog,
         c.name AS customerName
       FROM $entriesTable e
@@ -1012,6 +1162,7 @@ class DatabaseHelper {
           'address': row.length > 3 ? row[3] : '',
           'phone': row.length > 4 ? row[4] : '',
           'ledgerYear': int.tryParse(row[2]) ?? DateTime.now().year,
+          'isStockLedger': row.length > 5 ? (int.tryParse(row[5]) ?? 0) : 0,
         });
       }
 
@@ -1028,6 +1179,10 @@ class DatabaseHelper {
           'description': row[5],
           'debit': double.tryParse(row[6]) ?? 0,
           'credit': double.tryParse(row[7]) ?? 0,
+          'buyBags': row.length > 8 ? (double.tryParse(row[8]) ?? 0) : 0,
+          'sellBags': row.length > 9 ? (double.tryParse(row[9]) ?? 0) : 0,
+          'dailyLogPageNo': row.length > 10 ? row[10] : '',
+          'showInDailyLog': row.length > 11 ? (int.tryParse(row[11]) ?? 1) : 1,
         });
       }
 
@@ -1092,7 +1247,7 @@ class DatabaseHelper {
       );
       final sourceCustomers = await txn.query(
         customersTable,
-        columns: <String>['id', 'name', 'address', 'phone'],
+        columns: <String>['id', 'name', 'address', 'phone', 'isStockLedger'],
         where: 'ledgerYear = ?',
         whereArgs: <Object?>[sourceYear],
         orderBy: 'id ASC',
@@ -1105,6 +1260,7 @@ class DatabaseHelper {
               'name': customer['name'] as String? ?? '',
               'address': customer['address'] as String? ?? '',
               'phone': customer['phone'] as String? ?? '',
+              'isStockLedger': customer['isStockLedger'] as int? ?? 0,
               'ledgerYear': year,
             });
 
@@ -1503,6 +1659,56 @@ class AppDatabase {
     );
   }
 
+  Future<void> updateCustomerStockMode(int id, bool isStockLedger) {
+    return _helper.updateCustomerStockMode(id, isStockLedger);
+  }
+
+  Future<int> addStockEntry({
+    required int customerId,
+    required String entryDate,
+    required String createdAt,
+    required String pageNo,
+    required String description,
+    required String buyBags,
+    required double buyAmount,
+    required String sellBags,
+    required double sellAmount,
+  }) {
+    return _helper.addStockEntry(
+      customerId: customerId,
+      entryDate: entryDate,
+      createdAt: createdAt,
+      pageNo: pageNo,
+      description: description,
+      buyBags: buyBags,
+      buyAmount: buyAmount,
+      sellBags: sellBags,
+      sellAmount: sellAmount,
+    );
+  }
+
+  Future<int> updateStockEntry({
+    required int id,
+    required String entryDate,
+    required String pageNo,
+    required String description,
+    required String buyBags,
+    required double buyAmount,
+    required String sellBags,
+    required double sellAmount,
+  }) {
+    return _helper.updateStockEntry(
+      id: id,
+      entryDate: entryDate,
+      pageNo: pageNo,
+      description: description,
+      buyBags: buyBags,
+      buyAmount: buyAmount,
+      sellBags: sellBags,
+      sellAmount: sellAmount,
+    );
+  }
+
   Future<List<Map<String, Object?>>> getEntriesByCustomer(int customerId) {
     return _helper.getEntriesByCustomer(customerId);
   }
@@ -1703,11 +1909,15 @@ class AppDatabase {
     required int customerId,
     required double debit,
     required double credit,
+    double buyBags = 0,
+    double sellBags = 0,
   }) {
     return _helper.setCustomerLedgerOpeningBalance(
       customerId: customerId,
       debit: debit,
       credit: credit,
+      buyBags: buyBags,
+      sellBags: sellBags,
     );
   }
 

@@ -22,3 +22,9 @@ String formatBalance(double balance) {
   }
   return '0';
 }
+
+String formatBags(double bags) {
+  // Always format bags as integers per user request
+  final formatter = NumberFormat('#,##,##0', 'en_IN');
+  return formatter.format(bags.round());
+}

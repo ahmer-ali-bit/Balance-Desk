@@ -4,12 +4,14 @@ class Customer {
     required this.name,
     this.address = '',
     this.phone = '',
+    this.isStockLedger = false,
   });
 
   final int? id;
   final String name;
   final String address;
   final String phone;
+  final bool isStockLedger;
 
   String get displayAddress => address.trim().isEmpty ? '-' : address.trim();
   String get displayPhone => phone.trim().isEmpty ? '-' : phone.trim();
@@ -20,6 +22,7 @@ class Customer {
       name: map['name'] as String,
       address: map['address'] as String? ?? '',
       phone: map['phone'] as String? ?? '',
+      isStockLedger: (map['isStockLedger'] as int? ?? 0) == 1,
     );
   }
 
@@ -29,6 +32,7 @@ class Customer {
       'name': name,
       'address': address,
       'phone': phone,
+      'isStockLedger': isStockLedger ? 1 : 0,
     };
   }
 }

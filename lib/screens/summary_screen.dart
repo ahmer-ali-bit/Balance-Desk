@@ -14,6 +14,9 @@ import '../utils/number_format_utils.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/customer_search_field.dart';
 import '../widgets/summary_stat_card.dart';
+import '../providers/customer_provider.dart';
+import 'ledger_screen.dart';
+import 'package:provider/provider.dart';
 
 class SummaryScreen extends StatefulWidget {
   const SummaryScreen({super.key});
@@ -92,6 +95,14 @@ class _SummaryScreenState extends State<SummaryScreen> {
           openingBalance.credit,
           (double sum, Entry entry) => sum + entry.credit,
         );
+        final totalBuyBags = entries.fold<double>(
+          0,
+          (double sum, Entry entry) => sum + (double.tryParse(entry.buyBags) ?? 0),
+        );
+        final totalSellBags = entries.fold<double>(
+          0,
+          (double sum, Entry entry) => sum + (double.tryParse(entry.sellBags) ?? 0),
+        );
         final latestPageNo = entries.isEmpty ? '' : entries.last.pageNo;
 
         summaries.add(
@@ -100,6 +111,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
             pageNo: latestPageNo,
             totalDebit: totalDebit,
             totalCredit: totalCredit,
+            totalBuyBags: totalBuyBags,
+            totalSellBags: totalSellBags,
           ),
         );
       }
@@ -131,17 +144,40 @@ class _SummaryScreenState extends State<SummaryScreen> {
         );
         _isLoading = false;
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) {
         return;
       }
-
       setState(() {
-        _errorMessage = 'Unable to load summary data.';
         _isLoading = false;
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading summary: $e')),
+      );
     }
   }
+
+  Future<void> _navigateToCustomerLedger(Customer customer) async {
+    final customerProvider = context.read<CustomerProvider>();
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => MultiProvider(
+          providers: [
+            ChangeNotifierProvider<CustomerProvider>.value(
+              value: customerProvider,
+            ),
+          ],
+          child: LedgerScreen(
+            customer: customer,
+            autoOpenAddEntry: false,
+          ),
+        ),
+      ),
+    );
+    // Reload summary when returning in case data changed
+    _loadSummary();
+  }
+
 
   Future<void> _exportSummaryPdf() async {
     final rows = _buildSummaryPdfRows();
@@ -161,6 +197,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
           'Page No',
           'Total Debit',
           'Total Credit',
+          'Rem. Bags',
           'Balance',
         ],
         rows: rows,
@@ -214,6 +251,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
           'Page No',
           'Total Debit',
           'Total Credit',
+          'Rem. Bags',
           'Balance',
         ],
         rows: rows,
@@ -274,6 +312,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
           item.pageNo.isEmpty ? '-' : item.pageNo,
           _formatAmount(item.totalDebit),
           _formatAmount(item.totalCredit),
+          item.customer.isStockLedger ? formatBags(item.remainingBags) : '-',
           _formatBalance(item.balance),
         ],
       ),
@@ -282,6 +321,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
         '-',
         _formatAmount(_summaryData.overallDebit),
         _formatAmount(_summaryData.overallCredit),
+        '-',
         _formatBalance(_summaryData.finalBalance),
       ],
     ];
@@ -301,6 +341,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
         item.pageNo.isEmpty ? '-' : item.pageNo,
         _formatAmount(item.totalDebit),
         _formatAmount(item.totalCredit),
+        item.customer.isStockLedger ? formatBags(item.remainingBags) : '-',
         _formatBalance(item.balance),
       ]);
     }
@@ -311,6 +352,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
       '-',
       _formatAmount(_summaryData.overallDebit),
       _formatAmount(_summaryData.overallCredit),
+      '-',
       _formatBalance(_summaryData.finalBalance),
     ]);
 
@@ -842,11 +884,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
                   DataColumn(label: Text('Page No')),
                   DataColumn(label: Text('Total Debit'), numeric: true),
                   DataColumn(label: Text('Total Credit'), numeric: true),
+                  DataColumn(label: Text('Remaining'), numeric: true),
                   DataColumn(label: Text('Balance')),
                 ],
                 rows: <DataRow>[
                   ...customers.map((item) {
                     return DataRow(
+                      onLongPress: () => _navigateToCustomerLedger(item.customer),
                       cells: <DataCell>[
                         DataCell(
                           SizedBox(
@@ -871,6 +915,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
                           Text(
                             _formatAmount(item.totalCredit),
                             style: const TextStyle(color: AppColors.credit),
+                          ),
+                        ),
+                        DataCell(
+                          Text(
+                            item.customer.isStockLedger
+                                ? formatBags(item.remainingBags)
+                                : '-',
                           ),
                         ),
                         DataCell(
@@ -912,8 +963,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
     final colorScheme = theme.colorScheme;
     final balanceColor = AppColors.balanceColor(item.balance);
 
-    return Container(
-      padding: const EdgeInsets.all(14),
+    return GestureDetector(
+      onLongPress: () => _navigateToCustomerLedger(item.customer),
+      child: Container(
+        padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
@@ -957,8 +1010,12 @@ class _SummaryScreenState extends State<SummaryScreen> {
             credit: _formatAmount(item.totalCredit),
             balance: _formatBalance(item.balance),
             balanceColor: balanceColor,
+            bags: item.customer.isStockLedger
+                ? formatBags(item.remainingBags)
+                : null,
           ),
         ],
+      ),
       ),
     );
   }
@@ -969,6 +1026,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
     required String credit,
     required String balance,
     required Color balanceColor,
+    String? bags,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -1004,6 +1062,16 @@ class _SummaryScreenState extends State<SummaryScreen> {
               color: balanceColor,
             ),
           ),
+          if (bags != null) ...<Widget>[
+            _summaryStripDivider(context),
+            Expanded(
+              child: _SummaryStripItem(
+                label: 'Remaining',
+                value: bags,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1111,12 +1179,17 @@ class _CustomerSummary {
     required this.pageNo,
     required this.totalDebit,
     required this.totalCredit,
+    this.totalBuyBags = 0,
+    this.totalSellBags = 0,
   });
 
   final Customer customer;
   final String pageNo;
   final double totalDebit;
   final double totalCredit;
+  final double totalBuyBags;
+  final double totalSellBags;
 
   double get balance => totalDebit - totalCredit;
+  double get remainingBags => totalBuyBags - totalSellBags;
 }

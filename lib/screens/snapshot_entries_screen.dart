@@ -666,6 +666,21 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   }) {
     final rows = <List<String>>[];
     var entryIndex = 0;
+    // The snapshot export currently shows individual entry amounts and snapshot totals.
+    // We are keeping track of indices but don't need running totals across individual rows here.
+
+    if (includeOpeningBalance && _snapshots.isEmpty && _hasOpeningBalance) {
+      final openingBalance = _effectiveOpeningBalance;
+      rows.add(<String>[
+        'Opening Balance',
+        '-',
+        'Starting amount',
+        _formatAmount(openingBalance.debit),
+        _formatAmount(openingBalance.credit),
+        _formatBalance(openingBalance.debit - openingBalance.credit),
+        '-',
+      ]);
+    }
 
     for (final snapshot in _snapshots) {
       final matchesSearch =
@@ -682,18 +697,18 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
               ) <=
               0) {
         final entry = _entries[entryIndex];
+        
+        // Individual entries in this export view don't currently show running balance/bags in the row list
+    // to maintain a clean snapshot total focus.
+
         snapshotEntries.add(<String>[
           entry.customerName,
           _formatDate(entry.entry.entryDate),
-          entry.entry.displayDescription,
+          _formatDescription(entry),
           _formatAmount(entry.entry.debit),
           _formatAmount(entry.entry.credit),
           '',
-          [
-            if (entry.entry.pageNo.isNotEmpty) entry.entry.pageNo,
-            if (entry.entry.dailyLogPageNo.isNotEmpty)
-              'DL: ${entry.entry.dailyLogPageNo}',
-          ].join(' | '),
+          entry.entry.pageNo.isEmpty ? '-' : entry.entry.pageNo,
         ]);
         entryIndex++;
       }
@@ -703,15 +718,15 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         rows.add(<String>[
           'Snapshot Total',
           _formatDateTime(snapshot.savedAt),
-          'Total incl. balance B/F',
+          'Total',
           _formatAmount(snapshot.overallDebit),
           _formatAmount(snapshot.overallCredit),
           _formatBalance(snapshot.finalBalance),
-          snapshot.dailyLogPageNo.isNotEmpty
-              ? 'DL Pg ${snapshot.dailyLogPageNo}'
-              : '',
+          snapshot.dailyLogPageNo.isNotEmpty ? 'DL Pg ${snapshot.dailyLogPageNo}' : '-',
         ]);
 
+        // Next snapshot starts fresh with its own total calculation
+        
         final carryForward = _balanceToOpening(snapshot.finalBalance);
         if (carryForward.hasValue) {
           rows.add(<String>[
@@ -720,46 +735,25 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
             'From previous snapshot',
             _formatAmount(carryForward.debit),
             _formatAmount(carryForward.credit),
-            _formatBalance(carryForward.finalBalance),
-            '',
+            _formatBalance(carryForward.debit - carryForward.credit),
+            '-',
           ]);
         }
       }
     }
 
-    if (includeOpeningBalance && _snapshots.isEmpty && _hasOpeningBalance) {
-      final openingBalance = _effectiveOpeningBalance;
+    while (entryIndex < _entries.length) {
+      final entry = _entries[entryIndex];
       rows.add(<String>[
-        'Opening Balance',
-        '-',
-        'Starting amount',
-        _formatAmount(openingBalance.debit),
-        _formatAmount(openingBalance.credit),
-        _formatBalance(openingBalance.finalBalance),
+        entry.customerName,
+        _formatDate(entry.entry.entryDate),
+        _formatDescription(entry),
+        _formatAmount(entry.entry.debit),
+        _formatAmount(entry.entry.credit),
         '',
+        entry.entry.pageNo.isEmpty ? '-' : entry.entry.pageNo,
       ]);
-    }
-
-    if (_searchQuery.isEmpty) {
-      while (entryIndex < _entries.length) {
-        final entry = _entries[entryIndex];
-        rows.add(<String>[
-          entry.customerName,
-          _formatDate(entry.entry.entryDate),
-          entry.entry.displayDescription,
-          _formatAmount(entry.entry.debit),
-          _formatAmount(entry.entry.credit),
-          '',
-          [
-            if (entry.entry.pageNo.isNotEmpty) entry.entry.pageNo,
-            if (entry.entry.dailyLogPageNo.isNotEmpty)
-              'DL: ${entry.entry.dailyLogPageNo}',
-          ].join(' | '),
-        ]);
-        entryIndex++;
-      }
-    } else {
-      entryIndex = _entries.length;
+      entryIndex++;
     }
 
     return rows;
@@ -768,15 +762,22 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   List<({String label, String value})> _buildSnapshotPdfSummaryItems() {
     final items = <({String label, String value})>[];
 
-    items.add((label: 'Total Entries', value: '${_entries.length}'));
+    var totalBuyAmt = 0.0;
+    var totalSellAmt = 0.0;
+
+    for (final entry in _entries) {
+      totalBuyAmt += entry.entry.debit;
+      totalSellAmt += entry.entry.credit;
+    }
 
     final latestSnapshot = _latestSnapshot;
-    items.add((
-      label: 'Last Saved Snapshot Balance',
-      value: latestSnapshot != null
-          ? _formatBalance(latestSnapshot.finalBalance)
-          : '-',
-    ));
+    final finalBalance = latestSnapshot?.finalBalance ??
+        ((totalBuyAmt + _openingDebitBalance) - (totalSellAmt + _openingCreditBalance));
+    
+    items.add((label: 'Total Entries', value: _entries.length.toString()));
+    items.add((label: 'Total Debit', value: _formatAmount(totalBuyAmt)));
+    items.add((label: 'Total Credit', value: _formatAmount(totalSellAmt)));
+    items.add((label: 'Net Balance', value: _formatBalance(finalBalance)));
 
     return items;
   }
@@ -812,7 +813,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 'Starting amount',
                 _formatAmount(_effectiveOpeningBalance.debit),
                 _formatAmount(_effectiveOpeningBalance.credit),
-                _formatBalance(_effectiveOpeningBalance.finalBalance),
+                _formatBalance(_effectiveOpeningBalance.debit - _effectiveOpeningBalance.credit),
                 '-',
               ]
             : null,
@@ -1703,7 +1704,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              '${_formatDate(item.entry.entryDate)} • ${item.entry.displayDescription}',
+              '${_formatDate(item.entry.entryDate)} • ${_formatDescription(item)}',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -2067,7 +2068,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            '${_formatDate(item.entry.entryDate)} - ${item.entry.displayDescription}',
+            '${_formatDate(item.entry.entryDate)} - ${_formatDescription(item)}',
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodyMedium?.copyWith(
@@ -2343,7 +2344,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 item.customerName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(decoration: TextDecoration.underline),
+                style: const TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
           ),
@@ -2353,7 +2354,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           SizedBox(
             width: compact ? 220 : 280,
             child: Text(
-              item.entry.displayDescription,
+              _formatDescription(item),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -2533,13 +2534,13 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         DataCell(Text('Starting amount', style: rowStyle)),
         DataCell(
           Text(
-            _formatEntryAmount(openingBalance.debit),
+            _formatEntryAmount(openingBalance.credit), // Sell Amount in Debit column
             style: rowStyle?.copyWith(color: AppColors.debit),
           ),
         ),
         DataCell(
           Text(
-            _formatEntryAmount(openingBalance.credit),
+            _formatEntryAmount(openingBalance.debit), // Buy Amount in Credit column
             style: rowStyle?.copyWith(color: AppColors.credit),
           ),
         ),
@@ -2551,8 +2552,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
             ),
           ),
         ),
-        const DataCell(Text('')),
-        const DataCell(Text('')),
+        const DataCell(Text('')), // Page No
+        const DataCell(Text('')), // Action
       ],
     );
   }
@@ -2577,13 +2578,13 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         DataCell(Text('From previous snapshot', style: rowStyle)),
         DataCell(
           Text(
-            _formatEntryAmount(carryForward.debit),
+            _formatEntryAmount(carryForward.credit), // Sell Amount in Debit column
             style: rowStyle?.copyWith(color: AppColors.debit),
           ),
         ),
         DataCell(
           Text(
-            _formatEntryAmount(carryForward.credit),
+            _formatEntryAmount(carryForward.debit), // Buy Amount in Credit column
             style: rowStyle?.copyWith(color: AppColors.credit),
           ),
         ),
@@ -2595,8 +2596,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
             ),
           ),
         ),
-        const DataCell(Text('')),
-        const DataCell(Text('')),
+        const DataCell(Text('')), // Page No
+        const DataCell(Text('')), // Action
       ],
     );
   }
@@ -2702,6 +2703,26 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     }
 
     return _formatAmount(amount);
+  }
+
+  String _formatDescription(dynamic item) {
+    final Entry entry = item is _SnapshotEntry ? item.entry : (item as Entry);
+    final desc = entry.description.trim();
+    final parts = <String>[];
+    if (entry.buyBags.trim().isNotEmpty && entry.buyBags.trim() != '0') {
+      parts.add("Buy: ${entry.buyBags.trim()}");
+    }
+    final parsedSellBags = double.tryParse(entry.sellBags) ?? 0;
+    if (parsedSellBags > 0 || (entry.sellBags.trim().isNotEmpty && entry.sellBags.trim() != '0')) {
+      parts.add("Sell: ${entry.sellBags.trim()}");
+    }
+
+    final bagsPart = parts.join(" | ");
+    if (desc.isEmpty) {
+      return bagsPart.isEmpty ? "-" : bagsPart;
+    } else {
+      return bagsPart.isEmpty ? desc : "$desc ($bagsPart)";
+    }
   }
 }
 

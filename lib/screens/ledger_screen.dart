@@ -27,7 +27,7 @@ enum _ExportChoice { pdf, excel }
 
 enum _LedgerShortcut { addEntry, export, print, goBack }
 
-enum _LedgerAppBarAction { export, print, editCustomer }
+enum _LedgerAppBarAction { export, print, editCustomer, filterAndBalance }
 
 class _LedgerIntent extends Intent {
   const _LedgerIntent(this.action);
@@ -54,9 +54,7 @@ class LedgerScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<LedgerProvider>(
-      create: (_) => LedgerProvider(
-        customer: customer,
-      )..loadEntries(),
+      create: (_) => LedgerProvider(customer: customer)..loadEntries(),
       child: _LedgerView(
         customer: customer,
         autoOpenAddEntry: autoOpenAddEntry,
@@ -66,10 +64,7 @@ class LedgerScreen extends StatelessWidget {
 }
 
 class _LedgerView extends StatefulWidget {
-  const _LedgerView({
-    required this.customer,
-    required this.autoOpenAddEntry,
-  });
+  const _LedgerView({required this.customer, required this.autoOpenAddEntry});
 
   final Customer customer;
   final bool autoOpenAddEntry;
@@ -85,11 +80,16 @@ class _LedgerViewState extends State<_LedgerView> {
   final TextEditingController _openingDebitController = TextEditingController();
   final TextEditingController _openingCreditController =
       TextEditingController();
+  final TextEditingController _openingBuyBagsController =
+      TextEditingController();
+  final TextEditingController _openingSellBagsController =
+      TextEditingController();
   final FocusNode _openingDebitFocusNode = FocusNode();
   final FocusNode _openingCreditFocusNode = FocusNode();
+  final FocusNode _openingBuyBagsFocusNode = FocusNode();
+  final FocusNode _openingSellBagsFocusNode = FocusNode();
   String _lastOpeningBalanceSignature = '';
-  bool _showOpeningBalancePanel = false;
-  bool _showDateFilterPanel = false;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _didAutoOpenAddEntry = false;
 
   @override
@@ -111,16 +111,22 @@ class _LedgerViewState extends State<_LedgerView> {
     _tableVerticalController.dispose();
     _openingDebitController.dispose();
     _openingCreditController.dispose();
+    _openingBuyBagsController.dispose();
+    _openingSellBagsController.dispose();
     _openingDebitFocusNode.dispose();
     _openingCreditFocusNode.dispose();
+    _openingBuyBagsFocusNode.dispose();
+    _openingSellBagsFocusNode.dispose();
     super.dispose();
   }
 
   Future<void> _showAddEntryDialog() async {
     final customerId = widget.customer.id;
+    final isStockLedger = context.read<LedgerProvider>().isStockLedger;
     final draft = await showDialog<_EntryDraft>(
       context: context,
-      builder: (BuildContext context) => _AddEntryDialog(customerId: customerId),
+      builder: (BuildContext context) =>
+          _AddEntryDialog(customerId: customerId, isStockLedger: isStockLedger),
     );
 
     if (!mounted || draft == null) {
@@ -128,13 +134,23 @@ class _LedgerViewState extends State<_LedgerView> {
     }
 
     final provider = context.read<LedgerProvider>();
-    final isSaved = await provider.addEntry(
-      entryDate: draft.entryDate,
-      pageNo: draft.pageNo,
-      description: draft.description,
-      debit: draft.debit,
-      credit: draft.credit,
-    );
+    final isSaved = provider.isStockLedger
+        ? await provider.addStockEntry(
+            entryDate: draft.entryDate,
+            pageNo: draft.pageNo,
+            description: draft.description,
+            buyAmount: draft.debit,
+            sellAmount: draft.credit,
+            buyBags: draft.buyBags,
+            sellBags: draft.sellBags,
+          )
+        : await provider.addEntry(
+            entryDate: draft.entryDate,
+            pageNo: draft.pageNo,
+            description: draft.description,
+            debit: draft.debit,
+            credit: draft.credit,
+          );
 
     if (!mounted) {
       return;
@@ -150,9 +166,11 @@ class _LedgerViewState extends State<_LedgerView> {
   }
 
   Future<void> _showEditEntryDialog(Entry entry) async {
+    final isStockLedger = context.read<LedgerProvider>().isStockLedger;
     final draft = await showDialog<_EntryDraft>(
       context: context,
-      builder: (BuildContext context) => _EditEntryDialog(entry: entry),
+      builder: (BuildContext context) =>
+          _EditEntryDialog(entry: entry, isStockLedger: isStockLedger),
     );
 
     if (!mounted || draft == null) {
@@ -160,14 +178,25 @@ class _LedgerViewState extends State<_LedgerView> {
     }
 
     final provider = context.read<LedgerProvider>();
-    final isUpdated = await provider.updateEntry(
-      entry: entry,
-      entryDate: draft.entryDate,
-      pageNo: draft.pageNo,
-      description: draft.description,
-      debit: draft.debit,
-      credit: draft.credit,
-    );
+    final isUpdated = provider.isStockLedger
+        ? await provider.updateStockEntry(
+            entry: entry,
+            entryDate: draft.entryDate,
+            pageNo: draft.pageNo,
+            description: draft.description,
+            buyAmount: draft.debit,
+            sellAmount: draft.credit,
+            buyBags: draft.buyBags,
+            sellBags: draft.sellBags,
+          )
+        : await provider.updateEntry(
+            entry: entry,
+            entryDate: draft.entryDate,
+            pageNo: draft.pageNo,
+            description: draft.description,
+            debit: draft.debit,
+            credit: draft.credit,
+          );
 
     if (!mounted) {
       return;
@@ -247,8 +276,11 @@ class _LedgerViewState extends State<_LedgerView> {
     }
   }
 
-  void _showEntryMenu(BuildContext context, LedgerProvider provider, Entry entry) {
-
+  void _showEntryMenu(
+    BuildContext context,
+    LedgerProvider provider,
+    Entry entry,
+  ) {
     showDialog<void>(
       context: context,
       builder: (BuildContext context) {
@@ -263,7 +295,11 @@ class _LedgerViewState extends State<_LedgerView> {
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 16, left: 24, right: 24),
+                  padding: const EdgeInsets.only(
+                    bottom: 16,
+                    left: 24,
+                    right: 24,
+                  ),
                   child: Row(
                     children: <Widget>[
                       Icon(Icons.tune_rounded, color: colorScheme.primary),
@@ -286,13 +322,21 @@ class _LedgerViewState extends State<_LedgerView> {
                       color: colorScheme.primaryContainer,
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.edit_outlined, color: colorScheme.onPrimaryContainer),
+                    child: Icon(
+                      Icons.edit_outlined,
+                      color: colorScheme.onPrimaryContainer,
+                    ),
                   ),
-                  title: const Text('Edit Entry', style: TextStyle(fontWeight: FontWeight.w600)),
-                  onTap: context.read<LinkedSessionProvider>().canEdit ? () {
-                    Navigator.pop(context);
-                    _showEditEntryDialog(entry);
-                  } : null,
+                  title: const Text(
+                    'Edit Entry',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  onTap: context.read<LinkedSessionProvider>().canEdit
+                      ? () {
+                          Navigator.pop(context);
+                          _showEditEntryDialog(entry);
+                        }
+                      : null,
                 ),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 24),
@@ -302,13 +346,21 @@ class _LedgerViewState extends State<_LedgerView> {
                       color: colorScheme.secondaryContainer,
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.swap_horiz_rounded, color: colorScheme.onSecondaryContainer),
+                    child: Icon(
+                      Icons.swap_horiz_rounded,
+                      color: colorScheme.onSecondaryContainer,
+                    ),
                   ),
-                  title: const Text('Transfer to another customer', style: TextStyle(fontWeight: FontWeight.w600)),
-                  onTap: context.read<LinkedSessionProvider>().canEdit ? () {
-                    Navigator.pop(context);
-                    _showTransferDialog(provider, entry);
-                  } : null,
+                  title: const Text(
+                    'Transfer to another customer',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  onTap: context.read<LinkedSessionProvider>().canEdit
+                      ? () {
+                          Navigator.pop(context);
+                          _showTransferDialog(provider, entry);
+                        }
+                      : null,
                 ),
                 if (!entry.showInDailyLog)
                   ListTile(
@@ -319,13 +371,21 @@ class _LedgerViewState extends State<_LedgerView> {
                         color: colorScheme.tertiaryContainer,
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(Icons.playlist_add_rounded, color: colorScheme.onTertiaryContainer),
+                      child: Icon(
+                        Icons.playlist_add_rounded,
+                        color: colorScheme.onTertiaryContainer,
+                      ),
                     ),
-                    title: const Text('Add to Daily Log', style: TextStyle(fontWeight: FontWeight.w600)),
-                    onTap: context.read<LinkedSessionProvider>().canEdit ? () {
-                      Navigator.pop(context);
-                      _addEntryToDailyLog(provider, entry);
-                    } : null,
+                    title: const Text(
+                      'Add to Daily Log',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    onTap: context.read<LinkedSessionProvider>().canEdit
+                        ? () {
+                            Navigator.pop(context);
+                            _addEntryToDailyLog(provider, entry);
+                          }
+                        : null,
                     enabled: context.read<LinkedSessionProvider>().canEdit,
                   ),
                 ListTile(
@@ -336,13 +396,24 @@ class _LedgerViewState extends State<_LedgerView> {
                       color: colorScheme.errorContainer,
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.delete_outline, color: colorScheme.onErrorContainer),
+                    child: Icon(
+                      Icons.delete_outline,
+                      color: colorScheme.onErrorContainer,
+                    ),
                   ),
-                  title: Text('Delete Entry', style: TextStyle(color: colorScheme.error, fontWeight: FontWeight.w600)),
-                  onTap: context.read<LinkedSessionProvider>().canEdit ? () {
-                    Navigator.pop(context);
-                    _confirmDeleteEntry(entry);
-                  } : null,
+                  title: Text(
+                    'Delete Entry',
+                    style: TextStyle(
+                      color: colorScheme.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  onTap: context.read<LinkedSessionProvider>().canEdit
+                      ? () {
+                          Navigator.pop(context);
+                          _confirmDeleteEntry(entry);
+                        }
+                      : null,
                   enabled: context.read<LinkedSessionProvider>().canEdit,
                 ),
               ],
@@ -629,8 +700,14 @@ class _LedgerViewState extends State<_LedgerView> {
     return (first - second).abs() < 0.0001;
   }
 
-  String _openingBalanceSignature(double debit, double credit) {
-    return '${debit.toStringAsFixed(2)}|${credit.toStringAsFixed(2)}';
+  String _openingBalanceSignature(
+    double debit,
+    double credit, [
+    double buyBags = 0,
+    double sellBags = 0,
+  ]) {
+    return '${debit.toStringAsFixed(2)}|${credit.toStringAsFixed(2)}|'
+        '${buyBags.toStringAsFixed(2)}|${sellBags.toStringAsFixed(2)}';
   }
 
   SnapshotOpeningBalance _readOpeningBalance(LedgerProvider provider) {
@@ -643,13 +720,15 @@ class _LedgerViewState extends State<_LedgerView> {
       }
     } catch (_) {}
 
-    return const SnapshotOpeningBalance(debit: 0, credit: 0);
+    return SnapshotOpeningBalance(debit: 0, credit: 0);
   }
 
   Future<bool> _saveProviderOpeningBalance(
     LedgerProvider provider, {
     required double debit,
     required double credit,
+    double buyBags = 0,
+    double sellBags = 0,
   }) async {
     final dynamic dynamicProvider = provider;
 
@@ -657,6 +736,8 @@ class _LedgerViewState extends State<_LedgerView> {
       final result = await dynamicProvider.setOpeningBalance(
         debit: debit,
         credit: credit,
+        buyBags: buyBags,
+        sellBags: sellBags,
       );
       return result == true;
     } catch (_) {
@@ -685,11 +766,23 @@ class _LedgerViewState extends State<_LedgerView> {
     final creditText = openingBalance.credit == 0
         ? ''
         : provider.formatAmount(openingBalance.credit);
+    final buyBagsText = openingBalance.buyBags == 0
+        ? ''
+        : number_format_utils.formatAmount(openingBalance.buyBags);
+    final sellBagsText = openingBalance.sellBags == 0
+        ? ''
+        : number_format_utils.formatAmount(openingBalance.sellBags);
+
     _openingDebitController.text = debitText;
     _openingCreditController.text = creditText;
+    _openingBuyBagsController.text = buyBagsText;
+    _openingSellBagsController.text = sellBagsText;
+
     _lastOpeningBalanceSignature = _openingBalanceSignature(
       openingBalance.debit,
       openingBalance.credit,
+      openingBalance.buyBags,
+      openingBalance.sellBags,
     );
   }
 
@@ -698,18 +791,30 @@ class _LedgerViewState extends State<_LedgerView> {
     final signature = _openingBalanceSignature(
       openingBalance.debit,
       openingBalance.credit,
+      openingBalance.buyBags,
+      openingBalance.sellBags,
     );
-    final isEditing =
-        _openingDebitFocusNode.hasFocus || _openingCreditFocusNode.hasFocus;
+    final isEditing = _openingDebitFocusNode.hasFocus ||
+        _openingCreditFocusNode.hasFocus ||
+        _openingBuyBagsFocusNode.hasFocus ||
+        _openingSellBagsFocusNode.hasFocus;
     final debitText = openingBalance.debit == 0
         ? ''
         : provider.formatAmount(openingBalance.debit);
     final creditText = openingBalance.credit == 0
         ? ''
         : provider.formatAmount(openingBalance.credit);
-    final matchesController =
-        _openingDebitController.text == debitText &&
-        _openingCreditController.text == creditText;
+    final buyBagsText = openingBalance.buyBags == 0
+        ? ''
+        : number_format_utils.formatAmount(openingBalance.buyBags);
+    final sellBagsText = openingBalance.sellBags == 0
+        ? ''
+        : number_format_utils.formatAmount(openingBalance.sellBags);
+
+    final matchesController = _openingDebitController.text == debitText &&
+        _openingCreditController.text == creditText &&
+        _openingBuyBagsController.text == buyBagsText &&
+        _openingSellBagsController.text == sellBagsText;
 
     if (isEditing ||
         (_lastOpeningBalanceSignature == signature && matchesController)) {
@@ -718,20 +823,27 @@ class _LedgerViewState extends State<_LedgerView> {
 
     _openingDebitController.text = debitText;
     _openingCreditController.text = creditText;
+    _openingBuyBagsController.text = buyBagsText;
+    _openingSellBagsController.text = sellBagsText;
     _lastOpeningBalanceSignature = signature;
   }
 
   bool _hasOpeningBalanceDraftChanged(LedgerProvider provider) {
     final debit = _parseOpeningBalanceValue(_openingDebitController.text);
     final credit = _parseOpeningBalanceValue(_openingCreditController.text);
+    final buyBags = _parseOpeningBalanceValue(_openingBuyBagsController.text);
+    final sellBags = _parseOpeningBalanceValue(_openingSellBagsController.text);
+
     final openingBalance = _readOpeningBalance(provider);
 
-    if (debit == null || credit == null) {
+    if (debit == null || credit == null || buyBags == null || sellBags == null) {
       return false;
     }
 
     return !_amountEquals(debit, openingBalance.debit) ||
-        !_amountEquals(credit, openingBalance.credit);
+        !_amountEquals(credit, openingBalance.credit) ||
+        !_amountEquals(buyBags, openingBalance.buyBags) ||
+        !_amountEquals(sellBags, openingBalance.sellBags);
   }
 
   Future<void> _saveOpeningBalance() async {
@@ -739,10 +851,12 @@ class _LedgerViewState extends State<_LedgerView> {
 
     final debit = _parseOpeningBalanceValue(_openingDebitController.text);
     final credit = _parseOpeningBalanceValue(_openingCreditController.text);
+    final buyBags = _parseOpeningBalanceValue(_openingBuyBagsController.text);
+    final sellBags = _parseOpeningBalanceValue(_openingSellBagsController.text);
 
-    if (debit == null || credit == null) {
+    if (debit == null || credit == null || buyBags == null || sellBags == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid opening balance amount.')),
+        const SnackBar(content: Text('Enter valid opening balance values.')),
       );
       return;
     }
@@ -752,6 +866,8 @@ class _LedgerViewState extends State<_LedgerView> {
       provider,
       debit: debit,
       credit: credit,
+      buyBags: buyBags,
+      sellBags: sellBags,
     );
 
     if (!mounted) {
@@ -816,9 +932,11 @@ class _LedgerViewState extends State<_LedgerView> {
     }
 
     if (isCleared) {
-      _openingDebitController.clear();
-      _openingCreditController.clear();
-      _lastOpeningBalanceSignature = _openingBalanceSignature(0, 0);
+    _openingDebitController.clear();
+    _openingCreditController.clear();
+    _openingBuyBagsController.clear();
+    _openingSellBagsController.clear();
+    _lastOpeningBalanceSignature = _openingBalanceSignature(0, 0, 0, 0);
       setState(() {});
     }
 
@@ -863,6 +981,9 @@ class _LedgerViewState extends State<_LedgerView> {
           await _showEditCustomerDialog(provider);
         }
         break;
+      case _LedgerAppBarAction.filterAndBalance:
+        _scaffoldKey.currentState?.openEndDrawer();
+        break;
     }
   }
 
@@ -882,12 +1003,7 @@ class _LedgerViewState extends State<_LedgerView> {
         PopupMenuButton<_LedgerAppBarAction>(
           tooltip: 'More actions',
           onSelected: (_LedgerAppBarAction action) {
-            unawaited(
-              _handleAppBarAction(
-                action,
-                provider: provider,
-              ),
-            );
+            unawaited(_handleAppBarAction(action, provider: provider));
           },
           itemBuilder: (BuildContext context) =>
               <PopupMenuEntry<_LedgerAppBarAction>>[
@@ -909,13 +1025,22 @@ class _LedgerViewState extends State<_LedgerView> {
                     label: 'Print',
                   ),
                 ),
+                PopupMenuItem<_LedgerAppBarAction>(
+                  value: _LedgerAppBarAction.editCustomer,
+                  enabled: context.read<LinkedSessionProvider>().canEdit,
+                  child: _buildAppBarMenuItem(
+                    context,
+                    icon: Icons.edit_outlined,
+                    label: 'Edit Customer',
+                  ),
+                ),
+                if (provider.isStockLedger)
                   PopupMenuItem<_LedgerAppBarAction>(
-                    value: _LedgerAppBarAction.editCustomer,
-                    enabled: context.read<LinkedSessionProvider>().canEdit,
+                    value: _LedgerAppBarAction.filterAndBalance,
                     child: _buildAppBarMenuItem(
                       context,
-                      icon: Icons.edit_outlined,
-                      label: 'Edit Customer',
+                      icon: Icons.tune_rounded,
+                      label: 'Menu',
                     ),
                   ),
               ],
@@ -955,8 +1080,18 @@ class _LedgerViewState extends State<_LedgerView> {
                   label: const Text('Print'),
                 ),
                 const SizedBox(width: 10),
+                if (provider.isStockLedger) ...[
+                  OutlinedButton.icon(
+                    onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+                    icon: const Icon(Icons.tune_rounded),
+                    label: const Text('Menu'),
+                  ),
+                  const SizedBox(width: 10),
+                ],
                 FilledButton.icon(
-                  onPressed: context.watch<LinkedSessionProvider>().canEdit ? _showAddEntryDialog : null,
+                  onPressed: context.watch<LinkedSessionProvider>().canEdit
+                      ? _showAddEntryDialog
+                      : null,
                   icon: const Icon(Icons.add_rounded),
                   label: const Text('Add Entry'),
                 ),
@@ -1310,9 +1445,10 @@ class _LedgerViewState extends State<_LedgerView> {
                       IconButton(
                         tooltip: 'Clear opening balance',
                         onPressed:
-                            !provider.hasOpeningBalance || !context.read<LinkedSessionProvider>().canEdit
-                                ? null
-                                : () => _clearOpeningBalance(provider),
+                            !provider.hasOpeningBalance ||
+                                !context.read<LinkedSessionProvider>().canEdit
+                            ? null
+                            : () => _clearOpeningBalance(provider),
                         style: IconButton.styleFrom(
                           foregroundColor: colorScheme.error,
                           backgroundColor: colorScheme.surface,
@@ -1326,9 +1462,11 @@ class _LedgerViewState extends State<_LedgerView> {
                       IconButton.filled(
                         tooltip: 'Save opening balance',
                         onPressed:
-                            hasInvalidAmount || !hasChanges || !context.read<LinkedSessionProvider>().canEdit
-                                ? null
-                                : _saveOpeningBalance,
+                            hasInvalidAmount ||
+                                !hasChanges ||
+                                !context.read<LinkedSessionProvider>().canEdit
+                            ? null
+                            : _saveOpeningBalance,
                         style: IconButton.styleFrom(
                           backgroundColor: colorScheme.primary,
                           foregroundColor: colorScheme.onPrimary,
@@ -1458,60 +1596,86 @@ class _LedgerViewState extends State<_LedgerView> {
             SizedBox(height: verticalGap),
             LayoutBuilder(
               builder: (BuildContext context, BoxConstraints constraints) {
-                if (constraints.maxWidth < 520) {
+                final isStock = provider.isStockLedger;
+                
+                Widget buildDebitField() => _buildOpeningBalanceField(
+                  context: context,
+                  controller: _openingDebitController,
+                  focusNode: _openingDebitFocusNode,
+                  label: isStock ? 'Buy Amount Opening' : 'Debit Opening Balance',
+                  icon: Icons.arrow_downward_rounded,
+                  accentColor: isStock ? AppColors.credit : AppColors.debit,
+                  readOnly: readOnly,
+                  compact: compactForDesktop,
+                );
+
+                Widget buildCreditField() => _buildOpeningBalanceField(
+                  context: context,
+                  controller: _openingCreditController,
+                  focusNode: _openingCreditFocusNode,
+                  label: isStock ? 'Sell Amount Opening' : 'Credit Opening Balance',
+                  icon: Icons.arrow_upward_rounded,
+                  accentColor: isStock ? AppColors.debit : AppColors.credit,
+                  readOnly: readOnly,
+                  compact: compactForDesktop,
+                );
+
+                Widget buildBuyBagsField() => _buildOpeningBalanceField(
+                  context: context,
+                  controller: _openingBuyBagsController,
+                  focusNode: _openingBuyBagsFocusNode,
+                  label: 'Buy Opening',
+                  icon: Icons.shopping_bag_outlined,
+                  accentColor: AppColors.credit,
+                  readOnly: readOnly,
+                  compact: compactForDesktop,
+                );
+
+                Widget buildSellBagsField() => _buildOpeningBalanceField(
+                  context: context,
+                  controller: _openingSellBagsController,
+                  focusNode: _openingSellBagsFocusNode,
+                  label: 'Sell Opening',
+                  icon: Icons.sell_outlined,
+                  accentColor: AppColors.debit,
+                  readOnly: readOnly,
+                  compact: compactForDesktop,
+                );
+
+                if (constraints.maxWidth < 600) {
                   return Column(
                     children: <Widget>[
-                      _buildOpeningBalanceField(
-                        context: context,
-                        controller: _openingDebitController,
-                        focusNode: _openingDebitFocusNode,
-                        label: 'Debit Opening Balance',
-                        icon: Icons.arrow_downward_rounded,
-                        accentColor: AppColors.debit,
-                        readOnly: readOnly,
-                        compact: compactForDesktop,
-                      ),
+                      if (isStock) ...[
+                        buildBuyBagsField(),
+                        const SizedBox(height: 10),
+                        buildSellBagsField(),
+                        const SizedBox(height: 10),
+                      ],
+                      buildDebitField(),
                       const SizedBox(height: 10),
-                      _buildOpeningBalanceField(
-                        context: context,
-                        controller: _openingCreditController,
-                        focusNode: _openingCreditFocusNode,
-                        label: 'Credit Opening Balance',
-                        icon: Icons.arrow_upward_rounded,
-                        accentColor: AppColors.credit,
-                        readOnly: readOnly,
-                        compact: compactForDesktop,
-                      ),
+                      buildCreditField(),
                     ],
                   );
                 }
 
-                return Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: _buildOpeningBalanceField(
-                        context: context,
-                        controller: _openingDebitController,
-                        focusNode: _openingDebitFocusNode,
-                        label: 'Debit Opening Balance',
-                        icon: Icons.arrow_downward_rounded,
-                        accentColor: const Color(0xFF0F766E),
-                        readOnly: readOnly,
-                        compact: compactForDesktop,
+                return Column(
+                  children: [
+                    if (isStock) ...[
+                      Row(
+                        children: [
+                          Expanded(child: buildBuyBagsField()),
+                          SizedBox(width: compactForDesktop ? 8 : 10),
+                          Expanded(child: buildSellBagsField()),
+                        ],
                       ),
-                    ),
-                    SizedBox(width: compactForDesktop ? 8 : 10),
-                    Expanded(
-                      child: _buildOpeningBalanceField(
-                        context: context,
-                        controller: _openingCreditController,
-                        focusNode: _openingCreditFocusNode,
-                        label: 'Credit Opening Balance',
-                        icon: Icons.arrow_upward_rounded,
-                        accentColor: const Color(0xFFB45309),
-                        readOnly: readOnly,
-                        compact: compactForDesktop,
-                      ),
+                      const SizedBox(height: 10),
+                    ],
+                    Row(
+                      children: <Widget>[
+                        Expanded(child: buildDebitField()),
+                        SizedBox(width: compactForDesktop ? 8 : 10),
+                        Expanded(child: buildCreditField()),
+                      ],
                     ),
                   ],
                 );
@@ -1602,7 +1766,8 @@ class _LedgerViewState extends State<_LedgerView> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final customer = provider.customer;
-    final balanceAccent = AppColors.balanceColor(provider.finalBalance);
+    final displayBalance = provider.isStockLedger ? -provider.finalBalance : provider.finalBalance;
+    final balanceAccent = AppColors.balanceColor(displayBalance);
 
     return Container(
       width: double.infinity,
@@ -1655,84 +1820,153 @@ class _LedgerViewState extends State<_LedgerView> {
                       spacing: 8,
                       runSpacing: 8,
                       children: <Widget>[
-                        _buildMobileInfoPill(
-                          context,
-                          icon: Icons.filter_alt_outlined,
-                          label: _shortActiveFilterLabel(provider),
-                        ),
+                        if (!provider.isStockLedger)
+                          _buildMobileInfoPill(
+                            context,
+                            icon: Icons.filter_alt_outlined,
+                            label: _shortActiveFilterLabel(provider),
+                          ),
                       ],
                     ),
                   ],
                 ),
               ),
-                IconButton.filledTonal(
-                  tooltip: 'Edit customer details',
-                  onPressed: () => _showEditCustomerDialog(provider),
-                  icon: const Icon(Icons.edit_outlined, size: 18),
-                ),
+              IconButton.filledTonal(
+                tooltip: 'Edit customer details',
+                onPressed: () => _showEditCustomerDialog(provider),
+                icon: const Icon(Icons.edit_outlined, size: 18),
+              ),
             ],
           ),
           const SizedBox(height: 12),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-            decoration: BoxDecoration(
-              color: balanceAccent.withValues(alpha: 0.09),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: balanceAccent.withValues(alpha: 0.16)),
+          if (provider.isStockLedger) ...[
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final itemWidth = (constraints.maxWidth - 20) / 3;
+                return Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: <Widget>[
+                    SizedBox(
+                      width: itemWidth,
+                      child: _buildMobileOverviewMetric(
+                        context,
+                        label: 'Buy',
+                        value: provider.totalBuyBags.toStringAsFixed(0),
+                        accentColor: AppColors.debit,
+                      ),
+                    ),
+                    SizedBox(
+                      width: itemWidth,
+                      child: _buildMobileOverviewMetric(
+                        context,
+                        label: 'Buy Amt',
+                        value: provider.formatAmount(provider.totalDebit),
+                        accentColor: AppColors.debit,
+                      ),
+                    ),
+                    SizedBox(
+                      width: itemWidth,
+                      child: _buildMobileOverviewMetric(
+                        context,
+                        label: 'Sell',
+                        value: provider.totalSellBags.toStringAsFixed(0),
+                        accentColor: AppColors.credit,
+                      ),
+                    ),
+                    SizedBox(
+                      width: itemWidth,
+                      child: _buildMobileOverviewMetric(
+                        context,
+                        label: 'Sell Amt',
+                        value: provider.formatAmount(provider.totalCredit),
+                        accentColor: AppColors.credit,
+                      ),
+                    ),
+                    SizedBox(
+                      width: itemWidth,
+                      child: _buildMobileOverviewMetric(
+                        context,
+                        label: 'Remaining',
+                        value: provider.finalRemainingBags.toStringAsFixed(0),
+                        accentColor: colorScheme.primary,
+                      ),
+                    ),
+                    SizedBox(
+                      width: itemWidth,
+                      child: _buildMobileOverviewMetric(
+                        context,
+                        label: 'Balance',
+                        value: provider.formatBalance(displayBalance),
+                        accentColor: balanceAccent,
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
-            child: Row(
+          ] else ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              decoration: BoxDecoration(
+                color: balanceAccent.withValues(alpha: 0.09),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: balanceAccent.withValues(alpha: 0.16)),
+              ),
+              child: Row(
+                children: <Widget>[
+                  Icon(
+                    Icons.account_balance_wallet_outlined,
+                    color: balanceAccent,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Net Balance',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: balanceAccent,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  Flexible(
+                    child: Text(
+                      provider.formatBalance(displayBalance),
+                      textAlign: TextAlign.end,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
               children: <Widget>[
-                Icon(
-                  Icons.account_balance_wallet_outlined,
-                  color: balanceAccent,
-                  size: 20,
+                Expanded(
+                  child: _buildMobileOverviewMetric(
+                    context,
+                    label: 'Debit',
+                    value: provider.formatAmount(provider.totalDebit),
+                    accentColor: const Color(0xFF0F766E),
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    'Net Balance',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: balanceAccent,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                Flexible(
-                  child: Text(
-                    provider.formatBalance(provider.finalBalance),
-                    textAlign: TextAlign.end,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
+                  child: _buildMobileOverviewMetric(
+                    context,
+                    label: 'Credit',
+                    value: provider.formatAmount(provider.totalCredit),
+                    accentColor: const Color(0xFFB45309),
                   ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: _buildMobileOverviewMetric(
-                  context,
-                  label: 'Debit',
-                  value: provider.formatAmount(provider.totalDebit),
-                  accentColor: const Color(0xFF0F766E),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _buildMobileOverviewMetric(
-                  context,
-                  label: 'Credit',
-                  value: provider.formatAmount(provider.totalCredit),
-                  accentColor: const Color(0xFFB45309),
-                ),
-              ),
-            ],
-          ),
+          ],
           if (customer.displayAddress != '-' ||
               customer.displayPhone != '-') ...<Widget>[
             const SizedBox(height: 10),
@@ -1835,150 +2069,10 @@ class _LedgerViewState extends State<_LedgerView> {
     );
   }
 
-  Widget _buildMobileLedgerControls({
-    required BuildContext context,
-    required LedgerProvider provider,
-  }) {
-    final openingBalance = _readOpeningBalance(provider);
-    final openingLabel = openingBalance.hasValue
-        ? provider.formatBalance(openingBalance.finalBalance)
-        : '0';
-
-    return Column(
-      children: <Widget>[
-        _buildMobileToggleHeader(
-          context,
-          icon: Icons.account_balance_wallet_rounded,
-          title: 'Opening Balance',
-          value: openingLabel,
-          expanded: _showOpeningBalancePanel,
-          onTap: () {
-            setState(() {
-              _showOpeningBalancePanel = !_showOpeningBalancePanel;
-            });
-          },
-        ),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          child: _showOpeningBalancePanel
-              ? Padding(
-                  padding: const EdgeInsets.only(top: 10),
-                    child: _buildOpeningBalanceSection(
-                      context: context,
-                      provider: provider,
-                    ),
-                )
-              : const SizedBox.shrink(),
-        ),
-        const SizedBox(height: 10),
-        _buildMobileToggleHeader(
-          context,
-          icon: Icons.tune_rounded,
-          title: 'Date Filter',
-          value: _shortActiveFilterLabel(provider),
-          expanded: _showDateFilterPanel,
-          onTap: () {
-            setState(() {
-              _showDateFilterPanel = !_showDateFilterPanel;
-            });
-          },
-        ),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          child: _showDateFilterPanel
-              ? Padding(
-                  padding: const EdgeInsets.only(top: 10),
-                  child: _buildFilterBar(context: context, provider: provider),
-                )
-              : const SizedBox.shrink(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMobileToggleHeader(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String value,
-    required bool expanded,
-    required VoidCallback onTap,
-  }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Ink(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: colorScheme.outlineVariant),
-          ),
-          child: Row(
-            children: <Widget>[
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: colorScheme.primary, size: 18),
-              ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      title,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      value,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Icon(
-                expanded
-                    ? Icons.keyboard_arrow_up_rounded
-                    : Icons.keyboard_arrow_down_rounded,
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCustomerInfoCard(
-    BuildContext context,
-    LedgerProvider provider,
-  ) {
+  Widget _buildCustomerInfoCard(BuildContext context, LedgerProvider provider) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final customer = provider.customer;
-    final balanceAccent = AppColors.balanceColor(provider.finalBalance);
 
     return Container(
       width: double.infinity,
@@ -2042,11 +2136,12 @@ class _LedgerViewState extends State<_LedgerView> {
                           spacing: 8,
                           runSpacing: 8,
                           children: <Widget>[
-                            _buildHeroMetaChip(
-                              context,
-                              icon: Icons.filter_alt_outlined,
-                              label: _shortActiveFilterLabel(provider),
-                            ),
+                            if (!provider.isStockLedger)
+                              _buildHeroMetaChip(
+                                context,
+                                icon: Icons.filter_alt_outlined,
+                                label: _shortActiveFilterLabel(provider),
+                              ),
                             _buildHeroMetaChip(
                               context,
                               icon: Icons.receipt_long_outlined,
@@ -2073,22 +2168,35 @@ class _LedgerViewState extends State<_LedgerView> {
                         ),
                       ],
                     );
+                    final displayBalance = provider.isStockLedger ? -provider.finalBalance : provider.finalBalance;
+                    final balanceAccent = AppColors.balanceColor(displayBalance);
                     final balanceCard = _buildHeroBalanceCard(
                       context,
-                      value: provider.formatBalance(provider.finalBalance),
+                      value: provider.formatBalance(displayBalance),
                       accentColor: balanceAccent,
+                      label: 'Balance',
                     );
+                    final bagsCard = provider.isStockLedger
+                        ? _buildHeroBalanceCard(
+                            context,
+                            value:
+                                provider.finalRemainingBags.toStringAsFixed(0),
+                            accentColor: colorScheme.primary,
+                            label: 'Remaining',
+                            icon: Icons.inventory_2_outlined,
+                          )
+                        : null;
                     final editButton = IconButton.filledTonal(
-                            tooltip: 'Edit customer details',
-                            onPressed: () => _showEditCustomerDialog(provider),
-                            style: IconButton.styleFrom(
-                              backgroundColor: colorScheme.primaryContainer,
-                              foregroundColor: colorScheme.primary,
-                            ),
-                            icon: const Icon(Icons.edit_outlined),
-                          );
+                      tooltip: 'Edit customer details',
+                      onPressed: () => _showEditCustomerDialog(provider),
+                      style: IconButton.styleFrom(
+                        backgroundColor: colorScheme.primaryContainer,
+                        foregroundColor: colorScheme.primary,
+                      ),
+                      icon: const Icon(Icons.edit_outlined),
+                    );
 
-                    if (constraints.maxWidth < 520) {
+                    if (constraints.maxWidth < 600) {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
@@ -2097,12 +2205,16 @@ class _LedgerViewState extends State<_LedgerView> {
                             children: <Widget>[
                               Expanded(child: titleBlock),
                               ...<Widget>[
-                              const SizedBox(width: 12),
-                              editButton,
-                            ],
+                                const SizedBox(width: 12),
+                                editButton,
+                              ],
                             ],
                           ),
                           const SizedBox(height: 16),
+                          if (bagsCard != null) ...[
+                            bagsCard,
+                            const SizedBox(height: 12),
+                          ],
                           balanceCard,
                         ],
                       );
@@ -2117,14 +2229,18 @@ class _LedgerViewState extends State<_LedgerView> {
                             children: <Widget>[
                               Expanded(child: titleBlock),
                               ...<Widget>[
-                              const SizedBox(width: 12),
-                              editButton,
-                            ],
+                                const SizedBox(width: 12),
+                                editButton,
+                              ],
                             ],
                           ),
                         ),
                         const SizedBox(width: 16),
-                        SizedBox(width: 188, child: balanceCard),
+                        if (bagsCard != null) ...[
+                          Expanded(child: bagsCard),
+                          const SizedBox(width: 12),
+                        ],
+                        Expanded(child: balanceCard),
                       ],
                     );
                   },
@@ -2197,91 +2313,136 @@ class _LedgerViewState extends State<_LedgerView> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final customer = provider.customer;
-    final items = <({String label, String value})>[
+
+    final infoItems = <({String label, String value})>[
       (label: 'Customer ID', value: '${customer.id ?? '-'}'),
       (label: 'Address', value: customer.displayAddress),
       (label: 'Phone Number', value: customer.displayPhone),
-      (label: 'Total Debit', value: provider.formatAmount(provider.totalDebit)),
-      (
-        label: 'Total Credit',
-        value: provider.formatAmount(provider.totalCredit),
-      ),
-      (label: 'Balance', value: provider.formatBalance(provider.finalBalance)),
     ];
+
+    final metricItems = <({String label, String value})>[
+      if (provider.isStockLedger) ...[
+        (label: 'Buy', value: provider.totalBuyBags.toStringAsFixed(0)),
+        (
+          label: 'Buy Amount',
+          value: provider.formatAmount(provider.totalDebit),
+        ),
+        (label: 'Sell', value: provider.totalSellBags.toStringAsFixed(0)),
+        (
+          label: 'Sell Amount',
+          value: provider.formatAmount(provider.totalCredit),
+        ),
+        (
+          label: 'Remaining',
+          value: provider.finalRemainingBags.toStringAsFixed(0),
+        ),
+        (
+          label: 'Balance',
+          value: provider.formatBalance(
+            provider.isStockLedger ? -provider.finalBalance : provider.finalBalance,
+          ),
+        ),
+      ] else ...[
+        (
+          label: 'Total Debit',
+          value: provider.formatAmount(provider.totalDebit),
+        ),
+        (
+          label: 'Total Credit',
+          value: provider.formatAmount(provider.totalCredit),
+        ),
+        (
+          label: 'Balance',
+          value: provider.formatBalance(
+            provider.isStockLedger ? -provider.finalBalance : provider.finalBalance,
+          ),
+        ),
+      ],
+    ];
+
+      Widget buildTile(({String label, String value}) item, bool isMetric, {double? maxWidth}) {
+        final isDebit =
+            item.label == 'Total Debit' ||
+            (provider.isStockLedger && (item.label == 'Buy Amount' || item.label == 'Buy')) ||
+            (!provider.isStockLedger && (item.label == 'Sell Amount' || item.label == 'Sell'));
+        final isCredit =
+            item.label == 'Total Credit' ||
+            (provider.isStockLedger && (item.label == 'Sell Amount' || item.label == 'Sell')) ||
+            (!provider.isStockLedger && (item.label == 'Buy Amount' || item.label == 'Buy'));
+        final isBalance = item.label == 'Balance';
+        final isBags = item.label == 'Remaining';
+
+        final displayBalance = provider.isStockLedger ? -provider.finalBalance : provider.finalBalance;
+        final balanceColor = AppColors.balanceColor(displayBalance);
+
+        final bgColor = isDebit
+            ? AppColors.debit
+            : isCredit
+            ? AppColors.credit
+            : isBags
+            ? colorScheme.primary
+            : isBalance
+            ? (balanceColor == AppColors.debit
+                ? AppColors.debit
+                : (balanceColor == AppColors.credit
+                    ? AppColors.credit
+                    : Colors.grey.shade600))
+            : colorScheme.surface;
+
+      return _CustomerInfoTile(
+        label: item.label,
+        value: item.value,
+        backgroundColor: bgColor,
+        labelColor: isMetric ? Colors.white70 : colorScheme.onSurfaceVariant,
+        valueColor: isMetric ? Colors.white : colorScheme.onSurface,
+        borderColor: isMetric ? Colors.transparent : colorScheme.outlineVariant,
+        isMetric: isMetric,
+        maxWidth: maxWidth,
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
+        // Row 1: Name, Info Cards, and Edit Icon
         Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
             Expanded(
+              flex: 2,
               child: Text(
                 provider.customerName,
                 style: theme.textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-              IconButton(
-                tooltip: 'Edit customer details',
-                onPressed: () => _showEditCustomerDialog(provider),
-                icon: const Icon(Icons.edit_outlined),
+            const SizedBox(width: 4),
+            ...infoItems.map((item) => Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(left: 12),
+                child: buildTile(item, false),
               ),
+            )),
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'Edit customer details',
+              onPressed: () => _showEditCustomerDialog(provider),
+              icon: const Icon(Icons.edit_outlined),
+            ),
           ],
         ),
-        const SizedBox(height: 12),
-        LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final columns = constraints.maxWidth >= 1400
-                ? 6
-                : constraints.maxWidth >= 1080
-                ? 4
-                : constraints.maxWidth >= 760
-                ? 3
-                : 2;
-            const spacing = 12.0;
-            final tileWidth =
-                (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
-
-            return Wrap(
-              spacing: spacing,
-              runSpacing: spacing,
-              children: <Widget>[
-                for (final item in items) ...[
-                  () {
-                    final isDebit = item.label == 'Total Debit';
-                    final isCredit = item.label == 'Total Credit';
-                    final isBalance = item.label == 'Balance';
-                    final isMetric = isDebit || isCredit || isBalance;
-                    
-                    final bgColor = isDebit 
-                      ? AppColors.debit 
-                      : isCredit 
-                        ? AppColors.credit 
-                        : isBalance 
-                          ? (AppColors.balanceColor(provider.finalBalance) == AppColors.debit 
-                              ? AppColors.debit 
-                              : (AppColors.balanceColor(provider.finalBalance) == AppColors.credit ? AppColors.credit : Colors.grey.shade600))
-                          : colorScheme.surface;
-
-                    return SizedBox(
-                      width: tileWidth,
-                      child: _CustomerInfoTile(
-                        label: item.label,
-                        value: item.value,
-                        backgroundColor: bgColor,
-                        labelColor: isMetric ? Colors.white70 : colorScheme.onSurfaceVariant,
-                        valueColor: isMetric ? Colors.white : colorScheme.onSurface,
-                        borderColor: isMetric ? Colors.transparent : colorScheme.outlineVariant,
-                        isMetric: isMetric,
-                      ),
-                    );
-                  }(),
-                ],
-              ],
-            );
-          },
+        const SizedBox(height: 16),
+        // Row 2: Metric Cards (Equal width/height)
+        Row(
+          children: [
+            for (int i = 0; i < metricItems.length; i++) ...[
+              if (i > 0) const SizedBox(width: 12),
+              Expanded(child: buildTile(metricItems[i], true)),
+            ],
+          ],
         ),
       ],
     );
@@ -2322,6 +2483,8 @@ class _LedgerViewState extends State<_LedgerView> {
     BuildContext context, {
     required String value,
     required Color accentColor,
+    String label = 'Total Balance',
+    IconData icon = Icons.account_balance_wallet_outlined,
   }) {
     final theme = Theme.of(context);
 
@@ -2357,17 +2520,15 @@ class _LedgerViewState extends State<_LedgerView> {
               color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: const Icon(
-              Icons.account_balance_wallet_outlined,
+            child: Icon(
+              icon,
               color: Colors.white,
             ),
           ),
           const SizedBox(height: 14),
           Text(
-            'Current Balance',
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: Colors.white70,
-            ),
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(color: Colors.white70),
           ),
           const SizedBox(height: 4),
           Text(
@@ -2532,36 +2693,51 @@ class _LedgerViewState extends State<_LedgerView> {
     LedgerProvider provider, {
     required bool isCompact,
   }) {
-    if (PlatformHelper.isDesktop && !isCompact) {
-      return Row(
-        children: <Widget>[
-          Expanded(
-            child: Text(
-              'Ledger Entries',
-              style: Theme.of(
-                context,
-              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
-            ),
-          ),
-          if (provider.isLoading)
-            const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2.4),
-            ),
-        ],
-      );
-    }
-
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final countLabel =
         '${provider.entries.length} ${provider.entries.length == 1 ? 'entry' : 'entries'}';
+
     final trailing = Wrap(
       spacing: 10,
       runSpacing: 10,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: <Widget>[
+        if (!provider.isStockLedger)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: colorScheme.secondaryContainer.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: colorScheme.secondaryContainer),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.inventory_2_rounded,
+                  size: 20,
+                  color: colorScheme.onSecondaryContainer,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Stock Ledger',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: colorScheme.onSecondaryContainer,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  height: 32,
+                  child: Switch(
+                    value: provider.isStockLedger,
+                    onChanged: (_) => provider.toggleStockLedger(),
+                  ),
+                ),
+              ],
+            ),
+          ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
@@ -2587,6 +2763,22 @@ class _LedgerViewState extends State<_LedgerView> {
           ),
       ],
     );
+
+    if (PlatformHelper.isDesktop && !isCompact) {
+      return Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              'Ledger Entries',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          trailing,
+        ],
+      );
+    }
 
     return Container(
       width: double.infinity,
@@ -2660,12 +2852,10 @@ class _LedgerViewState extends State<_LedgerView> {
           builder: (BuildContext context, BoxConstraints constraints) {
             final isDesktop = PlatformHelper.isDesktop;
             final isCompact = !isDesktop && constraints.maxWidth < 760;
-            final useWideTopLayout = constraints.maxWidth >= 980;
             final useCardLayout = constraints.maxWidth < 760;
             final hasFab = isCompact;
             const desktopHorizontalPadding = 20.0;
             final desktopPageWidth = constraints.maxWidth;
-            const desktopTopCardHeight = 112.0;
             final bottomPadding =
                 24.0 +
                 MediaQuery.viewInsetsOf(context).bottom +
@@ -2685,42 +2875,39 @@ class _LedgerViewState extends State<_LedgerView> {
                   _buildLedgerStats(context, provider),
                 ],
                 const SizedBox(height: 12),
-                if (isCompact) ...<Widget>[
-                  _buildMobileLedgerControls(
-                    context: context,
-                    provider: provider,
-                  ),
-                ] else if (useWideTopLayout) ...<Widget>[
-                  SizedBox(
-                    height: desktopTopCardHeight,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        Expanded(
-                          child: _buildOpeningBalanceSection(
-                            context: context,
-                            provider: provider,
-                            compactForDesktop: true,
+                if (!provider.isStockLedger) ...[
+                  if (isDesktop || !isCompact)
+                    SizedBox(
+                      height: 112.0,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          Expanded(
+                            child: _buildOpeningBalanceSection(
+                              context: context,
+                              provider: provider,
+                              compactForDesktop: true,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildFilterBar(
-                            context: context,
-                            provider: provider,
-                            compactForDesktop: true,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildFilterBar(
+                              context: context,
+                              provider: provider,
+                              compactForDesktop: true,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
+                    )
+                  else ...[
+                    _buildFilterBar(context: context, provider: provider),
+                    const SizedBox(height: 16),
+                    _buildOpeningBalanceSection(
+                      context: context,
+                      provider: provider,
                     ),
-                  ),
-                ] else ...<Widget>[
-                  _buildOpeningBalanceSection(
-                    context: context,
-                    provider: provider,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildFilterBar(context: context, provider: provider),
+                  ],
                 ],
                 const SizedBox(height: 18),
                 _buildEntriesSectionHeader(
@@ -2738,6 +2925,64 @@ class _LedgerViewState extends State<_LedgerView> {
             );
 
             return Scaffold(
+              key: _scaffoldKey,
+              endDrawer: Drawer(
+                width: math.min(MediaQuery.sizeOf(context).width * 0.85, 420.0),
+                child: SafeArea(
+                  child: Column(
+                    children: [
+                      AppBar(
+                        automaticallyImplyLeading: false,
+                        title: const Text('Ledger Settings'),
+                        actions: [
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                      ),
+                      const Divider(height: 1),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (provider.isStockLedger) ...[
+                                _buildFilterBar(
+                                  context: context,
+                                  provider: provider,
+                                ),
+                                const SizedBox(height: 16),
+                                _buildOpeningBalanceSection(
+                                  context: context,
+                                  provider: provider,
+                                ),
+                                const SizedBox(height: 16),
+                                SwitchListTile(
+                                  title: const Text('Stock Ledger Mode'),
+                                  subtitle: const Text(
+                                    'Enable stock tracking for this customer.',
+                                  ),
+                                  value: provider.isStockLedger,
+                                  onChanged: (bool value) {
+                                    provider.toggleStockLedger();
+                                    Navigator.pop(
+                                      context,
+                                    ); // Close drawer on disable
+                                  },
+                                  contentPadding: EdgeInsets.zero,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
               appBar: AppBar(
                 toolbarHeight: isCompact ? 72 : 56,
                 automaticallyImplyLeading: !isDesktop,
@@ -2780,7 +3025,8 @@ class _LedgerViewState extends State<_LedgerView> {
                   isCompact: isCompact,
                 ),
               ),
-              floatingActionButton: hasFab && context.watch<LinkedSessionProvider>().canEdit
+              floatingActionButton:
+                  hasFab && context.watch<LinkedSessionProvider>().canEdit
                   ? FloatingActionButton.extended(
                       onPressed: _showAddEntryDialog,
                       icon: const Icon(Icons.add_rounded),
@@ -2820,9 +3066,12 @@ class _LedgerViewState extends State<_LedgerView> {
                     actions: <Type, Action<Intent>>{
                       _LedgerIntent: CallbackAction<_LedgerIntent>(
                         onInvoke: (_LedgerIntent intent) {
-                          final canEdit = context.read<LinkedSessionProvider>().canEdit;
-                          if (intent.action == _LedgerShortcut.addEntry && canEdit) {
-                              _showAddEntryDialog();
+                          final canEdit = context
+                              .read<LinkedSessionProvider>()
+                              .canEdit;
+                          if (intent.action == _LedgerShortcut.addEntry &&
+                              canEdit) {
+                            _showAddEntryDialog();
                           } else if (intent.action == _LedgerShortcut.export) {
                             _exportWithOptions();
                           } else if (intent.action == _LedgerShortcut.print) {
@@ -2917,10 +3166,7 @@ class _LedgerViewState extends State<_LedgerView> {
     }
 
     if (compactLayout) {
-      return _buildCompactLedgerEntries(
-        context,
-        provider,
-      );
+      return _buildCompactLedgerEntries(context, provider);
     }
 
     final dataTextStyle = Theme.of(
@@ -2931,17 +3177,17 @@ class _LedgerViewState extends State<_LedgerView> {
       builder: (BuildContext context, BoxConstraints constraints) {
         final horizontalMargin = PlatformHelper.isDesktop
             ? constraints.maxWidth >= 1700
-                ? 22.0
-                : constraints.maxWidth >= 1450
-                    ? 16.0
-                    : 12.0
+                  ? 22.0
+                  : constraints.maxWidth >= 1450
+                  ? 16.0
+                  : 12.0
             : 12.0;
         final columnSpacing = PlatformHelper.isDesktop
             ? constraints.maxWidth >= 1700
-                ? 42.0
-                : constraints.maxWidth >= 1450
-                    ? 28.0
-                    : 18.0
+                  ? 42.0
+                  : constraints.maxWidth >= 1450
+                  ? 28.0
+                  : 18.0
             : 18.0;
 
         return Card(
@@ -2960,20 +3206,30 @@ class _LedgerViewState extends State<_LedgerView> {
                 headingRowColor: WidgetStatePropertyAll(
                   Theme.of(context).colorScheme.surfaceContainerHighest,
                 ),
-                columns: const <DataColumn>[
-                  DataColumn(label: Text('Entry Date')),
-                  DataColumn(label: Text('Created Date')),
-                  DataColumn(label: Text('Page No')),
-                  DataColumn(label: Text('Description')),
-                  DataColumn(label: Text('Debit'), numeric: true),
-                  DataColumn(label: Text('Credit'), numeric: true),
-                  DataColumn(label: Text('Balance')),
-                  DataColumn(label: Text('Actions')),
-                ],
-                rows: _buildLedgerRows(
-                  provider,
-                  compact: false,
-                ),
+                columns: provider.isStockLedger
+                    ? const <DataColumn>[
+                        DataColumn(label: Text('Entry Date')),
+                        DataColumn(label: Text('Created Date')),
+                        DataColumn(label: Text('Page No')),
+                        DataColumn(label: Text('Buy'), numeric: true),
+                        DataColumn(label: Text('Buy Amount'), numeric: true),
+                        DataColumn(label: Text('Sell'), numeric: true),
+                        DataColumn(label: Text('Sell Amount'), numeric: true),
+                        DataColumn(label: Text('Remaining'), numeric: true),
+                        DataColumn(label: Text('Balance')),
+                        DataColumn(label: Text('Actions')),
+                      ]
+                    : const <DataColumn>[
+                        DataColumn(label: Text('Entry Date')),
+                        DataColumn(label: Text('Created Date')),
+                        DataColumn(label: Text('Page No')),
+                        DataColumn(label: Text('Description')),
+                        DataColumn(label: Text('Debit'), numeric: true),
+                        DataColumn(label: Text('Credit'), numeric: true),
+                        DataColumn(label: Text('Balance')),
+                        DataColumn(label: Text('Actions')),
+                      ],
+                rows: _buildLedgerRows(provider, compact: false),
               ),
             ),
           ),
@@ -2988,23 +3244,35 @@ class _LedgerViewState extends State<_LedgerView> {
   ) {
     final children = <Widget>[];
     double? runningBalance;
+    double? runningRemainingBags;
 
-    for (var index = 0; index < provider.entries.length; index++) {
-      final entry = provider.entries[index];
+    final entries = provider.entries.reversed.toList();
+    for (var index = 0; index < entries.length; index++) {
+      final entry = entries[index];
       final isOpeningBalanceEntry = _isOpeningBalanceEntry(provider, entry);
       final debit = entry.debit;
       final credit = entry.credit;
-      final hasValue = debit != 0 || credit != 0;
+      final buyBags = entry.buyBags;
+      final sellBags = entry.sellBags;
+      final hasValue =
+          debit != 0 || credit != 0 || buyBags.trim().isNotEmpty && buyBags.trim() != '0' || sellBags.trim().isNotEmpty && sellBags.trim() != '0';
       var balanceLabel = '';
+      var remainingBagsLabel = '';
 
       if (hasValue) {
-        final currentBalance = (runningBalance ?? 0) + debit - credit;
+        final currentBalance = provider.isStockLedger
+            ? (runningBalance ?? 0) + credit - debit
+            : (runningBalance ?? 0) + debit - credit;
         runningBalance = currentBalance;
         balanceLabel = provider.formatBalance(currentBalance);
-      }
 
-      if (index != 0) {
-        children.add(const SizedBox(height: 12));
+        if (provider.isStockLedger) {
+          final currentRemainingBags =
+              (runningRemainingBags ?? 0) + (double.tryParse(buyBags) ?? 0) - (double.tryParse(sellBags) ?? 0);
+          runningRemainingBags = currentRemainingBags;
+          remainingBagsLabel =
+              number_format_utils.formatAmount(currentRemainingBags);
+        }
       }
 
       children.add(
@@ -3013,14 +3281,22 @@ class _LedgerViewState extends State<_LedgerView> {
           provider,
           entry: entry,
           balanceLabel: balanceLabel,
+          remainingBagsLabel: remainingBagsLabel,
           isOpeningBalanceEntry: isOpeningBalanceEntry,
         ),
       );
     }
 
+    final reversedChildren = children.reversed.toList();
+    final List<Widget> spacedChildren = <Widget>[];
+    for (var i = 0; i < reversedChildren.length; i++) {
+      if (i != 0) spacedChildren.add(const SizedBox(height: 12));
+      spacedChildren.add(reversedChildren[i]);
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: children,
+      children: spacedChildren,
     );
   }
 
@@ -3029,6 +3305,7 @@ class _LedgerViewState extends State<_LedgerView> {
     LedgerProvider provider, {
     required Entry entry,
     required String balanceLabel,
+    String remainingBagsLabel = '',
     required bool isOpeningBalanceEntry,
   }) {
     final theme = Theme.of(context);
@@ -3103,7 +3380,7 @@ class _LedgerViewState extends State<_LedgerView> {
           ),
           const SizedBox(height: 10),
           Text(
-            entry.displayDescription,
+            isOpeningBalanceEntry ? 'Opening Balance' : entry.displayDescription,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.titleMedium?.copyWith(
@@ -3114,12 +3391,94 @@ class _LedgerViewState extends State<_LedgerView> {
           LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) {
               if (constraints.maxWidth < 520) {
-                return _buildEntryAmountStrip(
-                  context,
-                  provider,
-                  entry: entry,
-                  balanceLabel: balanceLabel,
-                  accentColor: accentColor,
+                  return _buildEntryAmountStrip(
+                    context,
+                    provider,
+                    entry: entry,
+                    balanceLabel: balanceLabel,
+                    remainingBagsLabel: remainingBagsLabel,
+                    accentColor: accentColor,
+                  );
+              }
+
+              if (provider.isStockLedger) {
+                final columnCount = constraints.maxWidth >= 720
+                    ? 3
+                    : constraints.maxWidth >= 420
+                    ? 2
+                    : 1;
+                const spacing = 10.0;
+                final tileWidth =
+                    (constraints.maxWidth - ((columnCount - 1) * spacing)) /
+                    columnCount;
+
+                return Wrap(
+                  spacing: spacing,
+                  runSpacing: spacing,
+                  children: <Widget>[
+                    if (entry.buyBags.trim().isNotEmpty && entry.buyBags.trim() != '0')
+                      SizedBox(
+                        width: tileWidth,
+                        child: _buildEntryMetricTile(
+                          context,
+                          label: 'Buy',
+                          value: number_format_utils.formatBags(double.tryParse(entry.buyBags) ?? 0),
+                          accentColor: AppColors.debit,
+                        ),
+                      ),
+                    if (entry.debit != 0)
+                      SizedBox(
+                        width: tileWidth,
+                        child: _buildEntryMetricTile(
+                          context,
+                          label: 'Buy Amount',
+                          value: provider.formatAmount(entry.debit),
+                          accentColor: AppColors.credit,
+                        ),
+                      ),
+                    if (entry.sellBags.trim().isNotEmpty && entry.sellBags.trim() != '0')
+                      SizedBox(
+                        width: tileWidth,
+                        child: _buildEntryMetricTile(
+                          context,
+                          label: 'Sell',
+                          value: number_format_utils.formatBags(double.tryParse(entry.sellBags) ?? 0),
+                          accentColor: AppColors.credit,
+                        ),
+                      ),
+                    if (entry.credit != 0)
+                      SizedBox(
+                        width: tileWidth,
+                        child: _buildEntryMetricTile(
+                          context,
+                          label: 'Sell Amount',
+                          value: provider.formatAmount(entry.credit),
+                          accentColor: AppColors.debit,
+                        ),
+                      ),
+                    SizedBox(
+                      width: tileWidth,
+                      child: _buildEntryMetricTile(
+                        context,
+                        label: 'Remaining',
+                        value:
+                            remainingBagsLabel.isEmpty
+                                ? '-'
+                                : remainingBagsLabel,
+                        accentColor: colorScheme.primary,
+                      ),
+                    ),
+                    SizedBox(
+                      width: tileWidth,
+                      child: _buildEntryMetricTile(
+                        context,
+                        label: 'Balance',
+                        value:
+                            balanceLabel.isEmpty ? 'No change' : balanceLabel,
+                        accentColor: accentColor,
+                      ),
+                    ),
+                  ],
                 );
               }
 
@@ -3175,7 +3534,9 @@ class _LedgerViewState extends State<_LedgerView> {
               if (isOpeningBalanceEntry)
                 IconButton(
                   tooltip: 'Clear opening balance',
-                  onPressed: context.watch<LinkedSessionProvider>().canEdit ? () => _clearOpeningBalance(provider) : null,
+                  onPressed: context.watch<LinkedSessionProvider>().canEdit
+                      ? () => _clearOpeningBalance(provider)
+                      : null,
                   icon: const Icon(Icons.delete_outline, size: 18),
                 )
               else ...<Widget>[
@@ -3243,6 +3604,7 @@ class _LedgerViewState extends State<_LedgerView> {
     LedgerProvider provider, {
     required Entry entry,
     required String balanceLabel,
+    String remainingBagsLabel = '',
     required Color accentColor,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -3256,32 +3618,52 @@ class _LedgerViewState extends State<_LedgerView> {
       ),
       child: Row(
         children: <Widget>[
-          Expanded(
-            child: _buildEntryAmountStripItem(
-              context,
-              label: 'Debit',
-              value: provider.formatAmount(entry.debit),
-              accentColor: const Color(0xFF0F766E),
+          if (provider.isStockLedger) ...<Widget>[
+            Expanded(
+              child: _buildEntryAmountStripItem(
+                context,
+                label: 'Remaining',
+                value: remainingBagsLabel.isEmpty ? '-' : remainingBagsLabel,
+                accentColor: colorScheme.primary,
+              ),
             ),
-          ),
-          _buildEntryAmountDivider(context),
-          Expanded(
-            child: _buildEntryAmountStripItem(
-              context,
-              label: 'Credit',
-              value: provider.formatAmount(entry.credit),
-              accentColor: const Color(0xFFB45309),
+            _buildEntryAmountDivider(context),
+            Expanded(
+              child: _buildEntryAmountStripItem(
+                context,
+                label: 'Balance',
+                value: balanceLabel.isEmpty ? '0' : balanceLabel,
+                accentColor: accentColor,
+              ),
             ),
-          ),
-          _buildEntryAmountDivider(context),
-          Expanded(
-            child: _buildEntryAmountStripItem(
-              context,
-              label: 'Balance',
-              value: balanceLabel.isEmpty ? '0' : balanceLabel,
-              accentColor: accentColor,
+          ] else ...<Widget>[
+            Expanded(
+              child: _buildEntryAmountStripItem(
+                context,
+                label: 'Debit',
+                value: provider.formatAmount(entry.debit),
+                accentColor: const Color(0xFF0F766E),
+              ),
             ),
-          ),
+            _buildEntryAmountDivider(context),
+            Expanded(
+              child: _buildEntryAmountStripItem(
+                context,
+                label: 'Credit',
+                value: provider.formatAmount(entry.credit),
+                accentColor: const Color(0xFFB45309),
+              ),
+            ),
+            _buildEntryAmountDivider(context),
+            Expanded(
+              child: _buildEntryAmountStripItem(
+                context,
+                label: 'Balance',
+                value: balanceLabel.isEmpty ? '0' : balanceLabel,
+                accentColor: accentColor,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -3370,25 +3752,53 @@ class _LedgerViewState extends State<_LedgerView> {
   }
 
   Widget _buildLedgerStats(BuildContext context, LedgerProvider provider) {
-    final items =
-        <({String label, String value, IconData icon, Color accentColor})>[
+    final items = provider.isStockLedger
+        ? <({String label, String value, IconData icon, Color accentColor})>[
+          (
+            label: 'Total Buy',
+            value: provider.formatAmount(provider.totalDebit),
+            icon: Icons.shopping_cart_outlined,
+            accentColor: AppColors.debit,
+          ),
+          (
+            label: 'Total Sell',
+            value: provider.formatAmount(provider.totalCredit),
+            icon: Icons.sell_outlined,
+            accentColor: AppColors.credit,
+          ),
+          (
+            label: 'Net Balance',
+            value: provider.formatBalance(
+              provider.isStockLedger ? -provider.finalBalance : provider.finalBalance,
+            ),
+            icon: Icons.account_balance_wallet_outlined,
+            accentColor: AppColors.balanceColor(
+              provider.isStockLedger ? -provider.finalBalance : provider.finalBalance,
+            ),
+          ),
+        ]
+        : <({String label, String value, IconData icon, Color accentColor})>[
           (
             label: 'Total Debit',
             value: provider.formatAmount(provider.totalDebit),
             icon: Icons.south_west_rounded,
-            accentColor: const Color(0xFF0F766E),
+            accentColor: AppColors.debit,
           ),
           (
             label: 'Total Credit',
             value: provider.formatAmount(provider.totalCredit),
             icon: Icons.north_east_rounded,
-            accentColor: const Color(0xFFB45309),
+            accentColor: AppColors.credit,
           ),
           (
             label: 'Net Balance',
-            value: provider.formatBalance(provider.finalBalance),
+            value: provider.formatBalance(
+              provider.isStockLedger ? -provider.finalBalance : provider.finalBalance,
+            ),
             icon: Icons.account_balance_wallet_outlined,
-            accentColor: Theme.of(context).colorScheme.primary,
+            accentColor: AppColors.balanceColor(
+              provider.isStockLedger ? -provider.finalBalance : provider.finalBalance,
+            ),
           ),
         ];
 
@@ -3499,12 +3909,7 @@ class _LedgerViewState extends State<_LedgerView> {
         .toList(growable: false);
   }
 
-  Future<void> _showTransferDialog(
-    LedgerProvider provider,
-    Entry entry,
-  ) async {
-
-
+  Future<void> _showTransferDialog(LedgerProvider provider, Entry entry) async {
     if (entry.id == null) {
       return;
     }
@@ -3611,13 +4016,19 @@ class _LedgerViewState extends State<_LedgerView> {
     final colorScheme = Theme.of(context).colorScheme;
     final rows = <DataRow>[];
     double? runningBalance;
+    double? runningRemainingBags;
 
-    for (final entry in provider.entries) {
+    final entries = provider.entries.reversed.toList();
+    for (final entry in entries) {
       final isOpeningBalanceEntry = _isOpeningBalanceEntry(provider, entry);
       final debit = entry.debit;
       final credit = entry.credit;
-      final hasValue = debit != 0 || credit != 0;
+      final buyBags = entry.buyBags;
+      final sellBags = entry.sellBags;
+      final hasValue =
+          debit != 0 || credit != 0 || buyBags.trim().isNotEmpty && buyBags.trim() != '0' || sellBags.trim().isNotEmpty && sellBags.trim() != '0';
       String balanceLabel = '';
+      String remainingBagsLabel = '';
       final rowStyle = isOpeningBalanceEntry
           ? Theme.of(
               context,
@@ -3625,10 +4036,155 @@ class _LedgerViewState extends State<_LedgerView> {
           : null;
 
       if (hasValue) {
-        final currentBalance = (runningBalance ?? 0) + debit - credit;
+        final currentBalance = provider.isStockLedger
+            ? (runningBalance ?? 0) + credit - debit
+            : (runningBalance ?? 0) + debit - credit;
         runningBalance = currentBalance;
         balanceLabel = provider.formatBalance(currentBalance);
+
+        if (provider.isStockLedger) {
+          final currentRemainingBags =
+              (runningRemainingBags ?? 0) + (double.tryParse(buyBags) ?? 0) - (double.tryParse(sellBags) ?? 0);
+          runningRemainingBags = currentRemainingBags;
+          remainingBagsLabel = number_format_utils.formatAmount(
+            currentRemainingBags,
+          );
+        }
       }
+
+      final List<DataCell> cells = <DataCell>[
+        DataCell(Text(_formatStoredDate(entry.entryDate), style: rowStyle)),
+        DataCell(Text(_formatStoredDate(entry.createdAt), style: rowStyle)),
+        DataCell(
+          Text(
+            isOpeningBalanceEntry 
+                ? 'Opening Balance'
+                : [
+                    if (entry.pageNo.isNotEmpty) entry.pageNo,
+                    if (entry.dailyLogPageNo.isNotEmpty)
+                      'DL: ${entry.dailyLogPageNo}',
+                  ].join(' | '),
+            style: rowStyle?.copyWith(
+              color: entry.dailyLogPageNo.isNotEmpty
+                  ? colorScheme.tertiary
+                  : null,
+              fontWeight: entry.dailyLogPageNo.isNotEmpty
+                  ? FontWeight.bold
+                  : null,
+            ),
+          ),
+        ),
+      ];
+
+      if (provider.isStockLedger) {
+        cells.addAll(<DataCell>[
+          DataCell(
+            Text(
+              (buyBags.trim().isEmpty || buyBags.trim() == '0') 
+                  ? '' 
+                  : number_format_utils.formatBags(double.tryParse(buyBags) ?? 0),
+              style: (rowStyle ?? const TextStyle()).copyWith(
+                color: AppColors.debit,
+              ),
+            ),
+          ),
+          DataCell(
+            Text(
+              provider.formatAmount(debit),
+              style: (rowStyle ?? const TextStyle()).copyWith(
+                color: AppColors.debit,
+              ),
+            ),
+          ),
+          DataCell(
+            Text(
+              (sellBags.trim().isEmpty || sellBags.trim() == '0') 
+                  ? '' 
+                  : number_format_utils.formatBags(double.tryParse(sellBags) ?? 0),
+              style: (rowStyle ?? const TextStyle()).copyWith(
+                color: AppColors.credit,
+              ),
+            ),
+          ),
+          DataCell(
+            Text(
+              provider.formatAmount(credit),
+              style: (rowStyle ?? const TextStyle()).copyWith(
+                color: AppColors.credit,
+              ),
+            ),
+          ),
+          DataCell(
+            Text(
+              remainingBagsLabel,
+              style: (rowStyle ?? const TextStyle()).copyWith(
+                color: (runningRemainingBags ?? 0) >= 0
+                    ? AppColors.credit
+                    : AppColors.debit,
+              ),
+            ),
+          ),
+        ]);
+      } else {
+        cells.addAll(<DataCell>[
+          DataCell(
+            SizedBox(
+              width: compact ? 220 : 260,
+              child: Text(
+                entry.displayDescription,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: rowStyle,
+              ),
+            ),
+          ),
+          DataCell(
+            Text(
+              provider.formatAmount(debit),
+              style: (rowStyle ?? const TextStyle()).copyWith(
+                color: AppColors.debit,
+              ),
+            ),
+          ),
+          DataCell(
+            Text(
+              provider.formatAmount(credit),
+              style: (rowStyle ?? const TextStyle()).copyWith(
+                color: AppColors.credit,
+              ),
+            ),
+          ),
+        ]);
+      }
+
+      cells.addAll(<DataCell>[
+        DataCell(
+          Text(
+            balanceLabel,
+            style: (rowStyle ?? const TextStyle()).copyWith(
+              color: AppColors.balanceLabelColor(balanceLabel),
+            ),
+          ),
+        ),
+        DataCell(
+          isOpeningBalanceEntry
+              ? IconButton(
+                  tooltip: 'Clear opening balance',
+                  onPressed: () => _clearOpeningBalance(provider),
+                  icon: const Icon(Icons.delete_outline),
+                )
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    IconButton(
+                      tooltip: 'Entry Options',
+                      onPressed: () => _showEntryMenu(context, provider, entry),
+                      icon: const Icon(Icons.more_vert_rounded),
+                    ),
+                  ],
+                ),
+        ),
+      ]);
 
       rows.add(
         DataRow(
@@ -3637,83 +4193,12 @@ class _LedgerViewState extends State<_LedgerView> {
                   Theme.of(context).colorScheme.surfaceContainerHighest,
                 )
               : null,
-          cells: <DataCell>[
-            DataCell(Text(_formatStoredDate(entry.entryDate), style: rowStyle)),
-            DataCell(Text(_formatStoredDate(entry.createdAt), style: rowStyle)),
-            DataCell(
-              Text(
-                [
-                  if (entry.pageNo.isNotEmpty) entry.pageNo,
-                  if (entry.dailyLogPageNo.isNotEmpty) 'DL: ${entry.dailyLogPageNo}'
-                ].join(' | ').isEmpty ? '-' : [
-                  if (entry.pageNo.isNotEmpty) entry.pageNo,
-                  if (entry.dailyLogPageNo.isNotEmpty) 'DL: ${entry.dailyLogPageNo}'
-                ].join(' | '),
-                style: rowStyle?.copyWith(
-                  color: entry.dailyLogPageNo.isNotEmpty ? colorScheme.tertiary : null,
-                  fontWeight: entry.dailyLogPageNo.isNotEmpty ? FontWeight.bold : null,
-                ),
-              ),
-            ),
-            DataCell(
-              SizedBox(
-                width: compact ? 220 : 260,
-                child: Text(
-                  entry.displayDescription,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: rowStyle,
-                ),
-              ),
-            ),
-            DataCell(
-              Text(
-                provider.formatAmount(debit),
-                style: (rowStyle ?? const TextStyle()).copyWith(
-                  color: AppColors.debit,
-                ),
-              ),
-            ),
-            DataCell(
-              Text(
-                provider.formatAmount(credit),
-                style: (rowStyle ?? const TextStyle()).copyWith(
-                  color: AppColors.credit,
-                ),
-              ),
-            ),
-            DataCell(
-              Text(
-                balanceLabel,
-                style: (rowStyle ?? const TextStyle()).copyWith(
-                  color: AppColors.balanceLabelColor(balanceLabel),
-                ),
-              ),
-            ),
-            DataCell(
-              isOpeningBalanceEntry
-                  ? IconButton(
-                      tooltip: 'Clear opening balance',
-                      onPressed: () => _clearOpeningBalance(provider),
-                      icon: const Icon(Icons.delete_outline),
-                    )
-                  : Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        IconButton(
-                          tooltip: 'Entry Options',
-                          onPressed: () => _showEntryMenu(context, provider, entry),
-                          icon: const Icon(Icons.more_vert_rounded),
-                        ),
-                      ],
-                    ),
-            ),
-          ],
+          cells: cells,
         ),
       );
     }
 
-    return rows;
+    return rows.reversed.toList();
   }
 }
 
@@ -3724,6 +4209,8 @@ class _EntryDraft {
     required this.description,
     required this.debit,
     required this.credit,
+    this.buyBags = '',
+    this.sellBags = '',
   });
 
   final DateTime entryDate;
@@ -3731,6 +4218,8 @@ class _EntryDraft {
   final String description;
   final double debit;
   final double credit;
+  final String buyBags;
+  final String sellBags;
 }
 
 class _CustomerProfileDraft {
@@ -4068,10 +4557,28 @@ Future<DateTime?> _showAutoClosingDatePicker({
 
   String formatDate(DateTime date) {
     final months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
-    final dayOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.weekday % 7];
+    final dayOfWeek = [
+      'Sun',
+      'Mon',
+      'Tue',
+      'Wed',
+      'Thu',
+      'Fri',
+      'Sat',
+    ][date.weekday % 7];
     return '$dayOfWeek, ${months[date.month - 1]} ${date.day}';
   }
 
@@ -4093,7 +4600,9 @@ Future<DateTime?> _showAutoClosingDatePicker({
                 padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
                 decoration: BoxDecoration(
                   color: colorScheme.primary,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(28),
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -4155,9 +4664,10 @@ Future<DateTime?> _showAutoClosingDatePicker({
 }
 
 class _AddEntryDialog extends StatefulWidget {
-  const _AddEntryDialog({this.customerId});
+  const _AddEntryDialog({this.customerId, required this.isStockLedger});
 
   final int? customerId;
+  final bool isStockLedger;
 
   @override
   State<_AddEntryDialog> createState() => _AddEntryDialogState();
@@ -4169,9 +4679,10 @@ class _AddEntryDialogState extends State<_AddEntryDialog> {
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _debitController = TextEditingController();
   final TextEditingController _creditController = TextEditingController();
+  final TextEditingController _buyBagsController = TextEditingController();
+  final TextEditingController _sellBagsController = TextEditingController();
 
   DateTime _selectedDate = DateTime.now();
-  String? _amountError;
 
   @override
   void initState() {
@@ -4197,6 +4708,8 @@ class _AddEntryDialogState extends State<_AddEntryDialog> {
     _descriptionController.dispose();
     _debitController.dispose();
     _creditController.dispose();
+    _buyBagsController.dispose();
+    _sellBagsController.dispose();
     super.dispose();
   }
 
@@ -4225,18 +4738,29 @@ class _AddEntryDialogState extends State<_AddEntryDialog> {
   }
 
   void _submit() {
-    final isValid = _formKey.currentState?.validate() ?? false;
-    if (!isValid) {
+    final debit = _parseAmount(_debitController.text);
+    final credit = _parseAmount(_creditController.text);
+    final buyBags = _buyBagsController.text.trim();
+    final sellBags = _sellBagsController.text.trim();
+
+    final isStockLedger = widget.isStockLedger;
+
+    if (isStockLedger) {
+      if (buyBags.isEmpty && debit == 0 && sellBags.isEmpty && credit == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Enter bag quantities and amounts.')),
+        );
+        return;
+      }
+    } else if (debit == 0 && credit == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a debit or credit amount.')),
+      );
       return;
     }
 
-    final debit = _parseAmount(_debitController.text);
-    final credit = _parseAmount(_creditController.text);
-
-    if (debit == 0 && credit == 0) {
-      setState(() {
-        _amountError = 'Enter a debit or credit amount.';
-      });
+    final isValid = _formKey.currentState?.validate() ?? false;
+    if (!isValid) {
       return;
     }
 
@@ -4246,10 +4770,12 @@ class _AddEntryDialogState extends State<_AddEntryDialog> {
     final customerId = widget.customerId;
     final pageNoValue = _pageNoController.text.trim();
     if (customerId != null) {
-      unawaited(AppDatabase.instance.setAppSetting(
-        key: 'ledger.pageNo:$customerId',
-        value: pageNoValue,
-      ));
+      unawaited(
+        AppDatabase.instance.setAppSetting(
+          key: 'ledger.pageNo:$customerId',
+          value: pageNoValue,
+        ),
+      );
     }
 
     Navigator.of(context).pop(
@@ -4259,6 +4785,8 @@ class _AddEntryDialogState extends State<_AddEntryDialog> {
         description: _descriptionController.text.trim(),
         debit: debit,
         credit: credit,
+        buyBags: buyBags,
+        sellBags: sellBags,
       ),
     );
   }
@@ -4280,6 +4808,36 @@ class _AddEntryDialogState extends State<_AddEntryDialog> {
     }
 
     return null;
+  }
+
+  String? _validateBuyBags(String? value) {
+    if (!widget.isStockLedger) return null;
+    final amount = _parseAmount(_debitController.text);
+    if (amount > 0 && (value == null || value.trim().isEmpty)) return 'Required';
+    return null;
+  }
+
+  String? _validateBuyAmount(String? value) {
+    if (!widget.isStockLedger) return null;
+    final bags = _buyBagsController.text.trim();
+    final amount = _parseAmount(value ?? '');
+    if (bags.isNotEmpty && amount == 0) return 'Amount required';
+    return _validateAmount(value);
+  }
+
+  String? _validateSellBags(String? value) {
+    if (!widget.isStockLedger) return null;
+    final amount = _parseAmount(_creditController.text);
+    if (amount > 0 && (value == null || value.trim().isEmpty)) return 'Required';
+    return null;
+  }
+
+  String? _validateSellAmount(String? value) {
+    if (!widget.isStockLedger) return null;
+    final bags = _sellBagsController.text.trim();
+    final amount = _parseAmount(value ?? '');
+    if (bags.isNotEmpty && amount == 0) return 'Amount required';
+    return _validateAmount(value);
   }
 
   double _parseAmount(String value) {
@@ -4371,21 +4929,73 @@ class _AddEntryDialogState extends State<_AddEntryDialog> {
               textInputAction: TextInputAction.next,
               scrollPadding: const EdgeInsets.only(bottom: 180),
             ),
-            SizedBox(height: fieldGap),
-            TextFormField(
-              controller: _descriptionController,
-              decoration: const InputDecoration(
-                labelText: 'Description (Optional)',
-                hintText: 'Leave empty to show -',
+            if (!widget.isStockLedger) ...[
+              SizedBox(height: fieldGap),
+              TextFormField(
+                controller: _descriptionController,
+                decoration: const InputDecoration(
+                  labelText: 'Description (Optional)',
+                  hintText: 'Leave empty to show -',
+                ),
+                textInputAction: TextInputAction.next,
+                minLines: 1,
+                maxLines: 3,
+                scrollPadding: const EdgeInsets.only(bottom: 180),
               ),
-              textInputAction: TextInputAction.next,
-              minLines: 1,
-              maxLines: 3,
-              scrollPadding: const EdgeInsets.only(bottom: 180),
-            ),
+            ],
             SizedBox(height: fieldGap),
             LayoutBuilder(
               builder: (BuildContext context, BoxConstraints constraints) {
+                final isStockLedger = widget.isStockLedger;
+
+                if (isStockLedger) {
+                  return Column(
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: TextFormField(
+                              controller: _buyBagsController,
+                              decoration: const InputDecoration(labelText: 'Buy'),
+                              validator: _validateBuyBags,
+                              scrollPadding: const EdgeInsets.only(bottom: 180),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: AmountInputField(
+                              controller: _debitController,
+                              label: 'Amount',
+                              validator: _validateBuyAmount,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: fieldGap),
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: TextFormField(
+                              controller: _sellBagsController,
+                              decoration: const InputDecoration(labelText: 'Sell'),
+                              validator: _validateSellBags,
+                              scrollPadding: const EdgeInsets.only(bottom: 180),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: AmountInputField(
+                              controller: _creditController,
+                              label: 'Amount',
+                              validator: _validateSellAmount,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                }
+
                 if (constraints.maxWidth < 420) {
                   return Column(
                     children: <Widget>[
@@ -4425,27 +5035,6 @@ class _AddEntryDialogState extends State<_AddEntryDialog> {
                 );
               },
             ),
-            if (_amountError != null) ...<Widget>[
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: colorScheme.errorContainer,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(
-                  _amountError!,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onErrorContainer,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -4454,9 +5043,10 @@ class _AddEntryDialogState extends State<_AddEntryDialog> {
 }
 
 class _EditEntryDialog extends StatefulWidget {
-  const _EditEntryDialog({required this.entry});
+  const _EditEntryDialog({required this.entry, required this.isStockLedger});
 
   final Entry entry;
+  final bool isStockLedger;
 
   @override
   State<_EditEntryDialog> createState() => _EditEntryDialogState();
@@ -4468,9 +5058,10 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _debitController = TextEditingController();
   final TextEditingController _creditController = TextEditingController();
+  final TextEditingController _buyBagsController = TextEditingController();
+  final TextEditingController _sellBagsController = TextEditingController();
 
   late DateTime _selectedDate;
-  String? _amountError;
 
   @override
   void initState() {
@@ -4480,8 +5071,18 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
         ? ''
         : widget.entry.description;
     // Feature 1: Use formatted numbers (with commas) for consistency
-    _debitController.text = widget.entry.debit == 0 ? '' : _formatInitialAmount(widget.entry.debit);
-    _creditController.text = widget.entry.credit == 0 ? '' : _formatInitialAmount(widget.entry.credit);
+    _debitController.text = widget.entry.debit == 0
+        ? ''
+        : _formatInitialAmount(widget.entry.debit);
+    _creditController.text = widget.entry.credit == 0
+        ? ''
+        : _formatInitialAmount(widget.entry.credit);
+    _buyBagsController.text = widget.entry.buyBags.trim().isEmpty || widget.entry.buyBags.trim() == '0'
+        ? ''
+        : widget.entry.buyBags.trim();
+    _sellBagsController.text = widget.entry.sellBags.trim().isEmpty || widget.entry.sellBags.trim() == '0'
+        ? ''
+        : widget.entry.sellBags.trim();
     _selectedDate = DateTime.tryParse(widget.entry.entryDate) ?? DateTime.now();
   }
 
@@ -4491,6 +5092,8 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
     _descriptionController.dispose();
     _debitController.dispose();
     _creditController.dispose();
+    _buyBagsController.dispose();
+    _sellBagsController.dispose();
     super.dispose();
   }
 
@@ -4509,18 +5112,29 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
   }
 
   void _submit() {
-    final isValid = _formKey.currentState?.validate() ?? false;
-    if (!isValid) {
+    final debit = _parseAmount(_debitController.text);
+    final credit = _parseAmount(_creditController.text);
+    final buyBags = _buyBagsController.text.trim();
+    final sellBags = _sellBagsController.text.trim();
+
+    final isStockLedger = widget.isStockLedger;
+
+    if (isStockLedger) {
+      if (buyBags.isEmpty && debit == 0 && sellBags.isEmpty && credit == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Enter bag quantities and amounts.')),
+        );
+        return;
+      }
+    } else if (debit == 0 && credit == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a debit or credit amount.')),
+      );
       return;
     }
 
-    final debit = _parseAmount(_debitController.text);
-    final credit = _parseAmount(_creditController.text);
-
-    if (debit == 0 && credit == 0) {
-      setState(() {
-        _amountError = 'Enter a debit or credit amount.';
-      });
+    final isValid = _formKey.currentState?.validate() ?? false;
+    if (!isValid) {
       return;
     }
 
@@ -4533,6 +5147,8 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
         description: _descriptionController.text.trim(),
         debit: debit,
         credit: credit,
+        buyBags: buyBags,
+        sellBags: sellBags,
       ),
     );
   }
@@ -4556,6 +5172,36 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
     return null;
   }
 
+  String? _validateBuyBags(String? value) {
+    if (!widget.isStockLedger) return null;
+    final amount = _parseAmount(_debitController.text);
+    if (amount > 0 && (value == null || value.trim().isEmpty)) return 'Required';
+    return null;
+  }
+
+  String? _validateBuyAmount(String? value) {
+    if (!widget.isStockLedger) return null;
+    final bags = _buyBagsController.text.trim();
+    final amount = _parseAmount(value ?? '');
+    if (bags.isNotEmpty && amount == 0) return 'Amount required';
+    return _validateAmount(value);
+  }
+
+  String? _validateSellBags(String? value) {
+    if (!widget.isStockLedger) return null;
+    final amount = _parseAmount(_creditController.text);
+    if (amount > 0 && (value == null || value.trim().isEmpty)) return 'Required';
+    return null;
+  }
+
+  String? _validateSellAmount(String? value) {
+    if (!widget.isStockLedger) return null;
+    final bags = _sellBagsController.text.trim();
+    final amount = _parseAmount(value ?? '');
+    if (bags.isNotEmpty && amount == 0) return 'Amount required';
+    return _validateAmount(value);
+  }
+
   double _parseAmount(String value) {
     final cleaned = value.replaceAll(',', '').trim();
     return double.tryParse(cleaned) ?? 0;
@@ -4574,7 +5220,6 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final isCompact = MediaQuery.sizeOf(context).width < 640;
     final fieldGap = isCompact ? 14.0 : 16.0;
 
@@ -4630,21 +5275,73 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
               textInputAction: TextInputAction.next,
               scrollPadding: const EdgeInsets.only(bottom: 180),
             ),
-            SizedBox(height: fieldGap),
-            TextFormField(
-              controller: _descriptionController,
-              decoration: const InputDecoration(
-                labelText: 'Description (Optional)',
-                hintText: 'Leave empty to show -',
+            if (!widget.isStockLedger) ...[
+              SizedBox(height: fieldGap),
+              TextFormField(
+                controller: _descriptionController,
+                decoration: const InputDecoration(
+                  labelText: 'Description (Optional)',
+                  hintText: 'Leave empty to show -',
+                ),
+                textInputAction: TextInputAction.next,
+                minLines: 1,
+                maxLines: 3,
+                scrollPadding: const EdgeInsets.only(bottom: 180),
               ),
-              textInputAction: TextInputAction.next,
-              minLines: 1,
-              maxLines: 3,
-              scrollPadding: const EdgeInsets.only(bottom: 180),
-            ),
+            ],
             SizedBox(height: fieldGap),
             LayoutBuilder(
               builder: (BuildContext context, BoxConstraints constraints) {
+                final isStockLedger = widget.isStockLedger;
+
+                if (isStockLedger) {
+                  return Column(
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: TextFormField(
+                              controller: _buyBagsController,
+                              decoration: const InputDecoration(labelText: 'Buy'),
+                              validator: _validateBuyBags,
+                              scrollPadding: const EdgeInsets.only(bottom: 180),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: AmountInputField(
+                              controller: _debitController,
+                              label: 'Amount',
+                              validator: _validateBuyAmount,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: fieldGap),
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: TextFormField(
+                              controller: _sellBagsController,
+                              decoration: const InputDecoration(labelText: 'Sell'),
+                              validator: _validateSellBags,
+                              scrollPadding: const EdgeInsets.only(bottom: 180),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: AmountInputField(
+                              controller: _creditController,
+                              label: 'Amount',
+                              validator: _validateSellAmount,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                }
+
                 if (constraints.maxWidth < 420) {
                   return Column(
                     children: <Widget>[
@@ -4684,27 +5381,6 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
                 );
               },
             ),
-            if (_amountError != null) ...<Widget>[
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: colorScheme.errorContainer,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(
-                  _amountError!,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onErrorContainer,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -4832,6 +5508,7 @@ class _CustomerInfoTile extends StatelessWidget {
     this.valueColor,
     this.borderColor,
     this.isMetric = false,
+    this.maxWidth,
   });
 
   final String label;
@@ -4842,6 +5519,7 @@ class _CustomerInfoTile extends StatelessWidget {
   final Color? valueColor;
   final Color? borderColor;
   final bool isMetric;
+  final double? maxWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -4852,7 +5530,10 @@ class _CustomerInfoTile extends StatelessWidget {
     final resolvedBg = backgroundColor ?? colorScheme.surfaceContainerLowest;
 
     return ConstrainedBox(
-      constraints: const BoxConstraints(minWidth: 120, maxWidth: 240),
+      constraints: BoxConstraints(
+        minWidth: 120,
+        maxWidth: maxWidth ?? double.infinity,
+      ),
       child: ClipRRect(
         borderRadius: borderRadius,
         child: BackdropFilter(
@@ -4860,8 +5541,8 @@ class _CustomerInfoTile extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: isMetric 
-                  ? resolvedBg.withValues(alpha: 0.15) 
+              color: isMetric
+                  ? resolvedBg.withValues(alpha: 0.15)
                   : resolvedBg.withValues(alpha: 0.1),
               gradient: isMetric
                   ? LinearGradient(
@@ -4892,9 +5573,10 @@ class _CustomerInfoTile extends StatelessWidget {
                   : null,
               borderRadius: borderRadius,
               border: Border.all(
-                color: isMetric 
-                    ? resolvedBg.withValues(alpha: 0.3) 
-                    : borderColor ?? colorScheme.outlineVariant.withValues(alpha: 0.2),
+                color: isMetric
+                    ? resolvedBg.withValues(alpha: 0.3)
+                    : borderColor ??
+                          colorScheme.outlineVariant.withValues(alpha: 0.2),
                 width: 1.2,
               ),
             ),
@@ -4912,9 +5594,11 @@ class _CustomerInfoTile extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
-                      icon, 
-                      size: 18, 
-                      color: isMetric ? Colors.white : (valueColor ?? colorScheme.primary),
+                      icon,
+                      size: 18,
+                      color: isMetric
+                          ? Colors.white
+                          : (valueColor ?? colorScheme.primary),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -4926,8 +5610,8 @@ class _CustomerInfoTile extends StatelessWidget {
                       Text(
                         label.toUpperCase(),
                         style: theme.textTheme.labelMedium?.copyWith(
-                          color: isMetric 
-                              ? Colors.white.withValues(alpha: 0.7) 
+                          color: isMetric
+                              ? Colors.white.withValues(alpha: 0.7)
                               : labelColor ?? colorScheme.onSurfaceVariant,
                           fontSize: 9,
                           letterSpacing: 0.5,
@@ -4938,7 +5622,9 @@ class _CustomerInfoTile extends StatelessWidget {
                       Text(
                         value,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: isMetric ? Colors.white : (valueColor ?? colorScheme.onSurface),
+                          color: isMetric
+                              ? Colors.white
+                              : (valueColor ?? colorScheme.onSurface),
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
                         ),

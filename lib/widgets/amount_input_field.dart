@@ -9,11 +9,13 @@ class AmountInputField extends StatelessWidget {
     required this.label,
     required this.controller,
     this.validator,
+    this.prefix = 'Rs ',
   });
 
   final String label;
   final TextEditingController controller;
   final String? Function(String?)? validator;
+  final String? prefix;
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +26,10 @@ class AmountInputField extends StatelessWidget {
       inputFormatters: <TextInputFormatter>[
         NumberFormatTextInputFormatter(decimalRange: 2),
       ],
-      decoration: InputDecoration(labelText: label, prefixText: 'Rs '),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixText: prefix,
+      ),
       validator: validator,
     );
   }

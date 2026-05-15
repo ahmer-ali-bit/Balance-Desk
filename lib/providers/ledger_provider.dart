@@ -19,6 +19,7 @@ class LedgerProvider extends ChangeNotifier {
   String _customerName;
   String _customerAddress;
   String _customerPhone;
+  bool _isStockLedger;
 
   LedgerProvider({
     required Customer customer,
@@ -27,6 +28,7 @@ class LedgerProvider extends ChangeNotifier {
        _customerName = customer.name,
        _customerAddress = customer.address,
        _customerPhone = customer.phone,
+       _isStockLedger = customer.isStockLedger,
        _database = database ?? AppDatabase.instance {
     _dbSub = _database.onDataChanged.listen((_) {
       if (!_isDisposed) loadEntries();
@@ -35,7 +37,7 @@ class LedgerProvider extends ChangeNotifier {
 
   List<Entry> _entries = <Entry>[];
   List<Entry> _visibleEntries = <Entry>[];
-  SnapshotOpeningBalance _openingBalance = const SnapshotOpeningBalance(
+  SnapshotOpeningBalance _openingBalance = SnapshotOpeningBalance(
     debit: 0,
     credit: 0,
   );
@@ -49,6 +51,7 @@ class LedgerProvider extends ChangeNotifier {
     name: _customerName,
     address: _customerAddress,
     phone: _customerPhone,
+    isStockLedger: _isStockLedger,
   );
   String get customerName => _customerName;
   String get customerAddress => _customerAddress;
@@ -58,6 +61,7 @@ class LedgerProvider extends ChangeNotifier {
   List<Entry> get entries => List<Entry>.unmodifiable(_visibleEntries);
   SnapshotOpeningBalance get openingBalance => _openingBalance;
   bool get hasOpeningBalance => _openingBalance.hasValue;
+  bool get isStockLedger => _isStockLedger;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
@@ -72,6 +76,18 @@ class LedgerProvider extends ChangeNotifier {
   );
 
   double get finalBalance => totalDebit - totalCredit;
+
+  double get totalBuyBags => _visibleEntries.fold<double>(
+    0,
+    (double sum, Entry entry) => sum + (double.tryParse(entry.buyBags) ?? 0),
+  );
+
+  double get totalSellBags => _visibleEntries.fold<double>(
+    0,
+    (double sum, Entry entry) => sum + (double.tryParse(entry.sellBags) ?? 0),
+  );
+
+  double get finalRemainingBags => totalBuyBags - totalSellBags;
 
   String get activeFilterLabel {
     final range = _resolveActiveRange();
@@ -115,7 +131,7 @@ class LedgerProvider extends ChangeNotifier {
           .map<Entry>((Map<String, Object?> row) => Entry.fromMap(row))
           .toList(growable: false);
       _openingBalance =
-          openingBalance ?? const SnapshotOpeningBalance(debit: 0, credit: 0);
+          openingBalance ?? SnapshotOpeningBalance(debit: 0, credit: 0);
       _rebuildVisibleEntries();
       _errorMessage = null;
     } catch (error, stackTrace) {
@@ -138,9 +154,24 @@ class LedgerProvider extends ChangeNotifier {
     await loadEntries();
   }
 
+  Future<void> toggleStockLedger() async {
+    if (_customer.id == null) return;
+    
+    _isStockLedger = !_isStockLedger;
+    _notifyListeners();
+    
+    try {
+      await _database.updateCustomerStockMode(_customer.id!, _isStockLedger);
+    } catch (e) {
+      debugPrint('Failed to persist stock ledger mode: $e');
+    }
+  }
+
   Future<bool> setOpeningBalance({
     required double debit,
     required double credit,
+    double buyBags = 0,
+    double sellBags = 0,
   }) async {
 
     if (_customer.id == null) {
@@ -149,7 +180,7 @@ class LedgerProvider extends ChangeNotifier {
       return false;
     }
 
-    if (debit < 0 || credit < 0) {
+    if (debit < 0 || credit < 0 || buyBags < 0 || sellBags < 0) {
       _errorMessage = 'Amounts cannot be negative.';
       _notifyListeners();
       return false;
@@ -158,17 +189,24 @@ class LedgerProvider extends ChangeNotifier {
     _setLoading(true);
 
     try {
-      if (debit == 0 && credit == 0) {
+      if (debit == 0 && credit == 0 && buyBags == 0 && sellBags == 0) {
         await _database.clearCustomerLedgerOpeningBalance(_customer.id!);
       } else {
         await _database.setCustomerLedgerOpeningBalance(
           customerId: _customer.id!,
           debit: debit,
           credit: credit,
+          buyBags: buyBags,
+          sellBags: sellBags,
         );
       }
 
-      _openingBalance = SnapshotOpeningBalance(debit: debit, credit: credit);
+      _openingBalance = SnapshotOpeningBalance(
+        debit: debit,
+        credit: credit,
+        buyBags: buyBags,
+        sellBags: sellBags,
+      );
       _rebuildVisibleEntries();
       _errorMessage = null;
       _setLoading(false);
@@ -231,6 +269,58 @@ class LedgerProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> addStockEntry({
+    required DateTime entryDate,
+    required String pageNo,
+    required String description,
+    required String buyBags,
+    required double buyAmount,
+    required String sellBags,
+    required double sellAmount,
+  }) async {
+    if (_customer.id == null) {
+      _errorMessage = 'Customer record is invalid.';
+      _notifyListeners();
+      return false;
+    }
+
+    if (buyAmount < 0 || sellAmount < 0) {
+      _errorMessage = 'Values cannot be negative.';
+      _notifyListeners();
+      return false;
+    }
+
+    if (buyBags.trim().isEmpty && buyAmount == 0 && sellBags.trim().isEmpty && sellAmount == 0) {
+      _errorMessage = 'Enter at least one value.';
+      _notifyListeners();
+      return false;
+    }
+
+    _setLoading(true);
+
+    try {
+      await _database.addStockEntry(
+        customerId: _customer.id!,
+        entryDate: entryDate.toIso8601String(),
+        createdAt: DateTime.now().toIso8601String(),
+        pageNo: pageNo,
+        description: description.trim(),
+        buyBags: buyBags,
+        buyAmount: buyAmount,
+        sellBags: sellBags,
+        sellAmount: sellAmount,
+      );
+      await loadEntries();
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint('LedgerProvider.addStockEntry failed: $error');
+      debugPrint('$stackTrace');
+      _errorMessage = 'Unable to save ledger entry.';
+      _setLoading(false);
+      return false;
+    }
+  }
+
   Future<bool> updateEntry({
     required Entry entry,
     required DateTime entryDate,
@@ -273,6 +363,52 @@ class LedgerProvider extends ChangeNotifier {
       return true;
     } catch (error, stackTrace) {
       debugPrint('LedgerProvider.updateEntry failed: $error');
+      debugPrint('$stackTrace');
+      _errorMessage = 'Unable to update ledger entry.';
+      _setLoading(false);
+      return false;
+    }
+  }
+
+  Future<bool> updateStockEntry({
+    required Entry entry,
+    required DateTime entryDate,
+    required String pageNo,
+    required String description,
+    required String buyBags,
+    required double buyAmount,
+    required String sellBags,
+    required double sellAmount,
+  }) async {
+    if (entry.id == null) {
+      _errorMessage = 'Entry record is invalid.';
+      _notifyListeners();
+      return false;
+    }
+
+    if (buyAmount < 0 || sellAmount < 0) {
+      _errorMessage = 'Values cannot be negative.';
+      _notifyListeners();
+      return false;
+    }
+
+    _setLoading(true);
+
+    try {
+      await _database.updateStockEntry(
+        id: entry.id!,
+        entryDate: entryDate.toIso8601String(),
+        pageNo: pageNo,
+        description: description.trim(),
+        buyBags: buyBags,
+        buyAmount: buyAmount,
+        sellBags: sellBags,
+        sellAmount: sellAmount,
+      );
+      await loadEntries();
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint('LedgerProvider.updateStockEntry failed: $error');
       debugPrint('$stackTrace');
       _errorMessage = 'Unable to update ledger entry.';
       _setLoading(false);
@@ -458,6 +594,7 @@ class LedgerProvider extends ChangeNotifier {
     }
 
     _visibleEntries = <Entry>[
+      ..._entries,
       Entry(
         customerId: _customer.id ?? 0,
         entryDate: '-',
@@ -466,8 +603,9 @@ class LedgerProvider extends ChangeNotifier {
         description: _openingBalanceDescription,
         debit: _openingBalance.debit,
         credit: _openingBalance.credit,
+        buyBags: _openingBalance.buyBags == 0 ? '' : _openingBalance.buyBags.toString(),
+        sellBags: _openingBalance.sellBags == 0 ? '' : _openingBalance.sellBags.toString(),
       ),
-      ..._entries,
     ];
   }
 

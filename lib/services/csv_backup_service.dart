@@ -81,6 +81,7 @@ class CsvBackupService {
               'address': row['address'],
               'phone': row['phone'],
               'ledgerYear': row['ledgerYear'],
+              'isStockLedger': row['isStockLedger'],
             },
           )
           .toList(growable: false),
@@ -95,7 +96,10 @@ class CsvBackupService {
               'description': row['description'],
               'debit': row['debit'],
               'credit': row['credit'],
+              'buyBags': row['buyBags'],
+              'sellBags': row['sellBags'],
               'dailyLogPageNo': row['dailyLogPageNo'],
+              'showInDailyLog': row['showInDailyLog'],
             },
           )
           .toList(growable: false),
@@ -275,7 +279,14 @@ class CsvBackupService {
 
     return _DecodedBackupPayload(
       customersCsv: <List<String>>[
-        const <String>['id', 'name', 'ledgerYear', 'address', 'phone'],
+        const <String>[
+          'id',
+          'name',
+          'ledgerYear',
+          'address',
+          'phone',
+          'isStockLedger',
+        ],
         ...customers.map<List<String>>((Map<String, dynamic> row) {
           return <String>[
             '${row['id'] ?? ''}',
@@ -283,6 +294,7 @@ class CsvBackupService {
             '${row['ledgerYear'] ?? ''}',
             '${row['address'] ?? ''}',
             '${row['phone'] ?? ''}',
+            '${row['isStockLedger'] ?? '0'}',
           ];
         }),
       ],
@@ -296,7 +308,10 @@ class CsvBackupService {
           'description',
           'debit',
           'credit',
+          'buyBags',
+          'sellBags',
           'dailyLogPageNo',
+          'showInDailyLog',
         ],
         ...entries.map<List<String>>((Map<String, dynamic> row) {
           return <String>[
@@ -308,7 +323,10 @@ class CsvBackupService {
             '${row['description'] ?? ''}',
             '${row['debit'] ?? ''}',
             '${row['credit'] ?? ''}',
+            '${row['buyBags'] ?? '0'}',
+            '${row['sellBags'] ?? '0'}',
             '${row['dailyLogPageNo'] ?? ''}',
+            '${row['showInDailyLog'] ?? '1'}',
           ];
         }),
       ],
