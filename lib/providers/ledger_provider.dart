@@ -69,27 +69,39 @@ class LedgerProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
-  double get totalDebit => _visibleEntries.fold<double>(
-    0,
-    (double sum, Entry entry) => sum + entry.debit,
-  );
+  double get totalDebit {
+    final entriesSum = _entries.fold<double>(
+      0,
+      (double sum, Entry entry) => sum + entry.debit,
+    );
+    return entriesSum + _openingBalance.debit;
+  }
 
-  double get totalCredit => _visibleEntries.fold<double>(
-    0,
-    (double sum, Entry entry) => sum + entry.credit,
-  );
+  double get totalCredit {
+    final entriesSum = _entries.fold<double>(
+      0,
+      (double sum, Entry entry) => sum + entry.credit,
+    );
+    return entriesSum + _openingBalance.credit;
+  }
 
   double get finalBalance => totalDebit - totalCredit;
 
-  double get totalBuyBags => _visibleEntries.fold<double>(
-    0,
-    (double sum, Entry entry) => sum + (double.tryParse(entry.buyBags) ?? 0),
-  );
+  double get totalBuyBags {
+    final entriesSum = _entries.fold<double>(
+      0,
+      (double sum, Entry entry) => sum + (double.tryParse(entry.buyBags) ?? 0),
+    );
+    return entriesSum + _openingBalance.buyBags;
+  }
 
-  double get totalSellBags => _visibleEntries.fold<double>(
-    0,
-    (double sum, Entry entry) => sum + (double.tryParse(entry.sellBags) ?? 0),
-  );
+  double get totalSellBags {
+    final entriesSum = _entries.fold<double>(
+      0,
+      (double sum, Entry entry) => sum + (double.tryParse(entry.sellBags) ?? 0),
+    );
+    return entriesSum + _openingBalance.sellBags;
+  }
 
   double get finalRemainingBags => totalBuyBags - totalSellBags;
 
@@ -120,6 +132,16 @@ class LedgerProvider extends ChangeNotifier {
     _setLoading(true);
 
     try {
+      // Sync customer details to ensure settings like Stock Ledger mode persist correctly
+      final customerData = await _database.getCustomer(_customer.id!);
+      if (customerData != null) {
+        _customerName = customerData['name'] as String? ?? _customerName;
+        _customerAddress = customerData['address'] as String? ?? _customerAddress;
+        _customerPhone = customerData['phone'] as String? ?? _customerPhone;
+        _isStockLedger = (customerData['isStockLedger'] as int? ?? 0) == 1;
+        _useWeight = (customerData['useWeight'] as int? ?? 0) == 1;
+      }
+
       final range = _resolveActiveRange();
       final rows = range == null
           ? await _database.getEntriesByCustomer(_customer.id!)

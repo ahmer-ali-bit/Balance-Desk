@@ -653,11 +653,22 @@ class DatabaseHelper {
     final db = await database;
     return db.query(
       customersTable,
-      columns: <String>['id', 'name', 'address', 'phone', 'isStockLedger'],
+      columns: <String>['id', 'name', 'address', 'phone', 'isStockLedger', 'useWeight'],
       where: 'ledgerYear = ?',
       whereArgs: <Object?>[_activeYear],
       orderBy: 'name COLLATE NOCASE',
     );
+  }
+
+  Future<Map<String, Object?>?> getCustomer(int id) async {
+    final db = await database;
+    final rows = await db.query(
+      customersTable,
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    return rows.isNotEmpty ? rows.first : null;
   }
 
   Future<int> addEntry({
@@ -1655,6 +1666,8 @@ class AppDatabase {
   }) => _helper.addCustomer(name, address: address, phone: phone);
 
   Future<List<Map<String, Object?>>> getCustomers() => _helper.getCustomers();
+
+  Future<Map<String, Object?>?> getCustomer(int id) => _helper.getCustomer(id);
 
   Future<bool> customerNameExists(String name, {int? excludingCustomerId}) {
     return _helper.customerNameExists(

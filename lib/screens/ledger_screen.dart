@@ -2444,12 +2444,12 @@ class _LedgerViewState extends State<_LedgerView> {
       Widget buildTile(({String label, String value}) item, bool isMetric, {double? maxWidth}) {
         final isDebit =
             item.label == 'Total Debit' ||
-            (provider.isStockLedger && (item.label == 'Buy Amount' || item.label == 'Buy')) ||
-            (!provider.isStockLedger && (item.label == 'Sell Amount' || item.label == 'Sell'));
+            (provider.isStockLedger && (item.label == 'Buy Amount' || item.label == 'Buy' || item.label == 'Buy Wt')) ||
+            (!provider.isStockLedger && (item.label == 'Sell Amount' || item.label == 'Sell' || item.label == 'Sell Wt'));
         final isCredit =
             item.label == 'Total Credit' ||
-            (provider.isStockLedger && (item.label == 'Sell Amount' || item.label == 'Sell')) ||
-            (!provider.isStockLedger && (item.label == 'Buy Amount' || item.label == 'Buy'));
+            (provider.isStockLedger && (item.label == 'Sell Amount' || item.label == 'Sell' || item.label == 'Sell Wt')) ||
+            (!provider.isStockLedger && (item.label == 'Buy Amount' || item.label == 'Buy' || item.label == 'Buy Wt'));
         final isBalance = item.label == 'Balance';
         final isBags = item.label == 'Remaining';
 
@@ -2457,9 +2457,9 @@ class _LedgerViewState extends State<_LedgerView> {
         final balanceColor = AppColors.balanceColor(displayBalance);
 
         final bgColor = isDebit
-            ? AppColors.debit
+            ? (provider.isStockLedger ? AppColors.credit : AppColors.debit)
             : isCredit
-            ? AppColors.credit
+            ? (provider.isStockLedger ? AppColors.debit : AppColors.credit)
             : isBags
             ? colorScheme.primary
             : isBalance
