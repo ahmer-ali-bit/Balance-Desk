@@ -312,7 +312,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
           item.pageNo.isEmpty ? '-' : item.pageNo,
           _formatAmount(item.totalDebit),
           _formatAmount(item.totalCredit),
-          item.customer.isStockLedger ? formatBags(item.remainingBags) : '-',
+          item.customer.isStockLedger
+              ? (item.customer.useWeight ? formatWeight(item.remainingBags) : formatBags(item.remainingBags))
+              : '-',
           _formatBalance(item.balance),
         ],
       ),
@@ -341,7 +343,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
         item.pageNo.isEmpty ? '-' : item.pageNo,
         _formatAmount(item.totalDebit),
         _formatAmount(item.totalCredit),
-        item.customer.isStockLedger ? formatBags(item.remainingBags) : '-',
+        item.customer.isStockLedger
+            ? (item.customer.useWeight ? formatWeight(item.remainingBags) : formatBags(item.remainingBags))
+            : '-',
         _formatBalance(item.balance),
       ]);
     }
@@ -920,7 +924,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                         DataCell(
                           Text(
                             item.customer.isStockLedger
-                                ? formatBags(item.remainingBags)
+                                ? (item.customer.useWeight ? formatWeight(item.remainingBags) : formatBags(item.remainingBags))
                                 : '-',
                           ),
                         ),
@@ -1006,12 +1010,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
           const SizedBox(height: 10),
           _buildSummaryAmountStrip(
             context,
+            isStock: item.customer.isStockLedger,
             debit: _formatAmount(item.totalDebit),
             credit: _formatAmount(item.totalCredit),
             balance: _formatBalance(item.balance),
             balanceColor: balanceColor,
             bags: item.customer.isStockLedger
-                ? formatBags(item.remainingBags)
+                ? (item.customer.useWeight ? formatWeight(item.remainingBags) : formatBags(item.remainingBags))
                 : null,
           ),
         ],
@@ -1022,6 +1027,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
   Widget _buildSummaryAmountStrip(
     BuildContext context, {
+    required bool isStock,
     required String debit,
     required String credit,
     required String balance,
@@ -1041,17 +1047,17 @@ class _SummaryScreenState extends State<SummaryScreen> {
         children: <Widget>[
           Expanded(
             child: _SummaryStripItem(
-              label: 'Debit',
+              label: isStock ? 'Buy' : 'Debit',
               value: debit,
-              color: AppColors.debit,
+              color: isStock ? AppColors.credit : AppColors.debit,
             ),
           ),
           _summaryStripDivider(context),
           Expanded(
             child: _SummaryStripItem(
-              label: 'Credit',
+              label: isStock ? 'Sell' : 'Credit',
               value: credit,
-              color: AppColors.credit,
+              color: isStock ? AppColors.debit : AppColors.credit,
             ),
           ),
           _summaryStripDivider(context),
@@ -1066,9 +1072,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
             _summaryStripDivider(context),
             Expanded(
               child: _SummaryStripItem(
-                label: 'Remaining',
+                label: isStock ? 'Rem.' : 'Remaining',
                 value: bags,
-                color: Theme.of(context).colorScheme.primary,
+                color: balanceColor,
               ),
             ),
           ],

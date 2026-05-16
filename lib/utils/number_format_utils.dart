@@ -35,3 +35,44 @@ String formatBagsString(String bags) {
   if (d == null) return bags; // Return original string if not a number
   return formatBags(d);
 }
+
+String formatWeight(double totalKg) {
+  final isNegative = totalKg < 0;
+  final absTotalKg = totalKg.abs();
+  final int mund = absTotalKg ~/ 40;
+  final double kg = absTotalKg % 40;
+  
+  final kgStr = kg == kg.toInt() ? kg.toInt().toString() : kg.toStringAsFixed(1);
+  return '${isNegative ? '-' : ''}$mund-$kgStr';
+}
+
+double parseWeight(String mundKg) {
+  if (mundKg.trim().isEmpty) return 0;
+  
+  // Strip the ' Mund-KG' suffix if present
+  String cleaned = mundKg.trim().replaceAll(RegExp(r'\s*Mund-KG\s*$', caseSensitive: false), '').trim();
+  
+  // Handle negative sign
+  bool isNegative = false;
+  if (cleaned.startsWith('-')) {
+    isNegative = true;
+    cleaned = cleaned.substring(1);
+  }
+  
+  // Try parsing as single number (KG)
+  final d = double.tryParse(cleaned);
+  if (d != null) return isNegative ? -d : d;
+  
+  // Try parsing as Mund-KG format (e.g. 10-20)
+  if (cleaned.contains('-')) {
+    final parts = cleaned.split('-');
+    if (parts.length == 2) {
+      final mund = double.tryParse(parts[0]) ?? 0;
+      final kg = double.tryParse(parts[1]) ?? 0;
+      final total = (mund * 40) + kg;
+      return isNegative ? -total : total;
+    }
+  }
+  
+  return 0;
+}

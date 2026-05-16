@@ -126,10 +126,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
       layoutBuilder: (Widget? currentChild, List<Widget> previousChildren) =>
           Stack(
             alignment: Alignment.topCenter,
-            children: <Widget>[
-              ...previousChildren,
-              ?currentChild,
-            ],
+            children: <Widget>[...previousChildren, ?currentChild],
           ),
       child: _buildActivePage(),
     );
@@ -262,7 +259,11 @@ class _AppShellScreenState extends State<AppShellScreen> {
                 for (final item in _destinations)
                   NavigationDestination(
                     icon: Icon(item.icon, size: 22),
-                    selectedIcon: Icon(item.selectedIcon, size: 24, color: colorScheme.primary),
+                    selectedIcon: Icon(
+                      item.selectedIcon,
+                      size: 24,
+                      color: colorScheme.primary,
+                    ),
                     label: item.label,
                   ),
               ],
@@ -295,9 +296,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
     return Column(
       key: const ValueKey<String>('mobile-content'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Expanded(child: content),
-      ],
+      children: <Widget>[Expanded(child: content)],
     );
   }
 
@@ -442,9 +441,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
     }
   }
 
-
   Future<void> _openNotesEditor() async {
-
     final notes = await showDialog<String>(
       context: context,
       builder: (BuildContext context) => _TextInputDialog(
@@ -465,7 +462,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
       key: _notesSettingKey,
       value: notes,
     );
-
 
     if (!mounted) {
       return;
@@ -659,7 +655,9 @@ class _AppShellScreenState extends State<AppShellScreen> {
     final workspaceId = context.watch<WorkspaceProvider>().activeWorkspaceId;
 
     return KeyedSubtree(
-      key: ValueKey<String>('$_selectedIndex-$_reloadRevision-$activeYear-$workspaceId'),
+      key: ValueKey<String>(
+        '$_selectedIndex-$_reloadRevision-$activeYear-$workspaceId',
+      ),
       child: PlatformHelper.isDesktop
           ? _PageSurface(child: _destinations[_selectedIndex].child)
           : _destinations[_selectedIndex].child,
@@ -708,7 +706,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
   }
 
   Future<void> _showAddYearDialog() async {
-
     final year = await showDialog<int>(
       context: context,
       builder: (BuildContext dialogContext) => const _AddYearDialog(),
@@ -745,7 +742,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
   }
 
   Future<void> _confirmDeleteYear() async {
-
     final yearProvider = context.read<LedgerYearProvider>();
     final yearToDelete = yearProvider.activeYear;
 
@@ -835,7 +831,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
   }
 
   Future<void> _restoreBackup() async {
-
     try {
       final filePath = await _csvBackupService.restoreBackupFile();
       if (!mounted || filePath == null || filePath.isEmpty) {
@@ -867,7 +862,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
   }
 
   Future<void> _openCompanyProfileEditor({bool isInitial = false}) async {
-
     final nameController = TextEditingController(text: _companyProfile.name);
     String? pickedLogoPath = _companyProfile.logoPath;
     bool removeLogo = false;
@@ -989,7 +983,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
                       name: name,
                       logoPath: logoPath,
                     );
-
 
                     if (!dialogContext.mounted) {
                       return;
@@ -1158,10 +1151,7 @@ class _SidebarContentState extends State<_SidebarContent> {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                colorScheme.primaryContainer,
-                colorScheme.surface,
-              ],
+              colors: [colorScheme.primaryContainer, colorScheme.surface],
             ),
           ),
           child: Column(
@@ -1183,7 +1173,11 @@ class _SidebarContentState extends State<_SidebarContent> {
                         ),
                       ],
                     ),
-                    child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 28),
+                    child: const Icon(
+                      Icons.account_balance_wallet_rounded,
+                      color: Colors.white,
+                      size: 28,
+                    ),
                   ),
                   const Spacer(),
                   // const SyncStatusIndicator(), // Temporarily hidden
@@ -1251,7 +1245,12 @@ class _SidebarContentState extends State<_SidebarContent> {
                     trailing: widget.hasNotes ? '●' : null,
                     onTap: canEdit ? widget.onNotesRequested : null,
                   ),
-                  Divider(height: 1, color: colorScheme.outlineVariant, indent: 16, endIndent: 16),
+                  Divider(
+                    height: 1,
+                    color: colorScheme.outlineVariant,
+                    indent: 16,
+                    endIndent: 16,
+                  ),
                   _DrawerSectionLabel('Data'),
                   _DrawerListTile(
                     icon: Icons.backup_outlined,
@@ -1263,14 +1262,24 @@ class _SidebarContentState extends State<_SidebarContent> {
                     label: 'Restore Backup',
                     onTap: canEdit ? widget.onRestoreBackupRequested : null,
                   ),
-                  Divider(height: 1, color: colorScheme.outlineVariant, indent: 16, endIndent: 16),
+                  Divider(
+                    height: 1,
+                    color: colorScheme.outlineVariant,
+                    indent: 16,
+                    endIndent: 16,
+                  ),
                   _DrawerSectionLabel('Security'),
                   _DrawerListTile(
                     icon: Icons.lock_outline_rounded,
                     label: widget.pinButtonLabel,
                     onTap: canEdit ? widget.onPinRequested : null,
                   ),
-                  Divider(height: 1, color: colorScheme.outlineVariant, indent: 16, endIndent: 16),
+                  Divider(
+                    height: 1,
+                    color: colorScheme.outlineVariant,
+                    indent: 16,
+                    endIndent: 16,
+                  ),
                   _DrawerSectionLabel('App'),
                   _DrawerListTile(
                     icon: Icons.system_update_alt_outlined,
@@ -1286,9 +1295,7 @@ class _SidebarContentState extends State<_SidebarContent> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(color: colorScheme.outlineVariant),
-            ),
+            border: Border(top: BorderSide(color: colorScheme.outlineVariant)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1323,7 +1330,9 @@ class _SidebarContentState extends State<_SidebarContent> {
   }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final years = provider.years.isEmpty ? <int>[provider.activeYear] : provider.years;
+    final years = provider.years.isEmpty
+        ? <int>[provider.activeYear]
+        : provider.years;
     final canEdit = context.read<LinkedSessionProvider>().canEdit;
 
     return Padding(
@@ -1349,15 +1358,20 @@ class _SidebarContentState extends State<_SidebarContent> {
                   enabled: !provider.isLoading,
                   onSelected: widget.onYearSelected,
                   itemBuilder: (BuildContext context) {
-                    return years.map<PopupMenuEntry<int>>(
-                      (int year) => PopupMenuItem<int>(
-                        value: year,
-                        child: Text('$year'),
-                      ),
-                    ).toList(growable: false);
+                    return years
+                        .map<PopupMenuEntry<int>>(
+                          (int year) => PopupMenuItem<int>(
+                            value: year,
+                            child: Text('$year'),
+                          ),
+                        )
+                        .toList(growable: false);
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
                       color: colorScheme.surfaceContainerHigh,
                       borderRadius: BorderRadius.circular(10),
@@ -1365,7 +1379,11 @@ class _SidebarContentState extends State<_SidebarContent> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.calendar_month_outlined, size: 18, color: colorScheme.primary),
+                        Icon(
+                          Icons.calendar_month_outlined,
+                          size: 18,
+                          color: colorScheme.primary,
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
@@ -1377,11 +1395,19 @@ class _SidebarContentState extends State<_SidebarContent> {
                         ),
                         if (provider.isLoading)
                           SizedBox(
-                            width: 16, height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: colorScheme.primary),
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: colorScheme.primary,
+                            ),
                           )
                         else
-                          Icon(Icons.unfold_more_rounded, size: 18, color: colorScheme.onSurfaceVariant),
+                          Icon(
+                            Icons.unfold_more_rounded,
+                            size: 18,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
                       ],
                     ),
                   ),
@@ -1390,11 +1416,15 @@ class _SidebarContentState extends State<_SidebarContent> {
               const SizedBox(width: 8),
               IconButton(
                 tooltip: 'Add year',
-                onPressed: (provider.isLoading || !canEdit) ? null : widget.onAddYearRequested,
+                onPressed: (provider.isLoading || !canEdit)
+                    ? null
+                    : widget.onAddYearRequested,
                 style: IconButton.styleFrom(
                   backgroundColor: colorScheme.surfaceContainerHigh,
                   foregroundColor: colorScheme.primary,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                   side: BorderSide(color: colorScheme.outlineVariant),
                 ),
                 icon: const Icon(Icons.add_rounded, size: 20),
@@ -1402,11 +1432,18 @@ class _SidebarContentState extends State<_SidebarContent> {
               const SizedBox(width: 4),
               IconButton(
                 tooltip: 'Delete year',
-                onPressed: (provider.isLoading || provider.years.length <= 1 || !canEdit) ? null : onDeleteRequested,
+                onPressed:
+                    (provider.isLoading ||
+                        provider.years.length <= 1 ||
+                        !canEdit)
+                    ? null
+                    : onDeleteRequested,
                 style: IconButton.styleFrom(
                   backgroundColor: colorScheme.surfaceContainerHigh,
                   foregroundColor: colorScheme.error,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                   side: BorderSide(color: colorScheme.outlineVariant),
                 ),
                 icon: const Icon(Icons.delete_outline_rounded, size: 20),
@@ -1418,7 +1455,9 @@ class _SidebarContentState extends State<_SidebarContent> {
               padding: const EdgeInsets.only(top: 6),
               child: Text(
                 provider.errorMessage!,
-                style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.error),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.error,
+                ),
               ),
             ),
         ],
@@ -1464,15 +1503,28 @@ class _DrawerListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return ListTile(
-      leading: Icon(icon, size: 22, color: onTap != null ? colorScheme.onSurface : colorScheme.onSurfaceVariant),
+      leading: Icon(
+        icon,
+        size: 22,
+        color: onTap != null
+            ? colorScheme.onSurface
+            : colorScheme.onSurfaceVariant,
+      ),
       title: Text(
         label,
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: onTap != null ? colorScheme.onSurface : colorScheme.onSurfaceVariant,
+          color: onTap != null
+              ? colorScheme.onSurface
+              : colorScheme.onSurfaceVariant,
         ),
       ),
       trailing: trailing != null
-          ? Text(trailing!, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colorScheme.primary))
+          ? Text(
+              trailing!,
+              style: Theme.of(
+                context,
+              ).textTheme.labelSmall?.copyWith(color: colorScheme.primary),
+            )
           : null,
       onTap: onTap,
       enabled: onTap != null,
@@ -1781,14 +1833,18 @@ class _SidebarActionItemState extends State<_SidebarActionItem> {
           onTap: widget.onTap,
           borderRadius: BorderRadius.circular(16),
           hoverColor: Colors.transparent,
-          splashColor: isEnabled ? const Color(0xFF22C55E).withValues(alpha: 0.14) : Colors.transparent,
+          splashColor: isEnabled
+              ? const Color(0xFF22C55E).withValues(alpha: 0.14)
+              : Colors.transparent,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 170),
             curve: Curves.easeOutCubic,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               color: Colors.white.withValues(
-                alpha: isEnabled ? (_isHovered ? hoverOpacity : baseOpacity) : 0.02,
+                alpha: isEnabled
+                    ? (_isHovered ? hoverOpacity : baseOpacity)
+                    : 0.02,
               ),
               borderRadius: BorderRadius.circular(16),
             ),
@@ -1796,11 +1852,7 @@ class _SidebarActionItemState extends State<_SidebarActionItem> {
               opacity: isEnabled ? 1.0 : 0.4,
               child: Row(
                 children: <Widget>[
-                  Icon(
-                    widget.icon,
-                    size: 18,
-                    color: const Color(0xFFE5E7EB),
-                  ),
+                  Icon(widget.icon, size: 18, color: const Color(0xFFE5E7EB)),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
@@ -2043,7 +2095,8 @@ class _WorkspaceSwitcher extends StatelessWidget {
                       child: IconButton(
                         padding: EdgeInsets.zero,
                         tooltip: 'Add Workspace',
-                        onPressed: () => _showAddWorkspaceDialog(context, provider),
+                        onPressed: () =>
+                            _showAddWorkspaceDialog(context, provider),
                         style: IconButton.styleFrom(
                           backgroundColor: colorScheme.surfaceContainerHigh,
                           foregroundColor: colorScheme.primary,
@@ -2078,68 +2131,70 @@ class _WorkspaceSwitcher extends StatelessWidget {
                   }
                 },
                 itemBuilder: (BuildContext context) {
-                  return workspaces.map<PopupMenuEntry<String>>((Workspace w) {
-                    final isActive = w.id == active.id;
-                    return PopupMenuItem<String>(
-                      value: w.id,
-                      child: Row(
-                        children: [
-                          Icon(
-                            isActive
-                                ? Icons.check_circle_rounded
-                                : Icons.circle_outlined,
-                            size: 18,
-                            color: isActive
-                                ? colorScheme.primary
-                                : colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              w.name,
-                              style: TextStyle(
-                                fontWeight: isActive
-                                    ? FontWeight.w700
-                                    : FontWeight.w400,
-                              ),
-                            ),
-                          ),
-                          if (!isActive && w.id != 'default')
-                            PopupMenuButton<_WorkspaceMenuAction>(
-                              padding: EdgeInsets.zero,
-                              icon: Icon(
-                                Icons.more_vert,
+                  return workspaces
+                      .map<PopupMenuEntry<String>>((Workspace w) {
+                        final isActive = w.id == active.id;
+                        return PopupMenuItem<String>(
+                          value: w.id,
+                          child: Row(
+                            children: [
+                              Icon(
+                                isActive
+                                    ? Icons.check_circle_rounded
+                                    : Icons.circle_outlined,
                                 size: 18,
-                                color: colorScheme.onSurfaceVariant,
+                                color: isActive
+                                    ? colorScheme.primary
+                                    : colorScheme.onSurfaceVariant,
                               ),
-                              onSelected: (_WorkspaceMenuAction action) {
-                                Navigator.of(context).pop();
-                                switch (action) {
-                                  case _WorkspaceMenuAction.rename:
-                                    _showRenameDialog(context, provider, w);
-                                    break;
-                                  case _WorkspaceMenuAction.delete:
-                                    _showDeleteDialog(context, provider, w);
-                                    break;
-                                }
-                              },
-                              itemBuilder: (_) => [
-                                const PopupMenuItem(
-                                  value: _WorkspaceMenuAction.rename,
-                                  child: Text('Rename'),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  w.name,
+                                  style: TextStyle(
+                                    fontWeight: isActive
+                                        ? FontWeight.w700
+                                        : FontWeight.w400,
+                                  ),
                                 ),
-                                const PopupMenuItem(
-                                  value: _WorkspaceMenuAction.delete,
-                                  child: Text('Delete'),
+                              ),
+                              if (!isActive && w.id != 'default')
+                                PopupMenuButton<_WorkspaceMenuAction>(
+                                  padding: EdgeInsets.zero,
+                                  icon: Icon(
+                                    Icons.more_vert,
+                                    size: 18,
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                  onSelected: (_WorkspaceMenuAction action) {
+                                    Navigator.of(context).pop();
+                                    switch (action) {
+                                      case _WorkspaceMenuAction.rename:
+                                        _showRenameDialog(context, provider, w);
+                                        break;
+                                      case _WorkspaceMenuAction.delete:
+                                        _showDeleteDialog(context, provider, w);
+                                        break;
+                                    }
+                                  },
+                                  itemBuilder: (_) => [
+                                    const PopupMenuItem(
+                                      value: _WorkspaceMenuAction.rename,
+                                      child: Text('Rename'),
+                                    ),
+                                    const PopupMenuItem(
+                                      value: _WorkspaceMenuAction.delete,
+                                      child: Text('Delete'),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          if (w.id == 'default' && !isActive)
-                            const SizedBox(width: 40),
-                        ],
-                      ),
-                    );
-                  }).toList(growable: false);
+                              if (w.id == 'default' && !isActive)
+                                const SizedBox(width: 40),
+                            ],
+                          ),
+                        );
+                      })
+                      .toList(growable: false);
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
@@ -2246,44 +2301,45 @@ class _WorkspaceSwitcher extends StatelessWidget {
     }
   }
 
-
   Future<void> _showDeleteDialog(
     BuildContext context,
     WorkspaceProvider provider,
     Workspace workspace,
   ) async {
-    final shouldDelete = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text('Delete Workspace'),
-          content: Text(
-            'Delete "${workspace.name}"? All data in this workspace will be lost. This cannot be undone.',
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(dialogContext).colorScheme.error,
+    final shouldDelete =
+        await showDialog<bool>(
+          context: context,
+          builder: (BuildContext dialogContext) {
+            return AlertDialog(
+              title: const Text('Delete Workspace'),
+              content: Text(
+                'Delete "${workspace.name}"? All data in this workspace will be lost. This cannot be undone.',
               ),
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
-    ) ?? false;
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Theme.of(dialogContext).colorScheme.error,
+                  ),
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('Delete'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
 
     if (!shouldDelete || !context.mounted) return;
 
     final deleted = await provider.deleteWorkspace(workspace.id);
     if (deleted && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('"${workspace.name}" deleted.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('"${workspace.name}" deleted.')));
     }
   }
 }
@@ -2292,7 +2348,6 @@ enum _WorkspaceMenuAction { rename, delete }
 
 class _TextInputDialog extends StatefulWidget {
   const _TextInputDialog({
-    super.key,
     required this.title,
     required this.label,
     required this.actionLabel,
@@ -2345,7 +2400,9 @@ class _TextInputDialogState extends State<_TextInputDialog> {
           autofocus: true,
           maxLines: widget.isMultiline ? 12 : 1,
           minLines: widget.isMultiline ? 6 : 1,
-          textInputAction: widget.isMultiline ? TextInputAction.newline : TextInputAction.done,
+          textInputAction: widget.isMultiline
+              ? TextInputAction.newline
+              : TextInputAction.done,
           decoration: InputDecoration(
             labelText: widget.label,
             hintText: widget.hint,
@@ -2363,10 +2420,7 @@ class _TextInputDialogState extends State<_TextInputDialog> {
             onPressed: () => Navigator.of(context).pop(''),
             child: const Text('Clear'),
           ),
-        FilledButton(
-          onPressed: _submit,
-          child: Text(widget.actionLabel),
-        ),
+        FilledButton(onPressed: _submit, child: Text(widget.actionLabel)),
       ],
     );
   }

@@ -217,7 +217,8 @@ class DatabaseHelper {
         address TEXT NOT NULL DEFAULT '',
         phone TEXT NOT NULL DEFAULT '',
         ledgerYear INTEGER NOT NULL DEFAULT $defaultYear,
-        isStockLedger INTEGER NOT NULL DEFAULT 0
+        isStockLedger INTEGER NOT NULL DEFAULT 0,
+        useWeight INTEGER NOT NULL DEFAULT 0
       )
     ''');
 
@@ -325,6 +326,12 @@ class DatabaseHelper {
       db: db,
       tableName: customersTable,
       columnName: 'isStockLedger',
+      definition: 'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _ensureColumn(
+      db: db,
+      tableName: customersTable,
+      columnName: 'useWeight',
       definition: 'INTEGER NOT NULL DEFAULT 0',
     );
   }
@@ -803,6 +810,16 @@ class DatabaseHelper {
     );
   }
 
+  Future<void> updateCustomerWeightMode(int id, bool useWeight) async {
+    final db = await database;
+    await db.update(
+      customersTable,
+      <String, Object?>{'useWeight': useWeight ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: <Object?>[id],
+    );
+  }
+
   Future<List<Map<String, Object?>>> getEntriesByCustomer(
     int customerId,
   ) async {
@@ -881,7 +898,8 @@ class DatabaseHelper {
         e.sellBags,
         e.dailyLogPageNo,
         e.showInDailyLog,
-        c.name AS customerName
+        c.name AS customerName,
+        c.useWeight
       FROM $entriesTable e
       JOIN $customersTable c ON c.id = e.customerId
       WHERE ${whereClause.toString()} AND c.ledgerYear = ? AND e.showInDailyLog = 1
@@ -921,7 +939,8 @@ class DatabaseHelper {
         e.sellBags,
         e.dailyLogPageNo,
         e.showInDailyLog,
-        c.name AS customerName
+        c.name AS customerName,
+        c.useWeight
       FROM $entriesTable e
       JOIN $customersTable c ON c.id = e.customerId
       WHERE ${whereClause.toString()} AND c.ledgerYear = ? AND e.showInDailyLog = 1
@@ -1093,7 +1112,14 @@ class DatabaseHelper {
     final db = await database;
     return db.query(
       customersTable,
-      columns: <String>['id', 'name', 'address', 'phone', 'ledgerYear'],
+      columns: <String>[
+        'id',
+        'name',
+        'address',
+        'phone',
+        'ledgerYear',
+        'isStockLedger',
+      ],
       orderBy: 'ledgerYear DESC, id ASC',
     );
   }
@@ -1111,6 +1137,10 @@ class DatabaseHelper {
         'description',
         'debit',
         'credit',
+        'buyBags',
+        'sellBags',
+        'dailyLogPageNo',
+        'showInDailyLog',
       ],
       orderBy: 'id ASC',
     );
@@ -1127,6 +1157,7 @@ class DatabaseHelper {
         'overallDebit',
         'overallCredit',
         'customerCount',
+        'dailyLogPageNo',
       ],
       orderBy: 'ledgerYear DESC, savedAt DESC, id DESC',
     );
@@ -1226,6 +1257,7 @@ class DatabaseHelper {
           'overallDebit': double.tryParse(row[3]) ?? 0,
           'overallCredit': double.tryParse(row[4]) ?? 0,
           'customerCount': int.tryParse(row[5]) ?? 0,
+          'dailyLogPageNo': row.length > 6 ? row[6] : '',
         });
       }
     });
@@ -1697,6 +1729,10 @@ class AppDatabase {
 
   Future<void> updateCustomerStockMode(int id, bool isStockLedger) {
     return _helper.updateCustomerStockMode(id, isStockLedger);
+  }
+
+  Future<void> updateCustomerWeightMode(int id, bool useWeight) {
+    return _helper.updateCustomerWeightMode(id, useWeight);
   }
 
   Future<int> addStockEntry({

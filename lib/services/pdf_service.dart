@@ -9,6 +9,11 @@ import '../models/customer.dart';
 import '../models/entry.dart';
 import '../utils/number_format_utils.dart';
 
+const PdfColor debitColor = PdfColor.fromInt(0xFF16A34A);
+const PdfColor creditColor = PdfColor.fromInt(0xFFDC2626);
+const PdfColor debitLightColor = PdfColor.fromInt(0xFFDCFCE7);
+const PdfColor creditLightColor = PdfColor.fromInt(0xFFFEE2E2);
+
 class PdfService {
   const PdfService();
 
@@ -89,8 +94,13 @@ class PdfService {
       ),
     );
     final isStock = customer.isStockLedger;
-    final rows = _buildLedgerRows(entries, isStockLedger: isStock);
-    final headers = isStock ? _stockLedgerHeaders : _ledgerHeaders;
+    final useWeight = customer.useWeight;
+    final rows = _buildLedgerRows(entries, isStockLedger: isStock, useWeight: useWeight);
+    final headers = isStock 
+        ? (useWeight 
+            ? ['Entry Date', 'Page No', 'Buy Weight', 'Buy Amount', 'Sell Weight', 'Sell Amount', 'Rem. Weight', 'Balance']
+            : _stockLedgerHeaders)
+        : _ledgerHeaders;
     final cellAlignments = isStock
         ? _stockLedgerCellAlignments
         : _ledgerCellAlignments;
@@ -142,6 +152,7 @@ class PdfService {
             remainingBags: remainingBags,
             entryCount: entryCount,
             isStockLedger: isStock,
+            useWeight: useWeight,
           );
         },
         build: (pw.Context context) {
@@ -287,6 +298,7 @@ class PdfService {
     required double remainingBags,
     required int entryCount,
     required bool isStockLedger,
+    required bool useWeight,
   }) {
     final titleBlock = _buildDocumentTitle(
       title: isStockLedger ? 'Stock Ledger' : 'Customer Ledger',
@@ -309,6 +321,7 @@ class PdfService {
             remainingBags: remainingBags,
             entryCount: entryCount,
             isStockLedger: isStockLedger,
+            useWeight: useWeight,
           ),
           pw.SizedBox(height: 12),
           _buildCompactTextTableHeader(
@@ -331,7 +344,7 @@ class PdfService {
         pw.SizedBox(height: 6),
         _buildPageMetaLine(
           isStockLedger
-              ? 'Entries: $entryCount | Remaining: ${_formatBags(remainingBags)} | Balance: ${_formatBalance(finalBalance)}'
+              ? 'Entries: $entryCount | Remaining: ${useWeight ? formatWeight(remainingBags) : _formatBags(remainingBags)} | Balance: ${_formatBalance(finalBalance)}'
               : 'Entries: $entryCount | Balance: ${_formatBalance(finalBalance)}',
         ),
         pw.SizedBox(height: 8),
@@ -605,6 +618,7 @@ class PdfService {
     required double remainingBags,
     required int entryCount,
     required bool isStockLedger,
+    required bool useWeight,
   }) {
     return pw.Container(
       padding: const pw.EdgeInsets.all(16),
@@ -621,9 +635,23 @@ class PdfService {
             style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 6),
-          pw.Text(
-            'Customer ID: ${customer.id ?? '-'}',
-            style: const pw.TextStyle(fontSize: 10),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'Customer ID: ${customer.id ?? '-'}',
+                style: const pw.TextStyle(fontSize: 10),
+              ),
+              if (isStockLedger)
+                pw.Text(
+                  'Total Entries: $entryCount',
+                  style: pw.TextStyle(
+                    fontSize: 10,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.blueGrey700,
+                  ),
+                ),
+            ],
           ),
           pw.SizedBox(height: 8),
           pw.Row(
@@ -658,9 +686,9 @@ class PdfService {
               children: <pw.Widget>[
                 pw.Expanded(
                   child: _buildTotalCard(
-                    label: 'Buy',
-                    value: _formatBags(totalBuyBags),
-                    color: const PdfColor.fromInt(0xFFFEE2E2),
+                    label: useWeight ? 'Buy Wt' : 'Buy',
+                    value: useWeight ? formatWeight(totalBuyBags) : _formatBags(totalBuyBags),
+                    color: debitLightColor,
                     isCompact: true,
                   ),
                 ),
@@ -669,16 +697,16 @@ class PdfService {
                   child: _buildTotalCard(
                     label: 'Buy Amt',
                     value: _formatAmount(totalDebit),
-                    color: const PdfColor.fromInt(0xFFFEE2E2),
+                    color: debitLightColor,
                     isCompact: true,
                   ),
                 ),
                 pw.SizedBox(width: 4),
                 pw.Expanded(
                   child: _buildTotalCard(
-                    label: 'Sell',
-                    value: _formatBags(totalSellBags),
-                    color: const PdfColor.fromInt(0xFFDCFCE7),
+                    label: useWeight ? 'Sell Wt' : 'Sell',
+                    value: useWeight ? formatWeight(totalSellBags) : _formatBags(totalSellBags),
+                    color: creditLightColor,
                     isCompact: true,
                   ),
                 ),
@@ -687,15 +715,15 @@ class PdfService {
                   child: _buildTotalCard(
                     label: 'Sell Amt',
                     value: _formatAmount(totalCredit),
-                    color: const PdfColor.fromInt(0xFFDCFCE7),
+                    color: creditLightColor,
                     isCompact: true,
                   ),
                 ),
                 pw.SizedBox(width: 4),
                 pw.Expanded(
                   child: _buildTotalCard(
-                    label: 'Remaining',
-                    value: _formatBags(remainingBags),
+                    label: useWeight ? 'Rem Wt' : 'Remaining',
+                    value: useWeight ? formatWeight(remainingBags) : _formatBags(remainingBags),
                     color: const PdfColor.fromInt(0xFFF1F5F9),
                     isCompact: true,
                   ),
@@ -707,9 +735,7 @@ class PdfService {
                     value: _formatBalance(finalBalance),
                     color: finalBalance == 0
                         ? const PdfColor.fromInt(0xFFF9FAFB)
-                        : (finalBalance > 0
-                              ? const PdfColor.fromInt(0xFFDCFCE7)
-                              : const PdfColor.fromInt(0xFFFEE2E2)),
+                        : (finalBalance > 0 ? debitLightColor : creditLightColor),
                     isCompact: true,
                   ),
                 ),
@@ -720,9 +746,17 @@ class PdfService {
               children: <pw.Widget>[
                 pw.Expanded(
                   child: _buildTotalCard(
+                    label: 'Entries',
+                    value: '$entryCount',
+                    color: const PdfColor.fromInt(0xFFF2F4F7),
+                  ),
+                ),
+                pw.SizedBox(width: 10),
+                pw.Expanded(
+                  child: _buildTotalCard(
                     label: 'Total Debit',
                     value: _formatAmount(totalDebit),
-                    color: const PdfColor.fromInt(0xFFE7F5FF),
+                    color: debitLightColor,
                   ),
                 ),
                 pw.SizedBox(width: 10),
@@ -730,7 +764,7 @@ class PdfService {
                   child: _buildTotalCard(
                     label: 'Total Credit',
                     value: _formatAmount(totalCredit),
-                    color: const PdfColor.fromInt(0xFFEFFCF3),
+                    color: creditLightColor,
                   ),
                 ),
                 pw.SizedBox(width: 10),
@@ -738,15 +772,9 @@ class PdfService {
                   child: _buildTotalCard(
                     label: 'Balance',
                     value: _formatBalance(finalBalance),
-                    color: const PdfColor.fromInt(0xFFFFF4E5),
-                  ),
-                ),
-                pw.SizedBox(width: 10),
-                pw.Expanded(
-                  child: _buildTotalCard(
-                    label: 'Entries',
-                    value: '$entryCount',
-                    color: const PdfColor.fromInt(0xFFF2F4F7),
+                    color: finalBalance == 0
+                        ? const PdfColor.fromInt(0xFFF9FAFB)
+                        : (finalBalance > 0 ? debitLightColor : creditLightColor),
                   ),
                 ),
               ],
@@ -763,13 +791,14 @@ class PdfService {
     required String sellAmt,
     required String remBags,
     required String finalBalance,
+    bool useWeight = false,
   }) {
     PdfColor balanceAccent;
     final balanceStr = finalBalance.toLowerCase();
     if (balanceStr.contains('credit')) {
-      balanceAccent = const PdfColor.fromInt(0xFFFEE2E2); // Red
+      balanceAccent = creditLightColor;
     } else if (balanceStr.contains('debit')) {
-      balanceAccent = const PdfColor.fromInt(0xFFDCFCE7); // Green
+      balanceAccent = debitLightColor;
     } else {
       balanceAccent = const PdfColor.fromInt(0xFFF1F5F9); // Neutral
     }
@@ -801,15 +830,15 @@ class PdfService {
                   crossAxisAlignment: pw.CrossAxisAlignment.stretch,
                   children: [
                     _buildTotalCard(
-                      label: 'Total Buy',
+                      label: useWeight ? 'Total Buy Weight' : 'Total Buy',
                       value: buyBags,
-                      color: const PdfColor.fromInt(0xFFFEE2E2), // Red
+                      color: debitLightColor,
                     ),
                     pw.SizedBox(height: 6),
                     _buildTotalCard(
                       label: 'Total Buy Amt',
                       value: buyAmt,
-                      color: const PdfColor.fromInt(0xFFFEE2E2),
+                      color: debitLightColor,
                     ),
                   ],
                 ),
@@ -820,15 +849,15 @@ class PdfService {
                   crossAxisAlignment: pw.CrossAxisAlignment.stretch,
                   children: [
                     _buildTotalCard(
-                      label: 'Total Sell',
+                      label: useWeight ? 'Total Sell Weight' : 'Total Sell',
                       value: sellBags,
-                      color: const PdfColor.fromInt(0xFFDCFCE7), // Green
+                      color: creditLightColor,
                     ),
                     pw.SizedBox(height: 6),
                     _buildTotalCard(
                       label: 'Total Sell Amt',
                       value: sellAmt,
-                      color: const PdfColor.fromInt(0xFFDCFCE7),
+                      color: creditLightColor,
                     ),
                   ],
                 ),
@@ -839,7 +868,7 @@ class PdfService {
                   crossAxisAlignment: pw.CrossAxisAlignment.stretch,
                   children: [
                     _buildTotalCard(
-                      label: 'Total Remaining',
+                      label: useWeight ? 'Total Rem. Weight' : 'Total Remaining',
                       value: remBags,
                       color: const PdfColor.fromInt(0xFFE0F2FE), // Blue
                     ),
@@ -977,6 +1006,7 @@ pw.Widget _buildEmptyState(String value) {
 List<List<String>> _buildLedgerRows(
   List<Entry> entries, {
   required bool isStockLedger,
+  bool useWeight = false,
 }) {
   final reversedEntries = entries.reversed.toList();
   final rows = <List<String>>[];
@@ -996,7 +1026,7 @@ List<List<String>> _buildLedgerRows(
       if (isStockLedger) {
         final currentBags = (runningBags ?? 0) + (double.tryParse(entry.buyBags) ?? 0) - (double.tryParse(entry.sellBags) ?? 0);
         runningBags = currentBags;
-        bagsLabel = _formatBags(currentBags);
+        bagsLabel = useWeight ? formatWeight(currentBags) : _formatBags(currentBags);
 
         final currentBalance = (runningBalance ?? 0) + entry.credit - entry.debit;
         runningBalance = currentBalance;
@@ -1019,9 +1049,9 @@ List<List<String>> _buildLedgerRows(
       rows.add(<String>[
         _formatDate(entry.entryDate),
         combinedPageNo.isEmpty ? '-' : combinedPageNo,
-        _formatBagsString(entry.buyBags),
+        useWeight ? formatWeight(double.tryParse(entry.buyBags) ?? 0) : _formatBagsString(entry.buyBags),
         entry.debit == 0 ? '' : _formatAmount(entry.debit), // Buy Amt (UI: debit)
-        _formatBagsString(entry.sellBags),
+        useWeight ? formatWeight(double.tryParse(entry.sellBags) ?? 0) : _formatBagsString(entry.sellBags),
         entry.credit == 0
             ? ''
             : _formatAmount(entry.credit), // Sell Amt (UI: credit)
@@ -1032,8 +1062,8 @@ List<List<String>> _buildLedgerRows(
       rows.add(<String>[
         _formatDate(entry.entryDate),
         _formatDate(entry.createdAt),
-        entry.pageNo.isEmpty ? '-' : entry.pageNo,
-        _formatDescription(entry),
+        isFirstEntry ? '-' : (entry.pageNo.isEmpty ? '-' : entry.pageNo),
+        isFirstEntry ? 'Opening Balance' : _formatDescription(entry),
         _formatAmount(entry.debit),
         _formatAmount(entry.credit),
         balanceLabel,
@@ -1131,24 +1161,28 @@ pw.Widget _buildCompactTextTableBody({
 
           // Apply color based on transaction type or value
           PdfColor? textColor;
-          if (isBuy || isCredit) {
-            textColor = PdfColors.red;
-          } else if (isSell || isDebit) {
-            textColor = PdfColors.green;
+          if (isBuy) {
+            textColor = creditColor; // Buy -> Red
+          } else if (isSell) {
+            textColor = debitColor;  // Sell -> Green
+          } else if (isDebit) {
+            textColor = debitColor;  // Debit -> Green
+          } else if (isCredit) {
+            textColor = creditColor; // Credit -> Red
           } else if (isRemBags) {
             final cellValue = colIndex < row.length
                 ? row[colIndex].replaceAll(',', '')
                 : '';
             final val = double.tryParse(cellValue) ?? 0;
-            textColor = val >= 0 ? PdfColors.green : PdfColors.red;
+            textColor = val >= 0 ? creditColor : debitColor;
           } else if (isBalance) {
             final cellValue = colIndex < row.length
                 ? row[colIndex].toLowerCase()
                 : '';
-            if (cellValue.contains('credit')) {
-              textColor = PdfColors.red;
-            } else if (cellValue.contains('debit')) {
-              textColor = PdfColors.green;
+            if (cellValue.endsWith(' c')) {
+              textColor = creditColor;
+            } else if (cellValue.endsWith(' d')) {
+              textColor = debitColor;
             }
           }
 
@@ -1330,7 +1364,15 @@ pw.Widget _buildTableCell({
 
 String _formatAmount(double amount) => formatAmount(amount);
 
-String _formatBalance(double balance) => formatBalance(balance);
+String _formatBalance(double balance) {
+  if (balance > 0) {
+    return '${formatAmount(balance)} D';
+  }
+  if (balance < 0) {
+    return '${formatAmount(balance.abs())} C';
+  }
+  return '0';
+}
 
 String _formatBags(double bags) => formatBags(bags);
 

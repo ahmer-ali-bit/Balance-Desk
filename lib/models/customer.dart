@@ -5,6 +5,7 @@ class Customer {
     this.address = '',
     this.phone = '',
     this.isStockLedger = false,
+    this.useWeight = false,
   });
 
   final int? id;
@@ -12,6 +13,7 @@ class Customer {
   final String address;
   final String phone;
   final bool isStockLedger;
+  final bool useWeight;
 
   String get displayAddress => address.trim().isEmpty ? '-' : address.trim();
   String get displayPhone => phone.trim().isEmpty ? '-' : phone.trim();
@@ -23,6 +25,7 @@ class Customer {
       address: map['address'] as String? ?? '',
       phone: map['phone'] as String? ?? '',
       isStockLedger: (map['isStockLedger'] as int? ?? 0) == 1,
+      useWeight: (map['useWeight'] as int? ?? 0) == 1,
     );
   }
 
@@ -33,6 +36,7 @@ class Customer {
       'address': address,
       'phone': phone,
       'isStockLedger': isStockLedger ? 1 : 0,
+      'useWeight': useWeight ? 1 : 0,
     };
   }
 }

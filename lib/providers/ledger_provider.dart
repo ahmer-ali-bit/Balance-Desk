@@ -20,6 +20,7 @@ class LedgerProvider extends ChangeNotifier {
   String _customerAddress;
   String _customerPhone;
   bool _isStockLedger;
+  bool _useWeight;
 
   LedgerProvider({
     required Customer customer,
@@ -29,6 +30,7 @@ class LedgerProvider extends ChangeNotifier {
        _customerAddress = customer.address,
        _customerPhone = customer.phone,
        _isStockLedger = customer.isStockLedger,
+       _useWeight = customer.useWeight,
        _database = database ?? AppDatabase.instance {
     _dbSub = _database.onDataChanged.listen((_) {
       if (!_isDisposed) loadEntries();
@@ -52,6 +54,7 @@ class LedgerProvider extends ChangeNotifier {
     address: _customerAddress,
     phone: _customerPhone,
     isStockLedger: _isStockLedger,
+    useWeight: _useWeight,
   );
   String get customerName => _customerName;
   String get customerAddress => _customerAddress;
@@ -62,6 +65,7 @@ class LedgerProvider extends ChangeNotifier {
   SnapshotOpeningBalance get openingBalance => _openingBalance;
   bool get hasOpeningBalance => _openingBalance.hasValue;
   bool get isStockLedger => _isStockLedger;
+  bool get useWeight => _useWeight;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
@@ -164,6 +168,19 @@ class LedgerProvider extends ChangeNotifier {
       await _database.updateCustomerStockMode(_customer.id!, _isStockLedger);
     } catch (e) {
       debugPrint('Failed to persist stock ledger mode: $e');
+    }
+  }
+
+  Future<void> toggleStockWeight() async {
+    if (_customer.id == null) return;
+    
+    _useWeight = !_useWeight;
+    _notifyListeners();
+    
+    try {
+      await _database.updateCustomerWeightMode(_customer.id!, _useWeight);
+    } catch (e) {
+      debugPrint('Failed to persist weight mode: $e');
     }
   }
 
@@ -548,6 +565,13 @@ class LedgerProvider extends ChangeNotifier {
 
   String formatBalance(double balance) =>
       number_format_utils.formatBalance(balance);
+
+  String formatBags(double bags) {
+    if (_isStockLedger && _useWeight) {
+      return number_format_utils.formatWeight(bags);
+    }
+    return number_format_utils.formatBags(bags);
+  }
 
   DateTimeRange? _resolveActiveRange() {
     final now = DateTime.now();

@@ -2707,14 +2707,17 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
 
   String _formatDescription(dynamic item) {
     final Entry entry = item is _SnapshotEntry ? item.entry : (item as Entry);
+    final bool useWeight = item is _SnapshotEntry ? item.useWeight : false;
     final desc = entry.description.trim();
     final parts = <String>[];
     if (entry.buyBags.trim().isNotEmpty && entry.buyBags.trim() != '0') {
-      parts.add("Buy: ${entry.buyBags.trim()}");
+      final val = double.tryParse(entry.buyBags) ?? 0;
+      parts.add(useWeight ? "Buy Wt: ${formatWeight(val)}" : "Buy: ${entry.buyBags.trim()}");
     }
     final parsedSellBags = double.tryParse(entry.sellBags) ?? 0;
     if (parsedSellBags > 0 || (entry.sellBags.trim().isNotEmpty && entry.sellBags.trim() != '0')) {
-      parts.add("Sell: ${entry.sellBags.trim()}");
+      final val = double.tryParse(entry.sellBags) ?? 0;
+      parts.add(useWeight ? "Sell Wt: ${formatWeight(val)}" : "Sell: ${entry.sellBags.trim()}");
     }
 
     final bagsPart = parts.join(" | ");
@@ -2727,15 +2730,17 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
 }
 
 class _SnapshotEntry {
-  const _SnapshotEntry({required this.entry, required this.customerName});
+  const _SnapshotEntry({required this.entry, required this.customerName, this.useWeight = false});
 
   final Entry entry;
   final String customerName;
+  final bool useWeight;
 
   factory _SnapshotEntry.fromMap(Map<String, Object?> map) {
     return _SnapshotEntry(
       entry: Entry.fromMap(map),
       customerName: map['customerName'] as String? ?? '-',
+      useWeight: map['useWeight'] == 1,
     );
   }
 }
