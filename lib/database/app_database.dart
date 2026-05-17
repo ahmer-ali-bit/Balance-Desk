@@ -1339,6 +1339,10 @@ class DatabaseHelper {
         txn,
         year: sourceYear,
       );
+      final sourceCustomerClosingBags = await _loadCustomerClosingBags(
+        txn,
+        year: sourceYear,
+      );
       final sourceCustomers = await txn.query(
         customersTable,
         columns: <String>['id', 'name', 'address', 'phone', 'isStockLedger'],
@@ -1365,7 +1369,19 @@ class DatabaseHelper {
         final closingBalance =
             sourceCustomerClosingBalances[sourceCustomerId] ?? 0;
         final openingBalance = _balanceToOpeningBalance(closingBalance);
-        if (!openingBalance.hasValue) {
+
+        final closingBags =
+            sourceCustomerClosingBags[sourceCustomerId] ?? 0;
+        final openingBags = _bagsToOpeningBags(closingBags);
+
+        final combinedOpening = SnapshotOpeningBalance(
+          debit: openingBalance.debit,
+          credit: openingBalance.credit,
+          buyBags: openingBags.buyBags,
+          sellBags: openingBags.sellBags,
+        );
+
+        if (!combinedOpening.hasValue) {
           continue;
         }
 
@@ -1373,8 +1389,10 @@ class DatabaseHelper {
           txn,
           year: year,
           customerId: newCustomerId,
-          debit: openingBalance.debit,
-          credit: openingBalance.credit,
+          debit: combinedOpening.debit,
+          credit: combinedOpening.credit,
+          buyBags: combinedOpening.buyBags,
+          sellBags: combinedOpening.sellBags,
         );
       }
     });
@@ -1518,6 +1536,8 @@ class DatabaseHelper {
     required int customerId,
     required double debit,
     required double credit,
+    double buyBags = 0,
+    double sellBags = 0,
   }) async {
     await txn.insert(appSettingsTable, <String, Object?>{
       'settingKey': _customerLedgerOpeningDebitSettingKey(
@@ -1533,6 +1553,97 @@ class DatabaseHelper {
       ),
       'settingValue': credit.toString(),
     }, conflictAlgorithm: ConflictAlgorithm.replace);
+    await txn.insert(appSettingsTable, <String, Object?>{
+      'settingKey': _customerLedgerOpeningBuyBagsSettingKey(
+        year: year,
+        customerId: customerId,
+      ),
+      'settingValue': buyBags.toString(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    await txn.insert(appSettingsTable, <String, Object?>{
+      'settingKey': _customerLedgerOpeningSellBagsSettingKey(
+        year: year,
+        customerId: customerId,
+      ),
+      'settingValue': sellBags.toString(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  SnapshotOpeningBalance _bagsToOpeningBags(double netBags) {
+    if (netBags > 0) {
+      return SnapshotOpeningBalance(debit: 0, credit: 0, buyBags: netBags, sellBags: 0);
+    }
+    if (netBags < 0) {
+      return SnapshotOpeningBalance(debit: 0, credit: 0, buyBags: 0, sellBags: netBags.abs());
+    }
+    return const SnapshotOpeningBalance(debit: 0, credit: 0);
+  }
+
+  Future<Map<int, double>> _loadCustomerClosingBags(
+    Transaction txn, {
+    required int year,
+  }) async {
+    final entryTotalsRows = await txn.rawQuery(
+      '''
+      SELECT
+        c.id AS customerId,
+        SUM(e.buyBags) AS totalBuyBags,
+        SUM(e.sellBags) AS totalSellBags
+      FROM $customersTable c
+      LEFT JOIN $entriesTable e ON e.customerId = c.id
+      WHERE c.ledgerYear = ?
+      GROUP BY c.id
+      ''',
+      <Object?>[year],
+    );
+
+    final buyBagsPrefix = 'ledgerOpeningBuyBags:$year:';
+    final sellBagsPrefix = 'ledgerOpeningSellBags:$year:';
+    final openingSettingRows = await txn.query(
+      appSettingsTable,
+      columns: <String>['settingKey', 'settingValue'],
+      where: 'settingKey LIKE ? OR settingKey LIKE ?',
+      whereArgs: <Object?>['$buyBagsPrefix%', '$sellBagsPrefix%'],
+    );
+
+    final openingBuyBagsByCustomerId = <int, double>{};
+    final openingSellBagsByCustomerId = <int, double>{};
+    for (final row in openingSettingRows) {
+      final key = row['settingKey'] as String? ?? '';
+      final value = double.tryParse(row['settingValue'] as String? ?? '') ?? 0;
+
+      if (key.startsWith(buyBagsPrefix)) {
+        final customerId = int.tryParse(key.substring(buyBagsPrefix.length));
+        if (customerId != null) {
+          openingBuyBagsByCustomerId[customerId] = value;
+        }
+        continue;
+      }
+
+      if (key.startsWith(sellBagsPrefix)) {
+        final customerId = int.tryParse(key.substring(sellBagsPrefix.length));
+        if (customerId != null) {
+          openingSellBagsByCustomerId[customerId] = value;
+        }
+      }
+    }
+
+    final bagsByCustomerId = <int, double>{};
+    for (final row in entryTotalsRows) {
+      final customerId = row['customerId'] as int?;
+      if (customerId == null) {
+        continue;
+      }
+
+      final openingBuyBags = openingBuyBagsByCustomerId[customerId] ?? 0;
+      final openingSellBags = openingSellBagsByCustomerId[customerId] ?? 0;
+      final totalBuyBags = _readDoubleValue(row['totalBuyBags']);
+      final totalSellBags = _readDoubleValue(row['totalSellBags']);
+      bagsByCustomerId[customerId] =
+          (openingBuyBags + totalBuyBags) - (openingSellBags + totalSellBags);
+    }
+
+    return bagsByCustomerId;
   }
 
   SnapshotOpeningBalance _balanceToOpeningBalance(double balance) {
