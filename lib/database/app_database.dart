@@ -1301,15 +1301,37 @@ class DatabaseHelper {
         txn,
         year: sourceYear,
       );
-      final sourceYearOpeningBalance = _balanceToOpeningBalance(
-        sourceYearBalance,
+
+      // Fetch the last saved snapshot for the daily logs opening balance
+      final lastSnapshotRows = await txn.query(
+        summarySnapshotsTable,
+        columns: <String>['overallDebit', 'overallCredit'],
+        where: 'ledgerYear = ?',
+        whereArgs: <Object?>[sourceYear],
+        orderBy: 'savedAt DESC',
+        limit: 1,
       );
-      if (sourceYearOpeningBalance.hasValue) {
+
+      double dailyLogClosingBalance = 0.0;
+      if (lastSnapshotRows.isNotEmpty) {
+        final lastSnapshot = lastSnapshotRows.first;
+        final snapshotDebit = _readDoubleValue(lastSnapshot['overallDebit']);
+        final snapshotCredit = _readDoubleValue(lastSnapshot['overallCredit']);
+        dailyLogClosingBalance = snapshotDebit - snapshotCredit;
+      } else {
+        dailyLogClosingBalance = sourceYearBalance;
+      }
+
+      final snapshotOpeningBalance = _balanceToOpeningBalance(
+        dailyLogClosingBalance,
+      );
+      
+      if (snapshotOpeningBalance.hasValue) {
         await _setSnapshotOpeningBalanceForYear(
           txn,
           year: year,
-          debit: sourceYearOpeningBalance.debit,
-          credit: sourceYearOpeningBalance.credit,
+          debit: snapshotOpeningBalance.debit,
+          credit: snapshotOpeningBalance.credit,
         );
       }
 
