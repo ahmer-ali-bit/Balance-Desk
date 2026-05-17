@@ -2709,23 +2709,51 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     final Entry entry = item is _SnapshotEntry ? item.entry : (item as Entry);
     final bool useWeight = item is _SnapshotEntry ? item.useWeight : false;
     final desc = entry.description.trim();
+    final lowerDesc = desc.toLowerCase();
     final parts = <String>[];
+    
     if (entry.buyBags.trim().isNotEmpty && entry.buyBags.trim() != '0') {
       final val = double.tryParse(entry.buyBags) ?? 0;
       parts.add(useWeight ? "Buy Wt: ${formatWeight(val)}" : "Buy: ${entry.buyBags.trim()}");
     }
+    
     final parsedSellBags = double.tryParse(entry.sellBags) ?? 0;
     if (parsedSellBags > 0 || (entry.sellBags.trim().isNotEmpty && entry.sellBags.trim() != '0')) {
       final val = double.tryParse(entry.sellBags) ?? 0;
       parts.add(useWeight ? "Sell Wt: ${formatWeight(val)}" : "Sell: ${entry.sellBags.trim()}");
     }
 
-    final bagsPart = parts.join(" | ");
     if (desc.isEmpty) {
-      return bagsPart.isEmpty ? "-" : bagsPart;
-    } else {
-      return bagsPart.isEmpty ? desc : "$desc ($bagsPart)";
+      return parts.isEmpty ? "-" : parts.join(" | ");
     }
+    
+    // If exact match, just show the auto-generated part (e.g., "Buy: 10")
+    if ((lowerDesc == 'buy' || lowerDesc == 'sell') && parts.isNotEmpty) {
+      return parts.join(" | ");
+    }
+
+    // Otherwise, check if keywords are in description to avoid "(Buy: 10)" duplication
+    final cleanParts = <String>[];
+    for (final part in parts) {
+      if (part.startsWith("Buy") && lowerDesc.contains("buy")) {
+        final valStr = useWeight ? formatWeight(double.tryParse(entry.buyBags) ?? 0) : entry.buyBags.trim();
+        if (lowerDesc.contains(valStr)) {
+          continue; // completely omit if quantity is also present
+        }
+        cleanParts.add(part.replaceFirst(RegExp(r'Buy( Wt)?: '), ''));
+      } else if (part.startsWith("Sell") && lowerDesc.contains("sell")) {
+        final valStr = useWeight ? formatWeight(double.tryParse(entry.sellBags) ?? 0) : entry.sellBags.trim();
+        if (lowerDesc.contains(valStr)) {
+          continue; // completely omit if quantity is also present
+        }
+        cleanParts.add(part.replaceFirst(RegExp(r'Sell( Wt)?: '), ''));
+      } else {
+        cleanParts.add(part);
+      }
+    }
+
+    final bagsPart = cleanParts.join(" | ");
+    return bagsPart.isEmpty ? desc : "$desc ($bagsPart)";
   }
 }
 

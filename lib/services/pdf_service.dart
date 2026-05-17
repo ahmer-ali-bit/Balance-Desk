@@ -1063,7 +1063,7 @@ List<List<String>> _buildLedgerRows(
         _formatDate(entry.entryDate),
         _formatDate(entry.createdAt),
         isFirstEntry ? '-' : (entry.pageNo.isEmpty ? '-' : entry.pageNo),
-        isFirstEntry ? 'Opening Balance' : _formatDescription(entry),
+        isFirstEntry ? 'Opening Balance' : _formatDescription(entry, useWeight: useWeight),
         _formatAmount(entry.debit),
         _formatAmount(entry.credit),
         balanceLabel,
@@ -1271,16 +1271,6 @@ Map<int, pw.TableColumnWidth> _resolveSnapshotColumnWidths(
     'balance',
   ];
 
-  const stockSummaryHeaders = <String>[
-    'sr #',
-    'customer',
-    'page no',
-    'total debit',
-    'total credit',
-    'remaining',
-    'balance',
-  ];
-
   if (_sameHeaderShape(normalizedHeaders, summaryHeaders)) {
     return <int, pw.TableColumnWidth>{
       0: const pw.FlexColumnWidth(0.7),
@@ -1289,18 +1279,6 @@ Map<int, pw.TableColumnWidth> _resolveSnapshotColumnWidths(
       3: const pw.FlexColumnWidth(1.15),
       4: const pw.FlexColumnWidth(1.15),
       5: const pw.FlexColumnWidth(1.3),
-    };
-  }
-
-  if (_sameHeaderShape(normalizedHeaders, stockSummaryHeaders)) {
-    return <int, pw.TableColumnWidth>{
-      0: const pw.FlexColumnWidth(0.6),
-      1: const pw.FlexColumnWidth(2.2),
-      2: const pw.FlexColumnWidth(0.8),
-      3: const pw.FlexColumnWidth(1.1),
-      4: const pw.FlexColumnWidth(1.1),
-      5: const pw.FlexColumnWidth(0.9),
-      6: const pw.FlexColumnWidth(1.2),
     };
   }
 
@@ -1396,24 +1374,55 @@ String _buildFileName(String customerName) {
   return '${safeName.isEmpty ? 'customer' : safeName}_ledger.pdf';
 }
 
-String _formatDescription(Entry entry) {
+String _formatDescription(Entry entry, {bool useWeight = false}) {
   final desc = entry.description.trim();
+  final lowerDesc = desc.toLowerCase();
   final parts = <String>[];
+  
   if (entry.buyBags.trim().isNotEmpty && entry.buyBags.trim() != '0') {
-    parts.add("Buy: ${entry.buyBags.trim()}");
+    final val = double.tryParse(entry.buyBags) ?? 0;
+    parts.add(useWeight ? "Buy Wt: ${formatWeight(val)}" : "Buy: ${entry.buyBags.trim()}");
   }
+  
   final parsedSellBags = double.tryParse(entry.sellBags) ?? 0;
   if (parsedSellBags > 0 || (entry.sellBags.trim().isNotEmpty && entry.sellBags.trim() != '0')) {
-    parts.add("Sell: ${entry.sellBags.trim()}");
+    final val = double.tryParse(entry.sellBags) ?? 0;
+    parts.add(useWeight ? "Sell Wt: ${formatWeight(val)}" : "Sell: ${entry.sellBags.trim()}");
   }
+  
   if (entry.dailyLogPageNo.isNotEmpty) {
     parts.add("DL Pg: ${entry.dailyLogPageNo}");
   }
 
-  final bagsPart = parts.join(" | ");
   if (desc.isEmpty) {
-    return bagsPart.isEmpty ? "-" : bagsPart;
-  } else {
-    return bagsPart.isEmpty ? desc : "$desc ($bagsPart)";
+    return parts.isEmpty ? "-" : parts.join(" | ");
   }
+
+  // If exact match, just show the auto-generated part (e.g., "Buy: 10")
+  if ((lowerDesc == 'buy' || lowerDesc == 'sell') && parts.isNotEmpty) {
+    return parts.join(" | ");
+  }
+
+  // Otherwise, check if keywords are in description to avoid "(Buy: 10)" duplication
+  final cleanParts = <String>[];
+  for (final part in parts) {
+    if (part.startsWith("Buy") && lowerDesc.contains("buy")) {
+      final valStr = useWeight ? formatWeight(double.tryParse(entry.buyBags) ?? 0) : entry.buyBags.trim();
+      if (lowerDesc.contains(valStr)) {
+        continue; // completely omit if quantity is also present
+      }
+      cleanParts.add(part.replaceFirst(RegExp(r'Buy( Wt)?: '), ''));
+    } else if (part.startsWith("Sell") && lowerDesc.contains("sell")) {
+      final valStr = useWeight ? formatWeight(double.tryParse(entry.sellBags) ?? 0) : entry.sellBags.trim();
+      if (lowerDesc.contains(valStr)) {
+        continue; // completely omit if quantity is also present
+      }
+      cleanParts.add(part.replaceFirst(RegExp(r'Sell( Wt)?: '), ''));
+    } else {
+      cleanParts.add(part);
+    }
+  }
+
+  final bagsPart = cleanParts.join(" | ");
+  return bagsPart.isEmpty ? desc : "$desc ($bagsPart)";
 }

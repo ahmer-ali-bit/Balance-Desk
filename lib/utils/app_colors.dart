@@ -29,9 +29,9 @@ class AppColors {
   /// Returns the accent color for a balance string label.
   /// If the label contains "Debit" → green, "Credit" → red.
   static Color balanceLabelColor(String balanceLabel) {
-    final lower = balanceLabel.toLowerCase();
-    if (lower.contains('debit')) return debit;
-    if (lower.contains('credit')) return credit;
+    final upper = balanceLabel.toUpperCase();
+    if (upper.contains('DEBIT') || upper.endsWith(' D') || upper == 'D') return debit;
+    if (upper.contains('CREDIT') || upper.endsWith(' C') || upper == 'C') return credit;
     return const Color(0xFF6B7280);
   }
 }

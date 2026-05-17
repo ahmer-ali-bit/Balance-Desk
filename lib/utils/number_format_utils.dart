@@ -15,10 +15,10 @@ String formatAmount(double amount) {
 
 String formatBalance(double balance) {
   if (balance > 0) {
-    return '${formatAmount(balance)} Debit';
+    return '${formatAmount(balance)} D';
   }
   if (balance < 0) {
-    return '${formatAmount(balance.abs())} Credit';
+    return '${formatAmount(balance.abs())} C';
   }
   return '0';
 }

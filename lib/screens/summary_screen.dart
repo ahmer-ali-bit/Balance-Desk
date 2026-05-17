@@ -197,7 +197,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
           'Page No',
           'Total Debit',
           'Total Credit',
-          'Rem. Bags',
           'Balance',
         ],
         rows: rows,
@@ -251,7 +250,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
           'Page No',
           'Total Debit',
           'Total Credit',
-          'Rem. Bags',
           'Balance',
         ],
         rows: rows,
@@ -312,9 +310,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
           item.pageNo.isEmpty ? '-' : item.pageNo,
           _formatAmount(item.totalDebit),
           _formatAmount(item.totalCredit),
-          item.customer.isStockLedger
-              ? (item.customer.useWeight ? formatWeight(item.remainingBags) : formatBags(item.remainingBags))
-              : '-',
           _formatBalance(item.balance),
         ],
       ),
@@ -323,7 +318,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
         '-',
         _formatAmount(_summaryData.overallDebit),
         _formatAmount(_summaryData.overallCredit),
-        '-',
         _formatBalance(_summaryData.finalBalance),
       ],
     ];
@@ -343,9 +337,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
         item.pageNo.isEmpty ? '-' : item.pageNo,
         _formatAmount(item.totalDebit),
         _formatAmount(item.totalCredit),
-        item.customer.isStockLedger
-            ? (item.customer.useWeight ? formatWeight(item.remainingBags) : formatBags(item.remainingBags))
-            : '-',
         _formatBalance(item.balance),
       ]);
     }
@@ -356,7 +347,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
       '-',
       _formatAmount(_summaryData.overallDebit),
       _formatAmount(_summaryData.overallCredit),
-      '-',
       _formatBalance(_summaryData.finalBalance),
     ]);
 
@@ -888,8 +878,12 @@ class _SummaryScreenState extends State<SummaryScreen> {
                   DataColumn(label: Text('Page No')),
                   DataColumn(label: Text('Total Debit'), numeric: true),
                   DataColumn(label: Text('Total Credit'), numeric: true),
-                  DataColumn(label: Text('Remaining'), numeric: true),
-                  DataColumn(label: Text('Balance')),
+                  DataColumn(
+                    label: Padding(
+                      padding: const EdgeInsets.only(left: 32),
+                      child: Text('Balance'),
+                    ),
+                  ),
                 ],
                 rows: <DataRow>[
                   ...customers.map((item) {
@@ -922,17 +916,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
                           ),
                         ),
                         DataCell(
-                          Text(
-                            item.customer.isStockLedger
-                                ? (item.customer.useWeight ? formatWeight(item.remainingBags) : formatBags(item.remainingBags))
-                                : '-',
-                          ),
-                        ),
-                        DataCell(
-                          Text(
-                            _formatBalance(item.balance),
-                            style: TextStyle(
-                                color: AppColors.balanceColor(item.balance)),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 32),
+                            child: Text(
+                              _formatBalance(item.balance),
+                              style: TextStyle(
+                                  color: AppColors.balanceColor(item.balance)),
+                            ),
                           ),
                         ),
                       ],
@@ -1015,9 +1005,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
             credit: _formatAmount(item.totalCredit),
             balance: _formatBalance(item.balance),
             balanceColor: balanceColor,
-            bags: item.customer.isStockLedger
-                ? (item.customer.useWeight ? formatWeight(item.remainingBags) : formatBags(item.remainingBags))
-                : null,
           ),
         ],
       ),
@@ -1032,7 +1019,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
     required String credit,
     required String balance,
     required Color balanceColor,
-    String? bags,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -1068,16 +1054,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
               color: balanceColor,
             ),
           ),
-          if (bags != null) ...<Widget>[
-            _summaryStripDivider(context),
-            Expanded(
-              child: _SummaryStripItem(
-                label: isStock ? 'Rem.' : 'Remaining',
-                value: bags,
-                color: balanceColor,
-              ),
-            ),
-          ],
         ],
       ),
     );

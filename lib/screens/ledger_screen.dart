@@ -3369,23 +3369,6 @@ class _LedgerViewState extends State<_LedgerView> {
 
     List<Widget> displayChildren = children.reversed.toList();
 
-    // Pin Opening Balance to top for Customer Ledger
-    if (!provider.isStockLedger) {
-      int obIndex = -1;
-      for (int i = 0; i < displayChildren.length; i++) {
-        final entry = (provider.entries.toList())[i];
-        if (_isOpeningBalanceEntry(provider, entry)) {
-          obIndex = i;
-          break;
-        }
-      }
-      
-      if (obIndex != -1 && obIndex < displayChildren.length) {
-        final obWidget = displayChildren.removeAt(obIndex);
-        displayChildren.insert(0, obWidget);
-      }
-    }
-
     final List<Widget> spacedChildren = <Widget>[];
     for (var i = 0; i < displayChildren.length; i++) {
       if (i != 0) spacedChildren.add(const SizedBox(height: 12));
@@ -4291,23 +4274,6 @@ class _LedgerViewState extends State<_LedgerView> {
     }
 
     final resultRows = rows.reversed.toList();
-
-    // Pin Opening Balance to top for Customer Ledger
-    if (!provider.isStockLedger) {
-      int obIndex = -1;
-      final entries = provider.entries.toList();
-      for (int i = 0; i < resultRows.length; i++) {
-        if (_isOpeningBalanceEntry(provider, entries[i])) {
-          obIndex = i;
-          break;
-        }
-      }
-      
-      if (obIndex != -1 && obIndex < resultRows.length) {
-        final obRow = resultRows.removeAt(obIndex);
-        resultRows.insert(0, obRow);
-      }
-    }
 
     return resultRows;
   }
