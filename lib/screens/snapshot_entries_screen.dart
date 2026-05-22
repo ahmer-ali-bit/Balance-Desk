@@ -705,8 +705,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           entry.customerName,
           _formatDate(entry.entry.entryDate),
           _formatDescription(entry),
-          _formatAmount(entry.entry.debit),
-          _formatAmount(entry.entry.credit),
+          _formatAmount(entry.debit),
+          _formatAmount(entry.credit),
           '',
           entry.entry.pageNo.isEmpty ? '-' : entry.entry.pageNo,
         ]);
@@ -748,8 +748,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         entry.customerName,
         _formatDate(entry.entry.entryDate),
         _formatDescription(entry),
-        _formatAmount(entry.entry.debit),
-        _formatAmount(entry.entry.credit),
+        _formatAmount(entry.debit),
+        _formatAmount(entry.credit),
         '',
         entry.entry.pageNo.isEmpty ? '-' : entry.entry.pageNo,
       ]);
@@ -766,8 +766,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     var totalSellAmt = 0.0;
 
     for (final entry in _entries) {
-      totalBuyAmt += entry.entry.debit;
-      totalSellAmt += entry.entry.credit;
+      totalBuyAmt += entry.debit;
+      totalSellAmt += entry.credit;
     }
 
     final latestSnapshot = _latestSnapshot;
@@ -915,13 +915,13 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           startingBalance.debit +
           entries.fold<double>(
             0,
-            (double sum, _SnapshotEntry entry) => sum + entry.entry.debit,
+            (double sum, _SnapshotEntry entry) => sum + entry.debit,
           ),
       credit:
           startingBalance.credit +
           entries.fold<double>(
             0,
-            (double sum, _SnapshotEntry entry) => sum + entry.entry.credit,
+            (double sum, _SnapshotEntry entry) => sum + entry.credit,
           ),
     );
   }
@@ -1716,13 +1716,13 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
               children: <Widget>[
                 _CompactAmountChip(
                   label: 'Debit',
-                  value: _formatEntryAmount(item.entry.debit),
+                  value: _formatEntryAmount(item.debit),
                   icon: Icons.arrow_downward_rounded,
                   color: AppColors.debit,
                 ),
                 _CompactAmountChip(
                   label: 'Credit',
-                  value: _formatEntryAmount(item.entry.credit),
+                  value: _formatEntryAmount(item.credit),
                   icon: Icons.arrow_upward_rounded,
                   color: AppColors.credit,
                 ),
@@ -2078,8 +2078,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           const SizedBox(height: 10),
           _buildDailyAmountStrip(
             context,
-            debit: _formatEntryAmount(item.entry.debit),
-            credit: _formatEntryAmount(item.entry.credit),
+            debit: _formatEntryAmount(item.debit),
+            credit: _formatEntryAmount(item.credit),
           ),
         ],
       ),
@@ -2361,7 +2361,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         ),
         DataCell(
           Text(
-            _formatEntryAmount(item.entry.debit),
+            _formatEntryAmount(item.debit),
             style: const TextStyle(
               color: AppColors.debit,
               fontWeight: FontWeight.bold,
@@ -2370,7 +2370,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         ),
         DataCell(
           Text(
-            _formatEntryAmount(item.entry.credit),
+            _formatEntryAmount(item.credit),
             style: const TextStyle(
               color: AppColors.credit,
               fontWeight: FontWeight.bold,
@@ -2568,6 +2568,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       fontWeight: FontWeight.w600,
     );
 
+    final balance = carryForward.finalBalance;
+
     return DataRow(
       color: WidgetStatePropertyAll<Color?>(
         Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -2577,22 +2579,26 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         const DataCell(Text('-')),
         DataCell(Text('From previous snapshot', style: rowStyle)),
         DataCell(
-          Text(
-            _formatEntryAmount(carryForward.credit), // Sell Amount in Debit column
-            style: rowStyle?.copyWith(color: AppColors.debit),
-          ),
+          balance > 0
+              ? Text(
+                  _formatEntryAmount(balance.abs()),
+                  style: rowStyle?.copyWith(color: AppColors.debit),
+                )
+              : const Text(''),
+        ),
+        DataCell(
+          balance < 0
+              ? Text(
+                  _formatEntryAmount(balance.abs()),
+                  style: rowStyle?.copyWith(color: AppColors.credit),
+                )
+              : const Text(''),
         ),
         DataCell(
           Text(
-            _formatEntryAmount(carryForward.debit), // Buy Amount in Credit column
-            style: rowStyle?.copyWith(color: AppColors.credit),
-          ),
-        ),
-        DataCell(
-          Text(
-            _formatBalance(carryForward.finalBalance),
+            _formatBalance(balance),
             style: rowStyle?.copyWith(
-              color: AppColors.balanceColor(carryForward.finalBalance),
+              color: AppColors.balanceColor(balance),
             ),
           ),
         ),
@@ -2758,19 +2764,29 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
 }
 
 class _SnapshotEntry {
-  const _SnapshotEntry({required this.entry, required this.customerName, this.useWeight = false});
+  const _SnapshotEntry({
+    required this.entry,
+    required this.customerName,
+    this.useWeight = false,
+    this.isStockLedger = false,
+  });
 
   final Entry entry;
   final String customerName;
   final bool useWeight;
+  final bool isStockLedger;
 
   factory _SnapshotEntry.fromMap(Map<String, Object?> map) {
     return _SnapshotEntry(
       entry: Entry.fromMap(map),
       customerName: map['customerName'] as String? ?? '-',
       useWeight: map['useWeight'] == 1,
+      isStockLedger: map['isStockLedger'] == 1,
     );
   }
+
+  double get debit => isStockLedger ? entry.credit : entry.debit;
+  double get credit => isStockLedger ? entry.debit : entry.credit;
 }
 
 class _SnapshotTotals {

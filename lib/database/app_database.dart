@@ -910,7 +910,8 @@ class DatabaseHelper {
         e.dailyLogPageNo,
         e.showInDailyLog,
         c.name AS customerName,
-        c.useWeight
+        c.useWeight,
+        c.isStockLedger
       FROM $entriesTable e
       JOIN $customersTable c ON c.id = e.customerId
       WHERE ${whereClause.toString()} AND c.ledgerYear = ? AND e.showInDailyLog = 1
@@ -951,7 +952,8 @@ class DatabaseHelper {
         e.dailyLogPageNo,
         e.showInDailyLog,
         c.name AS customerName,
-        c.useWeight
+        c.useWeight,
+        c.isStockLedger
       FROM $entriesTable e
       JOIN $customersTable c ON c.id = e.customerId
       WHERE ${whereClause.toString()} AND c.ledgerYear = ? AND e.showInDailyLog = 1

@@ -880,7 +880,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                   DataColumn(label: Text('Total Credit'), numeric: true),
                   DataColumn(
                     label: Padding(
-                      padding: const EdgeInsets.only(left: 32),
+                      padding: EdgeInsets.only(left: 32),
                       child: Text('Balance'),
                     ),
                   ),

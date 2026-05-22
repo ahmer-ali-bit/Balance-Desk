@@ -1131,8 +1131,12 @@ pw.Widget _buildCompactTextTableBody({
     children: List<pw.TableRow>.generate(rows.length, (int rowIndex) {
       final row = rows[rowIndex];
       final isFirst = rowIndex == 0 && highlightFirstRow;
+      final isSnapshotTotal = row.isNotEmpty && row[0] == 'Snapshot Total';
+      final isBalanceBF = row.isNotEmpty && row[0] == 'Balance B/F';
+      final isHighlighted = isFirst || isSnapshotTotal || isBalanceBF;
+
       return pw.TableRow(
-        decoration: isFirst
+        decoration: isHighlighted
             ? const pw.BoxDecoration(color: PdfColor.fromInt(0xFFE3F2FD))
             : null,
         children: List<pw.Widget>.generate(headers.length, (int colIndex) {
@@ -1145,7 +1149,7 @@ pw.Widget _buildCompactTextTableBody({
               header.contains('rem. bags') || header.contains('remaining');
           final isBalance = header.contains('balance');
 
-          var currentStyle = isFirst ? highlightStyle : cellStyle;
+          var currentStyle = isHighlighted ? highlightStyle : cellStyle;
 
           // Apply bold for key columns
           if (isBuy ||
