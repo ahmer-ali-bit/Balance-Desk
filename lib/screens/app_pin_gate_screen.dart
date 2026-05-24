@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/app_pin_service.dart';
+import '../services/biometric_auth_service.dart';
 import '../widgets/app_pin_dialogs.dart';
 
 class AppPinGateScreen extends StatefulWidget {
@@ -17,6 +18,7 @@ enum _AppPinGateView { loading, setupPrompt, unlock, app }
 
 class _AppPinGateScreenState extends State<AppPinGateScreen> {
   final AppPinService _pinService = AppPinService();
+  final BiometricAuthService _biometricService = BiometricAuthService();
   final TextEditingController _unlockPinController = TextEditingController();
   final FocusNode _unlockPinFocusNode = FocusNode();
   final GlobalKey<FormState> _unlockFormKey = GlobalKey<FormState>();
@@ -24,6 +26,12 @@ class _AppPinGateScreenState extends State<AppPinGateScreen> {
   _AppPinGateView _view = _AppPinGateView.loading;
   bool _isSubmitting = false;
   String? _errorMessage;
+
+  /// Whether biometric is available on this device AND the user has it enabled.
+  bool _biometricReady = false;
+
+  /// Human-readable label for the biometric type (e.g. "Fingerprint", "Touch ID").
+  String _biometricLabel = 'Biometric';
 
   @override
   void initState() {
@@ -45,14 +53,38 @@ class _AppPinGateScreenState extends State<AppPinGateScreen> {
     }
 
     if (hasPin) {
+      // Check biometric availability and preference before showing unlock view.
+      final biometricAvailable = await _biometricService.isBiometricAvailable();
+      final biometricEnabled = await _biometricService.isBiometricEnabled();
+      final biometricReady = biometricAvailable && biometricEnabled;
+
+      if (biometricReady) {
+        final label = await _biometricService.getBiometricLabel();
+        if (!mounted) return;
+        _biometricLabel = label;
+      }
+
+      if (!mounted) return;
+
       setState(() {
+        _biometricReady = biometricReady;
         _view = _AppPinGateView.unlock;
       });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _view == _AppPinGateView.unlock) {
-          _unlockPinFocusNode.requestFocus();
-        }
-      });
+
+      // Auto-trigger biometric prompt if ready.
+      if (biometricReady) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _view == _AppPinGateView.unlock) {
+            _authenticateWithBiometric();
+          }
+        });
+      } else {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _view == _AppPinGateView.unlock) {
+            _unlockPinFocusNode.requestFocus();
+          }
+        });
+      }
       return;
     }
 
@@ -66,6 +98,24 @@ class _AppPinGateScreenState extends State<AppPinGateScreen> {
           ? _AppPinGateView.setupPrompt
           : _AppPinGateView.app;
     });
+  }
+
+  Future<void> _authenticateWithBiometric() async {
+    final success = await _biometricService.authenticate(
+      reason: 'Unlock Balance Desk',
+    );
+    if (!mounted) return;
+
+    if (success) {
+      setState(() {
+        _isSubmitting = false;
+        _unlockPinController.clear();
+        _view = _AppPinGateView.app;
+      });
+    } else {
+      // Biometric failed/cancelled — focus PIN field for manual entry.
+      _unlockPinFocusNode.requestFocus();
+    }
   }
 
   Future<void> _savePin() async {
@@ -224,16 +274,53 @@ class _AppPinGateScreenState extends State<AppPinGateScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Enter your app PIN to continue.',
+                _biometricReady
+                    ? 'Use $_biometricLabel or enter your PIN to continue.'
+                    : 'Enter your app PIN to continue.',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: 18),
+
+              // Biometric button — shown only when device supports it and user
+              // has enabled it in settings.
+              if (_biometricReady) ...<Widget>[
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _authenticateWithBiometric,
+                    icon: Icon(_biometricIcon),
+                    label: Text('Use $_biometricLabel'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: <Widget>[
+                    const Expanded(child: Divider()),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        'or enter PIN',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    const Expanded(child: Divider()),
+                  ],
+                ),
+                const SizedBox(height: 14),
+              ],
+
               TextFormField(
                 controller: _unlockPinController,
                 focusNode: _unlockPinFocusNode,
-                autofocus: true,
+                autofocus: !_biometricReady,
                 keyboardType: TextInputType.number,
                 textInputAction: TextInputAction.done,
                 obscureText: true,
@@ -278,5 +365,13 @@ class _AppPinGateScreenState extends State<AppPinGateScreen> {
       case _AppPinGateView.app:
         return const SizedBox.shrink();
     }
+  }
+
+  /// Returns an appropriate icon for the biometric type.
+  IconData get _biometricIcon {
+    if (_biometricLabel.contains('Face')) {
+      return Icons.face_rounded;
+    }
+    return Icons.fingerprint_rounded;
   }
 }

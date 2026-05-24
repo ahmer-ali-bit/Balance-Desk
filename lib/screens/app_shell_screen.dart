@@ -11,6 +11,7 @@ import '../providers/customer_provider.dart';
 import '../providers/ledger_year_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/app_pin_service.dart';
+import '../services/biometric_auth_service.dart';
 import '../services/company_profile_service.dart';
 import '../services/csv_backup_service.dart';
 import '../services/manual_update_service.dart';
@@ -35,12 +36,16 @@ class _AppShellScreenState extends State<AppShellScreen> {
   static const String _notesSettingKey = 'sidebar.notes';
 
   final AppPinService _appPinService = AppPinService();
+  final BiometricAuthService _biometricService = BiometricAuthService();
   final CompanyProfileService _companyProfileService = CompanyProfileService();
   final CsvBackupService _csvBackupService = CsvBackupService();
   final ManualUpdateService _manualUpdateService = ManualUpdateService.instance;
   int _selectedIndex = 0;
   int _reloadRevision = 0;
   bool _isPinEnabled = false;
+  bool _isBiometricAvailable = false;
+  bool _isBiometricEnabled = false;
+  String _biometricLabel = 'Fingerprint';
   CompanyProfile _companyProfile = const CompanyProfile(
     name: '',
     logoPath: null,
@@ -73,6 +78,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
   void initState() {
     super.initState();
     _loadPinStatus();
+    _loadBiometricStatus();
     _loadCompanyProfile();
     _loadSidebarNotes();
     _setupWorkspaceProvider();
@@ -104,6 +110,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
 
     // Reload sidebar data
     await _loadPinStatus();
+    await _loadBiometricStatus();
     await _loadCompanyProfile();
     await _loadSidebarNotes();
 
@@ -395,6 +402,21 @@ class _AppShellScreenState extends State<AppShellScreen> {
     });
   }
 
+  Future<void> _loadBiometricStatus() async {
+    final available = await _biometricService.isBiometricAvailable();
+    final enabled = await _biometricService.isBiometricEnabled();
+    final label = available ? await _biometricService.getBiometricLabel() : 'Fingerprint';
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isBiometricAvailable = available;
+      _isBiometricEnabled = enabled;
+      _biometricLabel = label;
+    });
+  }
+
   Future<void> _loadSidebarNotes() async {
     try {
       final notes =
@@ -498,27 +520,14 @@ class _AppShellScreenState extends State<AppShellScreen> {
     final action = await showDialog<_PinAction>(
       context: context,
       builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text('App PIN'),
-          content: const Text(
-            'You can change the current PIN or remove it completely.',
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () =>
-                  Navigator.of(dialogContext).pop(_PinAction.disable),
-              child: const Text('Turn Off PIN'),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.of(dialogContext).pop(_PinAction.change),
-              child: const Text('Change PIN'),
-            ),
-          ],
+        return _PinSettingsDialog(
+          isBiometricAvailable: _isBiometricAvailable,
+          isBiometricEnabled: _isBiometricEnabled,
+          biometricLabel: _biometricLabel,
+          onBiometricToggled: (bool enabled) async {
+            await _biometricService.setBiometricEnabled(enabled);
+            await _loadBiometricStatus();
+          },
         );
       },
     );
@@ -640,7 +649,11 @@ class _AppShellScreenState extends State<AppShellScreen> {
       return;
     }
 
+    // Also disable biometric when PIN is turned off.
+    await _biometricService.setBiometricEnabled(false);
+
     await _loadPinStatus();
+    await _loadBiometricStatus();
     if (!mounted) {
       return;
     }
@@ -1536,6 +1549,104 @@ class _DrawerListTile extends StatelessWidget {
 }
 
 enum _PinAction { change, disable }
+
+/// Dialog that shows PIN management options along with a biometric toggle.
+class _PinSettingsDialog extends StatefulWidget {
+  const _PinSettingsDialog({
+    required this.isBiometricAvailable,
+    required this.isBiometricEnabled,
+    required this.biometricLabel,
+    required this.onBiometricToggled,
+  });
+
+  final bool isBiometricAvailable;
+  final bool isBiometricEnabled;
+  final String biometricLabel;
+  final Future<void> Function(bool enabled) onBiometricToggled;
+
+  @override
+  State<_PinSettingsDialog> createState() => _PinSettingsDialogState();
+}
+
+class _PinSettingsDialogState extends State<_PinSettingsDialog> {
+  late bool _biometricOn;
+  bool _toggling = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _biometricOn = widget.isBiometricEnabled;
+  }
+
+  Future<void> _onBiometricChanged(bool value) async {
+    setState(() => _toggling = true);
+    await widget.onBiometricToggled(value);
+    if (!mounted) return;
+    setState(() {
+      _biometricOn = value;
+      _toggling = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return AlertDialog(
+      title: const Text('App PIN'),
+      content: SizedBox(
+        width: 340,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'You can change the current PIN or remove it completely.',
+            ),
+            if (widget.isBiometricAvailable) ...[
+              const SizedBox(height: 16),
+              Divider(height: 1, color: colorScheme.outlineVariant),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('${widget.biometricLabel} Unlock'),
+                subtitle: Text(
+                  _biometricOn
+                      ? 'App can be unlocked with ${widget.biometricLabel.toLowerCase()}'
+                      : 'Use ${widget.biometricLabel.toLowerCase()} to unlock app',
+                ),
+                secondary: Icon(
+                  widget.biometricLabel.contains('Face')
+                      ? Icons.face_rounded
+                      : Icons.fingerprint_rounded,
+                  color: _biometricOn ? colorScheme.primary : null,
+                ),
+                value: _biometricOn,
+                onChanged: _toggling ? null : _onBiometricChanged,
+              ),
+              Divider(height: 1, color: colorScheme.outlineVariant),
+            ],
+          ],
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () =>
+              Navigator.of(context).pop(_PinAction.disable),
+          child: const Text('Turn Off PIN'),
+        ),
+        FilledButton(
+          onPressed: () =>
+              Navigator.of(context).pop(_PinAction.change),
+          child: const Text('Change PIN'),
+        ),
+      ],
+    );
+  }
+}
 
 class _AddYearDialog extends StatefulWidget {
   const _AddYearDialog();

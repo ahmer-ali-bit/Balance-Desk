@@ -41,6 +41,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Balance Desk uses the camera to scan linked device QR invites.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Balance Desk uses Face ID to unlock the app securely.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
