@@ -1,6 +1,9 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:intl/intl.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -8,6 +11,7 @@ import 'package:printing/printing.dart';
 import '../models/customer.dart';
 import '../models/entry.dart';
 import '../utils/number_format_utils.dart';
+import '../utils/platform_helper.dart';
 
 const PdfColor debitColor = PdfColor.fromInt(0xFF16A34A);
 const PdfColor creditColor = PdfColor.fromInt(0xFFDC2626);
@@ -174,6 +178,22 @@ class PdfService {
     return pdf.save();
   }
 
+  Future<void> _handlePdfOutput(Uint8List bytes, String filename) async {
+    if (PlatformHelper.isMacOS || PlatformHelper.isWindows) {
+      try {
+        final tempDir = await getTemporaryDirectory();
+        final file = File('${tempDir.path}/$filename');
+        await file.writeAsBytes(bytes);
+        await OpenFilex.open(file.path);
+      } catch (e) {
+        // Fallback to share sheet in case of error
+        await Printing.sharePdf(bytes: bytes, filename: filename);
+      }
+    } else {
+      await Printing.sharePdf(bytes: bytes, filename: filename);
+    }
+  }
+
   Future<void> exportCustomerLedgerPdf({
     required Customer customer,
     required List<Entry> entries,
@@ -182,10 +202,7 @@ class PdfService {
       customer: customer,
       entries: entries,
     );
-    await Printing.sharePdf(
-      bytes: bytes,
-      filename: _buildFileName(customer.name),
-    );
+    await _handlePdfOutput(bytes, _buildFileName(customer.name));
   }
 
   Future<void> printCustomerLedgerPdf({
@@ -222,7 +239,7 @@ class PdfService {
       openingBalanceRow: openingBalanceRow,
     );
 
-    await Printing.sharePdf(bytes: bytes, filename: fileName);
+    await _handlePdfOutput(bytes, fileName);
   }
 
   Future<Uint8List> generateSnapshotPdf({
@@ -688,7 +705,7 @@ class PdfService {
                   child: _buildTotalCard(
                     label: useWeight ? 'Buy Wt' : 'Buy',
                     value: useWeight ? formatWeight(totalBuyBags) : _formatBags(totalBuyBags),
-                    color: debitLightColor,
+                    color: creditLightColor,
                     isCompact: true,
                   ),
                 ),
@@ -697,7 +714,7 @@ class PdfService {
                   child: _buildTotalCard(
                     label: 'Buy Amt',
                     value: _formatAmount(totalDebit),
-                    color: debitLightColor,
+                    color: creditLightColor,
                     isCompact: true,
                   ),
                 ),
@@ -706,7 +723,7 @@ class PdfService {
                   child: _buildTotalCard(
                     label: useWeight ? 'Sell Wt' : 'Sell',
                     value: useWeight ? formatWeight(totalSellBags) : _formatBags(totalSellBags),
-                    color: creditLightColor,
+                    color: debitLightColor,
                     isCompact: true,
                   ),
                 ),
@@ -715,7 +732,7 @@ class PdfService {
                   child: _buildTotalCard(
                     label: 'Sell Amt',
                     value: _formatAmount(totalCredit),
-                    color: creditLightColor,
+                    color: debitLightColor,
                     isCompact: true,
                   ),
                 ),

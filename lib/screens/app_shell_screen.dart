@@ -851,12 +851,13 @@ class _AppShellScreenState extends State<AppShellScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(error.message)));
-    } catch (_) {
+    } catch (error, stackTrace) {
+      debugPrint('Restore failed: $error\n$stackTrace');
       if (!mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to restore backup right now.')),
+        SnackBar(content: Text('Restore failed: $error')),
       );
     }
   }

@@ -10,6 +10,7 @@ import '../database/app_database.dart';
 import '../models/customer.dart';
 import '../models/entry.dart';
 import '../models/snapshot_opening_balance.dart';
+import '../models/summary_snapshot.dart';
 import '../providers/customer_provider.dart';
 import '../providers/ledger_provider.dart';
 import '../services/export_service.dart';
@@ -265,15 +266,131 @@ class _LedgerViewState extends State<_LedgerView> {
   Future<void> _addEntryToDailyLog(LedgerProvider provider, Entry entry) async {
     if (entry.id == null) return;
     try {
-      await AppDatabase.instance.updateEntryDailyLogVisibility(
-        entryId: entry.id!,
-        show: true,
-      );
-      await provider.loadEntries();
+      // 1. Fetch saved snapshots
+      final snapshotRows = await AppDatabase.instance.getSummarySnapshots();
+      final snapshots = snapshotRows
+          .map<SummarySnapshot>((row) => SummarySnapshot.fromMap(row))
+          .toList()
+        ..sort((a, b) => b.savedAt.compareTo(a.savedAt)); // Newest first
+
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Entry added to Daily Logs')),
+
+      if (snapshots.isEmpty) {
+        // If there are no saved snapshots, add directly to daily log
+        await AppDatabase.instance.updateEntryDailyLogVisibility(
+          entryId: entry.id!,
+          show: true,
+        );
+        await provider.loadEntries();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Entry added to Daily Logs')),
+        );
+        return;
+      }
+
+      // 2. Show choice dialog
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Add to Daily Logs'),
+            content: const Text(
+              'Do you want to add this entry to the current active Daily Log, or do you want to add it into a previously saved snapshot?',
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop('cancel'),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop('active'),
+                child: const Text('Current Daily Log'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop('snapshot'),
+                child: const Text('Saved Snapshot'),
+              ),
+            ],
+          );
+        },
       );
+
+      if (!mounted || choice == null || choice == 'cancel') return;
+
+      if (choice == 'active') {
+        // Option 1: Add to current daily log
+        await AppDatabase.instance.updateEntryDailyLogVisibility(
+          entryId: entry.id!,
+          show: true,
+        );
+        await provider.loadEntries();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Entry added to Daily Logs')),
+        );
+      } else if (choice == 'snapshot') {
+        // Option 2: Add to a specific saved snapshot
+        if (!mounted) return;
+        
+        final selectedSnapshot = await showDialog<SummarySnapshot>(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text('Select Saved Snapshot'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: snapshots.length,
+                  itemBuilder: (BuildContext context, int index) {
+                    final snapshot = snapshots[index];
+                    final dateStr = snapshot.savedAt.split('T')[0];
+                    final timeParts = snapshot.savedAt.split('T')[1].split(':');
+                    final timeStr = '${timeParts[0]}:${timeParts[1]}';
+                    final pageNo = snapshot.dailyLogPageNo;
+                    final pageSuffix = pageNo.isNotEmpty ? ' (Page: $pageNo)' : '';
+                    return ListTile(
+                      leading: const Icon(Icons.history_toggle_off),
+                      title: Text('$dateStr $timeStr$pageSuffix'),
+                      subtitle: Text(
+                        'Debit: ${provider.formatAmount(snapshot.overallDebit)} | Credit: ${provider.formatAmount(snapshot.overallCredit)}',
+                      ),
+                      onTap: () {
+                        Navigator.of(context).pop(snapshot);
+                      },
+                    );
+                  },
+                ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            );
+          },
+        );
+
+        if (selectedSnapshot == null) return;
+
+        // Perform the update
+        await AppDatabase.instance.addEntryToSavedSnapshot(
+          entryId: entry.id!,
+          savedAt: selectedSnapshot.savedAt,
+          dailyLogPageNo: selectedSnapshot.dailyLogPageNo.isNotEmpty ? selectedSnapshot.dailyLogPageNo : null,
+        );
+
+        await provider.loadEntries();
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Entry added to the selected Saved Snapshot successfully.'),
+          ),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2918,7 +3035,7 @@ class _LedgerViewState extends State<_LedgerView> {
           builder: (BuildContext context, BoxConstraints constraints) {
             final isDesktop = PlatformHelper.isDesktop;
             final isCompact = !isDesktop && constraints.maxWidth < 760;
-            final useCardLayout = constraints.maxWidth < 760;
+            final useCardLayout = constraints.maxWidth < 1100;
             final hasFab = isCompact;
             const desktopHorizontalPadding = 20.0;
             final desktopPageWidth = constraints.maxWidth;
@@ -3257,17 +3374,23 @@ class _LedgerViewState extends State<_LedgerView> {
       builder: (BuildContext context, BoxConstraints constraints) {
         final horizontalMargin = PlatformHelper.isDesktop
             ? constraints.maxWidth >= 1700
-                  ? 22.0
+                  ? 20.0
                   : constraints.maxWidth >= 1450
-                  ? 16.0
-                  : 12.0
+                  ? 14.0
+                  : constraints.maxWidth >= 1100
+                  ? 10.0
+                  : 6.0
             : 12.0;
         final columnSpacing = PlatformHelper.isDesktop
             ? constraints.maxWidth >= 1700
-                  ? 42.0
+                  ? 38.0
                   : constraints.maxWidth >= 1450
-                  ? 28.0
-                  : 18.0
+                  ? 24.0
+                  : constraints.maxWidth >= 1100
+                  ? 14.0
+                  : constraints.maxWidth >= 950
+                  ? 8.0
+                  : 4.0
             : 18.0;
 
         return Card(
@@ -3288,28 +3411,28 @@ class _LedgerViewState extends State<_LedgerView> {
                 ),
                 columns: provider.isStockLedger
                     ? <DataColumn>[
-                        const DataColumn(label: Text('Entry Date')),
-                        const DataColumn(label: Text('Created Date')),
-                        const DataColumn(label: Text('Page No')),
-                        DataColumn(label: Text(provider.useWeight ? 'Buy Weight' : 'Buy'), numeric: true),
-                        const DataColumn(label: Text('Buy Amount'), numeric: true),
-                        DataColumn(label: Text(provider.useWeight ? 'Sell Weight' : 'Sell'), numeric: true),
-                        const DataColumn(label: Text('Sell Amount'), numeric: true),
-                        DataColumn(label: Text(provider.useWeight ? 'Rem. Weight' : 'Remaining'), numeric: true),
-                        const DataColumn(label: Text('Balance')),
-                        const DataColumn(label: Text('Actions')),
+                        const DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Entry Date'))),
+                        const DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Created Date'))),
+                        const DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Page No'))),
+                        DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text(provider.useWeight ? 'Buy Weight' : 'Buy')), numeric: true),
+                        const DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Buy Amount')), numeric: true),
+                        DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text(provider.useWeight ? 'Sell Weight' : 'Sell')), numeric: true),
+                        const DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Sell Amount')), numeric: true),
+                        DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text(provider.useWeight ? 'Rem. Weight' : 'Remaining')), numeric: true),
+                        const DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Balance'))),
+                        const DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Actions'))),
                       ]
                     : const <DataColumn>[
-                        DataColumn(label: Text('Entry Date')),
-                        DataColumn(label: Text('Created Date')),
-                        DataColumn(label: Text('Page No')),
-                        DataColumn(label: Text('Description')),
-                        DataColumn(label: Text('Debit'), numeric: true),
-                        DataColumn(label: Text('Credit'), numeric: true),
-                        DataColumn(label: Text('Balance')),
-                        DataColumn(label: Text('Actions')),
+                        DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Entry Date'))),
+                        DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Created Date'))),
+                        DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Page No'))),
+                        DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Description'))),
+                        DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Debit')), numeric: true),
+                        DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Credit')), numeric: true),
+                        DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Balance'))),
+                        DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Actions'))),
                       ],
-                rows: _buildLedgerRows(provider, compact: false),
+                rows: _buildLedgerRows(provider, compact: constraints.maxWidth < 1100),
               ),
             ),
           ),
@@ -4204,7 +4327,7 @@ class _LedgerViewState extends State<_LedgerView> {
         cells.addAll(<DataCell>[
           DataCell(
             SizedBox(
-              width: compact ? 220 : 260,
+              width: compact ? 120 : 260,
               child: Text(
                 isOpeningBalanceEntry ? 'Opening Balance' : entry.displayDescription,
                 maxLines: 1,

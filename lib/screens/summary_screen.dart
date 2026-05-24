@@ -848,7 +848,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
   ) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final isCompactTable = constraints.maxWidth < 760;
+        final isCompactTable = constraints.maxWidth < 1100;
         if (isCompactTable) {
           return _buildSummaryCardList(context, customers);
         }

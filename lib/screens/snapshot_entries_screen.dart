@@ -2202,7 +2202,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   Widget _buildEntryTable(BuildContext context) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final isCompactTable = constraints.maxWidth < 760;
+        final isCompactTable = constraints.maxWidth < 1100;
         if (isCompactTable) {
           return _buildCompactTimeline(context);
         }

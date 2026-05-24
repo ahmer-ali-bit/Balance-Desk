@@ -1108,6 +1108,74 @@ class DatabaseHelper {
     );
   }
 
+  Future<void> addEntryToSavedSnapshot({
+    required int entryId,
+    required String savedAt,
+    required String? dailyLogPageNo,
+  }) async {
+    final db = await database;
+    await db.update(
+      entriesTable,
+      <String, Object?>{
+        'showInDailyLog': 1,
+        'createdAt': savedAt,
+        if (dailyLogPageNo != null) 'dailyLogPageNo': dailyLogPageNo,
+      },
+      where: 'id = ?',
+      whereArgs: <Object?>[entryId],
+    );
+    await recalculateAllSnapshots();
+  }
+
+  Future<void> recalculateAllSnapshots() async {
+    // 1. Get snapshots sorted by savedAt
+    final snapshotRows = await getSummarySnapshots();
+    final snapshots = List<Map<String, Object?>>.from(snapshotRows);
+    snapshots.sort((a, b) {
+      final savedAtA = a['savedAt'] as String;
+      final savedAtB = b['savedAt'] as String;
+      return savedAtA.compareTo(savedAtB);
+    });
+        
+    // 2. Get snapshot opening balance
+    final openingBalance = await getSnapshotOpeningBalance();
+    
+    String? previousSavedAt;
+    SnapshotOpeningBalance currentStartingBalance = openingBalance ?? const SnapshotOpeningBalance(debit: 0, credit: 0);
+
+    for (final snapshot in snapshots) {
+      final snapshotId = snapshot['id'] as int?;
+      final savedAt = snapshot['savedAt'] as String;
+      if (snapshotId == null) continue;
+
+      // Load entries in this range
+      final entries = await getEntriesWithCustomerRangePaged(
+        startDate: previousSavedAt,
+        endDate: savedAt,
+        limit: 1000000,
+        offset: 0,
+      );
+
+      double debitSum = currentStartingBalance.debit;
+      double creditSum = currentStartingBalance.credit;
+
+      for (final entryRow in entries) {
+        debitSum += (entryRow['debit'] as num?)?.toDouble() ?? 0.0;
+        creditSum += (entryRow['credit'] as num?)?.toDouble() ?? 0.0;
+      }
+
+      await updateSummarySnapshotTotals(
+        id: snapshotId,
+        overallDebit: debitSum,
+        overallCredit: creditSum,
+      );
+
+      final finalBalance = debitSum - creditSum;
+      currentStartingBalance = _balanceToOpeningBalance(finalBalance);
+      previousSavedAt = savedAt;
+    }
+  }
+
   Future<List<int>> getLedgerYears() async {
     final db = await database;
     final rows = await db.query(
@@ -2148,6 +2216,22 @@ class AppDatabase {
   Future<int> deleteCustomer(int id) => _helper.deleteCustomer(id);
 
   Future<bool> resetCustomerIdSequence() => _helper.resetCustomerIdSequence();
+
+  Future<void> addEntryToSavedSnapshot({
+    required int entryId,
+    required String savedAt,
+    required String? dailyLogPageNo,
+  }) {
+    return _helper.addEntryToSavedSnapshot(
+      entryId: entryId,
+      savedAt: savedAt,
+      dailyLogPageNo: dailyLogPageNo,
+    );
+  }
+
+  Future<void> recalculateAllSnapshots() {
+    return _helper.recalculateAllSnapshots();
+  }
 
   Future<void> close() => _helper.close();
 }

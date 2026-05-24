@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
@@ -166,44 +167,51 @@ class CsvBackupService {
       );
     }
 
-    final backupData = _decodeBackupPayload(payload);
-    final preservedLocalSettings = await _loadLocalOnlySettings();
-    final mergedSettings = _mergeRestoredSettings(
-      backupData.settings,
-      preservedLocalSettings,
-    );
-
-    await _database.restoreFromCsv(
-      customers: backupData.customersCsv,
-      entries: backupData.entriesCsv,
-      snapshots: backupData.snapshotsCsv,
-      years: backupData.yearsCsv,
-      settings: mergedSettings,
-    );
-
-    if (backupData.logoBase64 == null || backupData.logoBase64!.isEmpty) {
-      await _companyProfileService.clearLogo();
-      return;
-    }
-
     try {
-      final bytes = base64Decode(backupData.logoBase64!);
-      final logoPath = await _companyProfileService.saveLogoBytes(
-        bytes: bytes,
-        extension: backupData.logoExtension ?? '.png',
+      final backupData = _decodeBackupPayload(payload);
+      final preservedLocalSettings = await _loadLocalOnlySettings();
+      final mergedSettings = _mergeRestoredSettings(
+        backupData.settings,
+        preservedLocalSettings,
       );
-      if (logoPath == null || logoPath.isEmpty) {
+
+      await _database.restoreFromCsv(
+        customers: backupData.customersCsv,
+        entries: backupData.entriesCsv,
+        snapshots: backupData.snapshotsCsv,
+        years: backupData.yearsCsv,
+        settings: mergedSettings,
+      );
+
+      if (backupData.logoBase64 == null || backupData.logoBase64!.isEmpty) {
+        await _companyProfileService.clearLogo();
         return;
       }
-      final profile = await _companyProfileService.loadProfile();
-      await _companyProfileService.saveProfile(
-        name: profile.name,
-        logoPath: logoPath,
-      );
-    } on FormatException {
-      throw const CsvBackupException(
-        'Backup logo data is invalid and could not be restored.',
-      );
+
+      try {
+        final bytes = base64Decode(backupData.logoBase64!);
+        final logoPath = await _companyProfileService.saveLogoBytes(
+          bytes: bytes,
+          extension: backupData.logoExtension ?? '.png',
+        );
+        if (logoPath == null || logoPath.isEmpty) {
+          return;
+        }
+        final profile = await _companyProfileService.loadProfile();
+        await _companyProfileService.saveProfile(
+          name: profile.name,
+          logoPath: logoPath,
+        );
+      } on FormatException {
+        throw const CsvBackupException(
+          'Backup logo data is invalid and could not be restored.',
+        );
+      }
+    } catch (error) {
+      if (error is CsvBackupException) {
+        rethrow;
+      }
+      throw CsvBackupException('Unable to restore backup: $error');
     }
   }
 
@@ -390,6 +398,20 @@ class CsvBackupService {
 
   Future<String?> _pickBackupSavePath() async {
     final fileName = _buildBackupFileName();
+    if (Platform.isMacOS) {
+      try {
+        final selectedDirectory = await FilePicker.platform.getDirectoryPath(
+          dialogTitle: 'Select Folder to Save Backup',
+        );
+        if (selectedDirectory == null || selectedDirectory.isEmpty) {
+          return null;
+        }
+        return path.join(selectedDirectory, fileName);
+      } catch (e) {
+        debugPrint('Failed to get directory path on macOS: $e');
+      }
+    }
+
     try {
       final path = await FilePicker.platform.saveFile(
         dialogTitle: 'Save Backup File',
