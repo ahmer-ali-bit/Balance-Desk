@@ -16,7 +16,7 @@ class ExportService {
   }) async {
     String? savePath;
     try {
-      savePath = await FilePicker.platform.saveFile(
+      savePath = await FilePicker.saveFile(
         dialogTitle: dialogTitle,
         fileName: fileName,
         type: FileType.custom,

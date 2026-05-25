@@ -23,7 +23,7 @@ class ManualUpdateService {
     final allowedExtensions = PlatformHelper.isAndroid
         ? const <String>['apk']
         : const <String>['exe', 'zip'];
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: allowedExtensions,
       dialogTitle: 'Select update file',

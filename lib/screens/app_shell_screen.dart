@@ -934,17 +934,33 @@ class _AppShellScreenState extends State<AppShellScreen> {
                             children: <Widget>[
                               OutlinedButton.icon(
                                 onPressed: () async {
-                                  final result = await FilePicker.platform
-                                      .pickFiles(type: FileType.image);
-                                  if (result == null ||
-                                      result.files.isEmpty ||
-                                      result.files.first.path == null) {
-                                    return;
+                                  try {
+                                    final result = await FilePicker
+                                        .pickFiles(
+                                      type: FileType.custom,
+                                      allowedExtensions: [
+                                        'jpg',
+                                        'jpeg',
+                                        'png',
+                                        'gif',
+                                        'bmp',
+                                        'webp',
+                                      ],
+                                      allowMultiple: false,
+                                    );
+                                    if (result == null ||
+                                        result.files.isEmpty ||
+                                        result.files.first.path == null) {
+                                      return;
+                                    }
+                                    setState(() {
+                                      pickedLogoPath = result.files.first.path;
+                                      removeLogo = false;
+                                    });
+                                  } catch (e) {
+                                    // ignore: avoid_print
+                                    print('FilePicker error: $e');
                                   }
-                                  setState(() {
-                                    pickedLogoPath = result.files.first.path;
-                                    removeLogo = false;
-                                  });
                                 },
                                 icon: const Icon(Icons.upload_file_outlined),
                                 label: const Text('Choose Logo'),

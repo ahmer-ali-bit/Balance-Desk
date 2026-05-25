@@ -400,7 +400,7 @@ class CsvBackupService {
     final fileName = _buildBackupFileName();
     if (Platform.isMacOS) {
       try {
-        final selectedDirectory = await FilePicker.platform.getDirectoryPath(
+        final selectedDirectory = await FilePicker.getDirectoryPath(
           dialogTitle: 'Select Folder to Save Backup',
         );
         if (selectedDirectory == null || selectedDirectory.isEmpty) {
@@ -413,7 +413,7 @@ class CsvBackupService {
     }
 
     try {
-      final path = await FilePicker.platform.saveFile(
+      final path = await FilePicker.saveFile(
         dialogTitle: 'Save Backup File',
         fileName: fileName,
         type: FileType.custom,
@@ -429,7 +429,7 @@ class CsvBackupService {
   }
 
   Future<String?> _pickBackupFilePath() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       dialogTitle: 'Select Backup File',
       type: FileType.custom,
       allowedExtensions: const <String>[_backupExtension],

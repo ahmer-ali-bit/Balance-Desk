@@ -16,7 +16,7 @@ class BackupService {
     final backupFileName = _buildBackupFileName();
     String? savePath;
     try {
-      savePath = await FilePicker.platform.saveFile(
+      savePath = await FilePicker.saveFile(
         dialogTitle: 'Create Backup File',
         fileName: backupFileName,
         type: FileType.custom,
@@ -57,7 +57,7 @@ class BackupService {
   }
 
   Future<String?> restoreDatabase() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       dialogTitle: 'Select Backup File',
       type: FileType.custom,
       allowedExtensions: const <String>['db', 'sqlite', 'sqlite3'],
