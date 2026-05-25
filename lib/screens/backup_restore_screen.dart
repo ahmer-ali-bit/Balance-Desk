@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -73,6 +74,42 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
+  }
+
+  Future<void> _saveBackupToFolder() async {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+    try {
+      final fileName = _buildBackupFileName();
+      final directoryPath = await FilePicker.getDirectoryPath(
+        dialogTitle: 'Select folder to save backup',
+      );
+      if (directoryPath == null || !mounted) return;
+      final filePath = p.join(directoryPath, fileName);
+      await _service.backupToFile(filePath);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Backup saved\n$filePath'),
+      ));
+      _refresh();
+    } on CsvBackupException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
+  }
+
+  String _buildBackupFileName() {
+    final now = DateTime.now();
+    final stamp =
+        '${now.year}'
+        '${now.month.toString().padLeft(2, '0')}'
+        '${now.day.toString().padLeft(2, '0')}_'
+        '${now.hour.toString().padLeft(2, '0')}'
+        '${now.minute.toString().padLeft(2, '0')}'
+        '${now.second.toString().padLeft(2, '0')}';
+    return 'balance_desk_backup_$stamp.json';
   }
 
   Future<void> _pickAndRestore() async {
@@ -151,23 +188,43 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // ── Action cards row ──
-              Row(
-                children: [
-                  Expanded(child: _buildActionCard(
-                    theme, cs,
+              if (Platform.isAndroid || Platform.isIOS) ...[
+                // Mobile: three cards
+                Row(children: [
+                  Expanded(child: _buildActionCard(theme, cs,
+                    icon: Icons.backup_rounded,
+                    label: 'Quick Backup',
+                    onTap: _createBackup,
+                  )),
+                  const SizedBox(width: 8),
+                  Expanded(child: _buildActionCard(theme, cs,
+                    icon: Icons.folder_open_rounded,
+                    label: 'Save to…',
+                    onTap: _saveBackupToFolder,
+                  )),
+                  const SizedBox(width: 8),
+                  Expanded(child: _buildActionCard(theme, cs,
+                    icon: Icons.restore_page_rounded,
+                    label: 'Pick & Restore',
+                    onTap: _pickAndRestore,
+                  )),
+                ]),
+              ] else ...[
+                // Desktop: two cards
+                Row(children: [
+                  Expanded(child: _buildActionCard(theme, cs,
                     icon: Icons.backup_rounded,
                     label: 'Create Backup',
                     onTap: _createBackup,
                   )),
                   const SizedBox(width: 12),
-                  Expanded(child: _buildActionCard(
-                    theme, cs,
+                  Expanded(child: _buildActionCard(theme, cs,
                     icon: Icons.restore_page_rounded,
                     label: 'Pick & Restore',
                     onTap: _pickAndRestore,
                   )),
-                ],
-              ),
+                ]),
+              ],
               const SizedBox(height: 28),
               // ── Recent backups header ──
               Row(
