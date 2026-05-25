@@ -13,7 +13,6 @@ import '../providers/workspace_provider.dart';
 import '../services/app_pin_service.dart';
 import '../services/biometric_auth_service.dart';
 import '../services/company_profile_service.dart';
-import '../services/csv_backup_service.dart';
 import '../services/manual_update_service.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/app_pin_dialogs.dart';
@@ -22,6 +21,7 @@ import '../widgets/scale_down_width.dart';
 import 'customer_list_screen.dart';
 import 'snapshot_entries_screen.dart';
 import 'summary_screen.dart';
+import 'backup_restore_screen.dart';
 import '../features/linked_devices/screens/linked_devices_screen.dart';
 import '../features/linked_devices/providers/linked_session_provider.dart';
 
@@ -38,7 +38,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
   final AppPinService _appPinService = AppPinService();
   final BiometricAuthService _biometricService = BiometricAuthService();
   final CompanyProfileService _companyProfileService = CompanyProfileService();
-  final CsvBackupService _csvBackupService = CsvBackupService();
   final ManualUpdateService _manualUpdateService = ManualUpdateService.instance;
   int _selectedIndex = 0;
   int _reloadRevision = 0;
@@ -335,15 +334,12 @@ class _AppShellScreenState extends State<AppShellScreen> {
       },
       onBackupRequested: () => _runDrawerAction(
         closeDrawerOnAction: closeDrawerOnAction,
-        action: _createManualBackup,
+        action: _openBackupRestoreScreen,
       ),
+
       onPinRequested: () => _runDrawerAction(
         closeDrawerOnAction: closeDrawerOnAction,
         action: _openPinSettings,
-      ),
-      onRestoreBackupRequested: () => _runDrawerAction(
-        closeDrawerOnAction: closeDrawerOnAction,
-        action: _restoreBackup,
       ),
       onCompanyProfileRequested: () => _runDrawerAction(
         closeDrawerOnAction: closeDrawerOnAction,
@@ -814,65 +810,12 @@ class _AppShellScreenState extends State<AppShellScreen> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<void> _createManualBackup() async {
-    try {
-      final path = await _csvBackupService.createBackupFile();
-      if (!mounted) {
-        return;
-      }
-      if (path == null) {
-        return;
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Backup saved.\n$path')));
-    } on CsvBackupException catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.message)));
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to create backup right now.')),
-      );
-    }
-  }
-
-  Future<void> _restoreBackup() async {
-    try {
-      final filePath = await _csvBackupService.restoreBackupFile();
-      if (!mounted || filePath == null || filePath.isEmpty) {
-        return;
-      }
-
-      await _reloadActiveYearData();
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Backup restored.')));
-    } on CsvBackupException catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.message)));
-    } catch (error, stackTrace) {
-      debugPrint('Restore failed: $error\n$stackTrace');
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Restore failed: $error')),
-      );
-    }
+  Future<void> _openBackupRestoreScreen() async {
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const BackupRestoreScreen()),
+    );
   }
 
   Future<void> _openCompanyProfileEditor({bool isInitial = false}) async {
@@ -886,41 +829,29 @@ class _AppShellScreenState extends State<AppShellScreen> {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setState) {
             Widget logoPreview() {
-              if (removeLogo) {
-                return const SizedBox.shrink();
-              }
+              if (removeLogo) return const SizedBox.shrink();
               final path = pickedLogoPath;
-              if (path == null || path.trim().isEmpty) {
-                return const SizedBox.shrink();
-              }
+              if (path == null || path.trim().isEmpty) return const SizedBox.shrink();
               final file = File(path);
-              if (!file.existsSync()) {
-                return const SizedBox.shrink();
-              }
+              if (!file.existsSync()) return const SizedBox.shrink();
               return CircleAvatar(radius: 28, backgroundImage: FileImage(file));
             }
 
             return AlertDialog(
-              title: Text(
-                isInitial ? 'Set Company Profile' : 'Company Profile',
-              ),
+              title: Text(isInitial ? 'Set Company Profile' : 'Company Profile'),
               content: SizedBox(
                 width: 380,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(
-                      'Company name and logo are optional. You can update them anytime.',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                    Text('Company name and logo are optional. You can update them anytime.',
+                        style: Theme.of(context).textTheme.bodySmall),
                     const SizedBox(height: 16),
                     TextField(
                       controller: nameController,
                       textInputAction: TextInputAction.done,
-                      decoration: const InputDecoration(
-                        labelText: 'Company name',
-                      ),
+                      decoration: const InputDecoration(labelText: 'Company name'),
                     ),
                     const SizedBox(height: 16),
                     Row(
@@ -929,51 +860,28 @@ class _AppShellScreenState extends State<AppShellScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
+                            spacing: 8, runSpacing: 8,
                             children: <Widget>[
                               OutlinedButton.icon(
                                 onPressed: () async {
                                   try {
-                                    final result = await FilePicker
-                                        .pickFiles(
+                                    final result = await FilePicker.pickFiles(
                                       type: FileType.custom,
-                                      allowedExtensions: [
-                                        'jpg',
-                                        'jpeg',
-                                        'png',
-                                        'gif',
-                                        'bmp',
-                                        'webp',
-                                      ],
+                                      allowedExtensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'],
                                       allowMultiple: false,
                                     );
-                                    if (result == null ||
-                                        result.files.isEmpty ||
-                                        result.files.first.path == null) {
-                                      return;
-                                    }
-                                    setState(() {
-                                      pickedLogoPath = result.files.first.path;
-                                      removeLogo = false;
-                                    });
+                                    if (result == null || result.files.isEmpty || result.files.first.path == null) return;
+                                    setState(() { pickedLogoPath = result.files.first.path; removeLogo = false; });
                                   } catch (e) {
-                                    // ignore: avoid_print
                                     print('FilePicker error: $e');
                                   }
                                 },
                                 icon: const Icon(Icons.upload_file_outlined),
                                 label: const Text('Choose Logo'),
                               ),
-                              if (pickedLogoPath != null &&
-                                  pickedLogoPath!.trim().isNotEmpty)
+                              if (pickedLogoPath != null && pickedLogoPath!.trim().isNotEmpty)
                                 TextButton(
-                                  onPressed: () {
-                                    setState(() {
-                                      removeLogo = true;
-                                      pickedLogoPath = null;
-                                    });
-                                  },
+                                  onPressed: () { setState(() { removeLogo = true; pickedLogoPath = null; }); },
                                   child: const Text('Remove Logo'),
                                 ),
                             ],
@@ -997,11 +905,9 @@ class _AppShellScreenState extends State<AppShellScreen> {
                     if (removeLogo) {
                       await _companyProfileService.clearLogo();
                       logoPath = '';
-                    } else if (pickedLogoPath != null &&
-                        pickedLogoPath!.trim().isNotEmpty) {
+                    } else if (pickedLogoPath != null && pickedLogoPath!.trim().isNotEmpty) {
                       if (pickedLogoPath != _companyProfile.logoPath) {
-                        logoPath = await _companyProfileService
-                            .copyLogoToAppDir(pickedLogoPath!);
+                        logoPath = await _companyProfileService.copyLogoToAppDir(pickedLogoPath!);
                       } else {
                         logoPath = _companyProfile.logoPath;
                       }
@@ -1009,18 +915,10 @@ class _AppShellScreenState extends State<AppShellScreen> {
                       logoPath = _companyProfile.logoPath;
                     }
 
-                    await _companyProfileService.saveProfile(
-                      name: name,
-                      logoPath: logoPath,
-                    );
-
-                    if (!dialogContext.mounted) {
-                      return;
-                    }
+                    await _companyProfileService.saveProfile(name: name, logoPath: logoPath);
+                    if (!dialogContext.mounted) return;
                     Navigator.of(dialogContext).pop(false);
-                    if (!mounted) {
-                      return;
-                    }
+                    if (!mounted) return;
                     await _loadCompanyProfile();
                   },
                   child: const Text('Save'),
@@ -1032,11 +930,9 @@ class _AppShellScreenState extends State<AppShellScreen> {
       },
     );
 
-    if (isInitial && (didSkip ?? false)) {
+    if (didSkip == true && mounted) {
       await _companyProfileService.markInitialPromptSkipped();
     }
-
-    nameController.dispose();
   }
 
   Future<void> _reloadActiveYearData() async {
@@ -1116,7 +1012,6 @@ class _SidebarContent extends StatefulWidget {
     required this.onDeleteYearRequested,
     required this.onBackupRequested,
     required this.onPinRequested,
-    required this.onRestoreBackupRequested,
     required this.onCompanyProfileRequested,
     required this.onNotesRequested,
     required this.onLinkedDevicesRequested,
@@ -1139,7 +1034,6 @@ class _SidebarContent extends StatefulWidget {
   final VoidCallback onDeleteYearRequested;
   final Future<void> Function() onBackupRequested;
   final Future<void> Function() onPinRequested;
-  final Future<void> Function() onRestoreBackupRequested;
   final Future<void> Function() onCompanyProfileRequested;
   final Future<void> Function() onNotesRequested;
   final Future<void> Function() onLinkedDevicesRequested;
@@ -1281,14 +1175,9 @@ class _SidebarContentState extends State<_SidebarContent> {
                   ),
                   _DrawerSectionLabel('Data'),
                   _DrawerListTile(
-                    icon: Icons.backup_outlined,
-                    label: 'Backup',
+                    icon: Icons.backup_rounded,
+                    label: 'Backup & Restore',
                     onTap: canEdit ? widget.onBackupRequested : null,
-                  ),
-                  _DrawerListTile(
-                    icon: Icons.restore_page_outlined,
-                    label: 'Restore Backup',
-                    onTap: canEdit ? widget.onRestoreBackupRequested : null,
                   ),
                   Divider(
                     height: 1,
