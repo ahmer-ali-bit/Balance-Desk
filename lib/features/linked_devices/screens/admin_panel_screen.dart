@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/linked_devices_utils.dart';
 import '../services/linked_devices_service.dart';
 import '../services/workspace_sync_service.dart';
@@ -71,6 +72,17 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
       // Automatically upload the current database snapshot so the guest can immediately download it
       await WorkspaceSyncService.instance.uploadFullSnapshot(deviceId);
+
+      // Save admin session to provider & prefs so auto-sync can start
+      if (mounted) {
+        final sp = context.read<LinkedSessionProvider>();
+        final prefs = await SharedPreferences.getInstance();
+        final adminSessionId =
+            'admin_${deviceId}_${DateTime.now().millisecondsSinceEpoch}';
+        await prefs.setString('linked_session_id', adminSessionId);
+        await prefs.setBool('linked_i_am_admin', true);
+        sp.saveSession(sessionId: adminSessionId, iAmAdmin: true);
+      }
 
       final token = result['inviteToken'] as String?;
       final expiryValue = result['expiresAt'];
@@ -188,16 +200,20 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // ── 1. Invite Module ──
-            if (!isLinked) 
+            if (!isLinked)
               _buildPremiumInviteCard(theme, cs)
             else
               _buildLinkedSessionInfoCard(theme, cs, sessionProvider),
-              
+
             const SizedBox(height: 32),
 
             // ── 2. Connected Instances (Only show if not linked, or show nothing for guests) ──
             if (!isLinked) ...[
-              _buildSectionHeader(theme, 'SYNCHRONIZED INSTANCES', Icons.hub_rounded),
+              _buildSectionHeader(
+                theme,
+                'SYNCHRONIZED INSTANCES',
+                Icons.hub_rounded,
+              ),
               const SizedBox(height: 16),
 
               if (_myDeviceId == null)
@@ -223,7 +239,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     }
 
                     return Column(
-                      children: sessions.map((session) => _buildPremiumDeviceTile(theme, cs, session)).toList(),
+                      children: sessions
+                          .map(
+                            (session) =>
+                                _buildPremiumDeviceTile(theme, cs, session),
+                          )
+                          .toList(),
                     );
                   },
                 ),
@@ -231,13 +252,32 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             ],
 
             // ── 3. Protocol Overview ──
-            _buildSectionHeader(theme, 'SECURITY PROTOCOL', Icons.security_rounded),
+            _buildSectionHeader(
+              theme,
+              'SECURITY PROTOCOL',
+              Icons.security_rounded,
+            ),
             const SizedBox(height: 16),
-            _buildPremiumInfoTile(cs, Icons.add_link_rounded, 'Link Generation', 'Create unique encrypted access tokens for peers.'),
+            _buildPremiumInfoTile(
+              cs,
+              Icons.add_link_rounded,
+              'Link Generation',
+              'Create unique encrypted access tokens for peers.',
+            ),
             const SizedBox(height: 12),
-            _buildPremiumInfoTile(cs, Icons.sync_lock_rounded, 'Access Control', 'Define and manage granular permissions in real-time.'),
+            _buildPremiumInfoTile(
+              cs,
+              Icons.sync_lock_rounded,
+              'Access Control',
+              'Define and manage granular permissions in real-time.',
+            ),
             const SizedBox(height: 12),
-            _buildPremiumInfoTile(cs, Icons.devices_rounded, 'Instance Management', 'Monitor and terminate remote sessions instantly.'),
+            _buildPremiumInfoTile(
+              cs,
+              Icons.devices_rounded,
+              'Instance Management',
+              'Monitor and terminate remote sessions instantly.',
+            ),
             const SizedBox(height: 40),
           ],
         ),
@@ -245,7 +285,11 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     );
   }
 
-  Widget _buildLinkedSessionInfoCard(ThemeData theme, ColorScheme cs, LinkedSessionProvider provider) {
+  Widget _buildLinkedSessionInfoCard(
+    ThemeData theme,
+    ColorScheme cs,
+    LinkedSessionProvider provider,
+  ) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -266,21 +310,27 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           const SizedBox(height: 20),
           Text(
             'Connected to Remote Workspace',
-            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w900,
+            ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
           Text(
             'You are currently operating in a synchronized session.',
-            style: theme.textTheme.labelMedium?.copyWith(color: cs.onSurfaceVariant),
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: cs.onSurfaceVariant,
+            ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
           _buildPremiumInfoTile(
-            cs, 
-            Icons.verified_user_rounded, 
-            'Permission Level', 
-            provider.canEdit ? 'Administrative (Read/Write)' : 'Observer (Read-Only)'
+            cs,
+            Icons.verified_user_rounded,
+            'Permission Level',
+            provider.canEdit
+                ? 'Administrative (Read/Write)'
+                : 'Observer (Read-Only)',
           ),
           const SizedBox(height: 20),
           _buildPremiumActionButton(
@@ -336,15 +386,19 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 const SizedBox(height: 20),
                 Text(
                   'Authorize New Session',
-                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'Share this token with devices to sync your workspace.',
-                  style: theme.textTheme.labelMedium?.copyWith(color: cs.onSurfaceVariant),
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
                   textAlign: TextAlign.center,
                 ),
-                
+
                 if (_errorMessage != null) ...[
                   const SizedBox(height: 20),
                   Container(
@@ -355,10 +409,21 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.warning_amber_rounded, color: cs.error, size: 20),
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          color: cs.error,
+                          size: 20,
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: Text(_errorMessage!, style: TextStyle(color: cs.error, fontSize: 13, fontWeight: FontWeight.bold)),
+                          child: Text(
+                            _errorMessage!,
+                            style: TextStyle(
+                              color: cs.error,
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -384,14 +449,23 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                       version: QrVersions.auto,
                       size: 180.0,
                       backgroundColor: Colors.white,
-                      eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: Colors.black),
+                      eyeStyle: const QrEyeStyle(
+                        eyeShape: QrEyeShape.square,
+                        color: Colors.black,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),
                   InkWell(
                     onTap: () {
-                      Clipboard.setData(ClipboardData(text: 'balancedesk://join?token=$_inviteToken'));
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Access Link Copied')));
+                      Clipboard.setData(
+                        ClipboardData(
+                          text: 'balancedesk://join?token=$_inviteToken',
+                        ),
+                      );
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Access Link Copied')),
+                      );
                     },
                     borderRadius: BorderRadius.circular(20),
                     child: Container(
@@ -407,7 +481,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('ACCESS TOKEN', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w900, color: cs.onSurfaceVariant)),
+                                Text(
+                                  'ACCESS TOKEN',
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                                ),
                                 const SizedBox(height: 4),
                                 Text(
                                   _inviteToken!,
@@ -430,26 +510,35 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                       padding: const EdgeInsets.only(top: 12),
                       child: Text(
                         'Temporary Token: Expires in ${(_expiry!.difference(DateTime.now()).inMinutes)} minutes',
-                        style: theme.textTheme.labelSmall?.copyWith(color: cs.error, fontWeight: FontWeight.bold),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: cs.error,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                 ],
               ],
             ),
           ),
-          
+
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
-              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(32)),
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(32),
+              ),
             ),
             child: _buildPremiumActionButton(
               onPressed: _isLoading ? null : _generateLink,
               isLoading: _isLoading,
-              icon: _inviteToken != null ? Icons.refresh_rounded : Icons.vpn_key_rounded,
-              label: _inviteToken != null ? 'Refresh Access Link' : 'Initialize Access Key',
+              icon: _inviteToken != null
+                  ? Icons.refresh_rounded
+                  : Icons.vpn_key_rounded,
+              label: _inviteToken != null
+                  ? 'Refresh Access Link'
+                  : 'Initialize Access Key',
               cs: cs,
             ),
           ),
@@ -483,14 +572,23 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       child: ElevatedButton.icon(
         onPressed: onPressed,
         icon: isLoading
-            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Colors.white,
+                ),
+              )
             : Icon(icon, color: cs.onPrimary),
         label: Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
           foregroundColor: cs.onPrimary,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
         ),
       ),
     );
@@ -502,24 +600,40 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       decoration: BoxDecoration(
         color: cs.surfaceContainer,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: cs.outline, width: 1, style: BorderStyle.solid),
+        border: Border.all(
+          color: cs.outline,
+          width: 1,
+          style: BorderStyle.solid,
+        ),
       ),
       child: Column(
         children: [
-          Icon(Icons.sensors_off_rounded, color: cs.onSurfaceVariant.withValues(alpha: 0.3), size: 48),
+          Icon(
+            Icons.sensors_off_rounded,
+            color: cs.onSurfaceVariant.withValues(alpha: 0.3),
+            size: 48,
+          ),
           const SizedBox(height: 16),
           Text(
             'Zero Active Remote Sessions',
-            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14, fontWeight: FontWeight.w700),
+            style: TextStyle(
+              color: cs.onSurfaceVariant,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildPremiumDeviceTile(ThemeData theme, ColorScheme cs, LinkedSession session) {
+  Widget _buildPremiumDeviceTile(
+    ThemeData theme,
+    ColorScheme cs,
+    LinkedSession session,
+  ) {
     final isWrite = session.permission == SessionPermission.write;
-    final hasActiveCode = session.editableCode != null;
+    final hasActiveCode = session.hasActiveEditCode;
     final accentColor = isWrite ? cs.primary : const Color(0xFFF59E0B);
 
     return Container(
@@ -539,25 +653,39 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 color: accentColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Icon(Icons.important_devices_rounded, color: accentColor, size: 24),
+              child: Icon(
+                Icons.important_devices_rounded,
+                color: accentColor,
+                size: 24,
+              ),
             ),
             title: Text(
               'Remote Node: ${LinkedDevicesUtils.formatDeviceId(session.linkedDeviceId)}',
-              style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900, fontFamily: 'RobotoMono'),
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w900,
+                fontFamily: 'RobotoMono',
+              ),
             ),
             subtitle: Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: accentColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
                       isWrite ? 'ADMIN ACCESS' : 'OBSERVER ACCESS',
-                      style: theme.textTheme.labelSmall?.copyWith(color: accentColor, fontWeight: FontWeight.w900, fontSize: 8),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: accentColor,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 8,
+                      ),
                     ),
                   ),
                 ],
@@ -571,7 +699,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               ),
             ),
           ),
-          
+
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: Row(
@@ -580,20 +708,36 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   if (hasActiveCode)
                     Expanded(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.3)),
+                          border: Border.all(
+                            color: const Color(
+                              0xFFF59E0B,
+                            ).withValues(alpha: 0.3),
+                          ),
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.key_rounded, size: 16, color: Color(0xFFF59E0B)),
+                            const Icon(
+                              Icons.key_rounded,
+                              size: 16,
+                              color: Color(0xFFF59E0B),
+                            ),
                             const SizedBox(width: 12),
                             Text(
                               session.editableCode!,
-                              style: const TextStyle(fontFamily: 'RobotoMono', fontWeight: FontWeight.w900, fontSize: 18, color: Color(0xFFF59E0B)),
+                              style: const TextStyle(
+                                fontFamily: 'RobotoMono',
+                                fontWeight: FontWeight.w900,
+                                fontSize: 18,
+                                color: Color(0xFFF59E0B),
+                              ),
                             ),
                           ],
                         ),
@@ -603,11 +747,20 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () => _generateEditCode(session),
-                      icon: Icon(hasActiveCode ? Icons.refresh_rounded : Icons.lock_open_rounded, size: 18),
-                      label: Text(hasActiveCode ? 'Refresh Token' : 'Authorize Edit'),
+                      icon: Icon(
+                        hasActiveCode
+                            ? Icons.refresh_rounded
+                            : Icons.lock_open_rounded,
+                        size: 18,
+                      ),
+                      label: Text(
+                        hasActiveCode ? 'Refresh Token' : 'Authorize Edit',
+                      ),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
                       ),
                     ),
                   ),
@@ -615,12 +768,21 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () => _revokeEditAccess(session),
-                      icon: const Icon(Icons.lock_rounded, size: 18, color: Color(0xFFF59E0B)),
-                      label: const Text('Revoke Administrative Permissions', style: TextStyle(color: Color(0xFFF59E0B))),
+                      icon: const Icon(
+                        Icons.lock_rounded,
+                        size: 18,
+                        color: Color(0xFFF59E0B),
+                      ),
+                      label: const Text(
+                        'Revoke Administrative Permissions',
+                        style: TextStyle(color: Color(0xFFF59E0B)),
+                      ),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         side: const BorderSide(color: Color(0xFFF59E0B)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
                       ),
                     ),
                   ),
@@ -632,7 +794,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     );
   }
 
-  Widget _buildPremiumInfoTile(ColorScheme cs, IconData icon, String title, String sub) {
+  Widget _buildPremiumInfoTile(
+    ColorScheme cs,
+    IconData icon,
+    String title,
+    String sub,
+  ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -648,8 +815,17 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
-                Text(sub, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14,
+                  ),
+                ),
+                Text(
+                  sub,
+                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                ),
               ],
             ),
           ),

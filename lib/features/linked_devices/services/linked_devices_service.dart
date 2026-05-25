@@ -4,14 +4,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import '../../../firebase_options.dart';
-import '../.././../models/linked_device_models.dart';
+import '../../../models/linked_device_models.dart';
 import 'firestore_rest_client.dart';
 
 class LinkedDevicesService {
   LinkedDevicesService._();
   static final LinkedDevicesService instance = LinkedDevicesService._();
 
-  bool get _isDesktop => !kIsWeb && (defaultTargetPlatform == TargetPlatform.windows || defaultTargetPlatform == TargetPlatform.linux || defaultTargetPlatform == TargetPlatform.macOS);
+  bool get _isDesktop => _isRunningOnDesktop;
 
   FirebaseFirestore get _db {
     if (!_isDesktop) _ensureInitialized();
@@ -28,6 +28,19 @@ class LinkedDevicesService {
     _initFuture = _doInit();
     await _initFuture;
   }
+
+  /// Public entry point to guarantee Firebase is ready before any _db access.
+  /// Desktop uses REST API, so Firebase initialization is not needed.
+  static Future<void> ensureFirebase() async {
+    if (_isRunningOnDesktop) return;
+    await _ensureInitialized();
+  }
+
+  static bool get _isRunningOnDesktop =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.linux ||
+          defaultTargetPlatform == TargetPlatform.macOS);
 
   static Future<void> _doInit() async {
     try {
@@ -49,9 +62,14 @@ class LinkedDevicesService {
   // ────────────────────────────────────────────────────────
   // ADMIN: Register this device as admin & generate invite
   // ────────────────────────────────────────────────────────
-  Future<Map<String, dynamic>> registerAsAdmin(String deviceId, String deviceName) async {
+  Future<Map<String, dynamic>> registerAsAdmin(
+    String deviceId,
+    String deviceName,
+  ) async {
+    await _expireOpenInvitesForAdmin(deviceId);
+
     final token = _generateToken();
-    final expiry = DateTime.now().add(const Duration(hours: 24));
+    final expiry = DateTime.now().add(const Duration(minutes: 10));
     final data = {
       'adminDeviceId': deviceId,
       'adminDeviceName': deviceName,
@@ -59,11 +77,16 @@ class LinkedDevicesService {
       'expiresAt': expiry.toIso8601String(),
       'createdAt': DateTime.now().toIso8601String(),
       'used': false,
+      'revoked': false,
     };
 
     try {
       if (_isDesktop) {
-        final success = await FirestoreRESTClient.setDocument(_invitesCol, token, data);
+        final success = await FirestoreRESTClient.setDocument(
+          _invitesCol,
+          token,
+          data,
+        );
         if (!success) throw Exception('REST set failed');
       } else {
         await _db.collection(_invitesCol).doc(token).set(data);
@@ -79,49 +102,86 @@ class LinkedDevicesService {
   // ────────────────────────────────────────────────────────
   // GUEST: Join workspace using invite token
   // ────────────────────────────────────────────────────────
-  Future<Map<String, dynamic>> joinWorkspace(String joiningDeviceId, String token) async {
+  Future<Map<String, dynamic>> joinWorkspace(
+    String joiningDeviceId,
+    String token, {
+    String? joiningDeviceName,
+  }) async {
     try {
+      final inviteToken = token.trim().toUpperCase();
       Map<String, dynamic>? inviteData;
       if (_isDesktop) {
-        inviteData = await FirestoreRESTClient.getDocument(_invitesCol, token);
+        inviteData = await FirestoreRESTClient.getDocument(
+          _invitesCol,
+          inviteToken,
+        );
       } else {
-        final snap = await _db.collection(_invitesCol).doc(token).get();
+        final snap = await _db.collection(_invitesCol).doc(inviteToken).get();
         inviteData = snap.data();
       }
 
       if (inviteData == null) {
-        return {'success': false, 'error': 'Invalid or expired invite link.'};
+        return {'success': false, 'error': 'Invalid or expired invite code.'};
       }
 
-      final expiresAt = DateTime.tryParse(inviteData['expiresAt'] as String? ?? '');
+      final expiresAt = DateTime.tryParse(
+        inviteData['expiresAt'] as String? ?? '',
+      );
       if (expiresAt != null && DateTime.now().isAfter(expiresAt)) {
-        return {'success': false, 'error': 'Invite link has expired.'};
+        return {'success': false, 'error': 'Invite code has expired.'};
       }
-      if (inviteData['used'] == true) {
-        return {'success': false, 'error': 'Invite link has already been used.'};
+      if (inviteData['used'] == true || inviteData['revoked'] == true) {
+        return {
+          'success': false,
+          'error': 'Invite code has already been used.',
+        };
       }
 
       final adminDeviceId = inviteData['adminDeviceId'] as String;
+      final adminDeviceName = inviteData['adminDeviceName']?.toString();
       final sessionId = 'session_${joiningDeviceId}_$adminDeviceId';
       final sessionData = {
         'sessionId': sessionId,
         'adminDeviceId': adminDeviceId,
+        'adminDeviceName': adminDeviceName,
         'linkedDeviceId': joiningDeviceId,
+        'linkedDeviceName': joiningDeviceName,
         'permission': 'read',
         'editableCode': null,
+        'editableCodeExpiresAt': null,
         'status': 'active',
         'joinedAt': DateTime.now().toIso8601String(),
+        'lastSnapshotAt': null,
+        'lastGuestSnapshotAt': null,
+        'lastAdminAppliedGuestSnapshotAt': null,
       };
 
       if (_isDesktop) {
-        await FirestoreRESTClient.setDocument(_sessionsCol, sessionId, sessionData);
-        await FirestoreRESTClient.updateDocument(_invitesCol, token, {'used': true});
+        await FirestoreRESTClient.setDocument(
+          _sessionsCol,
+          sessionId,
+          sessionData,
+        );
+        await FirestoreRESTClient.updateDocument(_invitesCol, inviteToken, {
+          'used': true,
+          'usedAt': DateTime.now().toIso8601String(),
+          'usedByDeviceId': joiningDeviceId,
+        });
       } else {
         await _db.collection(_sessionsCol).doc(sessionId).set(sessionData);
-        await _db.collection(_invitesCol).doc(token).update({'used': true});
+        await _db.collection(_invitesCol).doc(inviteToken).update({
+          'used': true,
+          'usedAt': DateTime.now().toIso8601String(),
+          'usedByDeviceId': joiningDeviceId,
+        });
       }
 
-      return {'success': true, 'sessionId': sessionId};
+      return {
+        'success': true,
+        'sessionId': sessionId,
+        'adminDeviceId': adminDeviceId,
+        'adminDeviceName': adminDeviceName,
+      };
     } catch (e) {
       debugPrint('joinWorkspace error: $e');
       return {'success': false, 'error': e.toString()};
@@ -135,21 +195,26 @@ class LinkedDevicesService {
     if (_isDesktop) {
       final controller = StreamController<List<LinkedSession>>();
       Timer? timer;
-      
+
       void fetchData() async {
-        final results = await FirestoreRESTClient.getCollection(_sessionsCol, 
-          whereField: 'adminDeviceId', isEqualTo: adminDeviceId);
+        final results = await FirestoreRESTClient.getCollection(
+          _sessionsCol,
+          whereField: 'adminDeviceId',
+          isEqualTo: adminDeviceId,
+        );
         if (!controller.isClosed) {
-          controller.add(results
-            .where((m) => m['status'] == 'active')
-            .map((m) => LinkedSession.fromMap(m))
-            .toList());
+          controller.add(
+            results
+                .where((m) => m['status'] == 'active')
+                .map((m) => LinkedSession.fromMap(m))
+                .toList(),
+          );
         }
       }
 
       timer = Timer.periodic(const Duration(seconds: 4), (_) => fetchData());
       fetchData();
-      
+
       controller.onCancel = () => timer?.cancel();
       return controller.stream;
     }
@@ -159,29 +224,99 @@ class LinkedDevicesService {
         .where('adminDeviceId', isEqualTo: adminDeviceId)
         .where('status', isEqualTo: 'active')
         .snapshots()
-        .map((snap) => snap.docs.map((d) => LinkedSession.fromMap(d.data())).toList());
+        .map(
+          (snap) =>
+              snap.docs.map((d) => LinkedSession.fromMap(d.data())).toList(),
+        );
+  }
+
+  /// One-time fetch of active linked device IDs for an admin (bi-directional sync).
+  Future<List<String>> getActiveLinkedDeviceIds(String adminDeviceId) async {
+    try {
+      List<Map<String, dynamic>> results;
+      if (_isDesktop) {
+        results = await FirestoreRESTClient.getCollection(
+          _sessionsCol,
+          whereField: 'adminDeviceId',
+          isEqualTo: adminDeviceId,
+        );
+      } else {
+        final snap = await _db
+            .collection(_sessionsCol)
+            .where('adminDeviceId', isEqualTo: adminDeviceId)
+            .where('status', isEqualTo: 'active')
+            .get();
+        results = snap.docs.map((d) => d.data()).toList();
+      }
+      return results
+          .where((m) => m['status'] == 'active')
+          .map((m) => m['linkedDeviceId']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList();
+    } catch (e) {
+      debugPrint('getActiveLinkedDeviceIds error: $e');
+      return [];
+    }
+  }
+
+  /// One-time fetch of all active sessions for an admin.
+  Future<List<LinkedSession>> getAllActiveSessions(String adminDeviceId) async {
+    try {
+      List<Map<String, dynamic>> results;
+      if (_isDesktop) {
+        results = await FirestoreRESTClient.getCollection(
+          _sessionsCol,
+          whereField: 'adminDeviceId',
+          isEqualTo: adminDeviceId,
+        );
+      } else {
+        final snap = await _db
+            .collection(_sessionsCol)
+            .where('adminDeviceId', isEqualTo: adminDeviceId)
+            .where('status', isEqualTo: 'active')
+            .get();
+        results = snap.docs.map((d) => d.data()).toList();
+      }
+      return results
+          .where((m) => m['status'] == 'active')
+          .map((m) => LinkedSession.fromMap(m))
+          .toList();
+    } catch (e) {
+      debugPrint('getAllActiveSessions error: $e');
+      return [];
+    }
   }
 
   // ────────────────────────────────────────────────────────
   // GUEST: Real-time stream for a specific session
   // ────────────────────────────────────────────────────────
-  Stream<DocumentSnapshot<Map<String, dynamic>>> sessionStream(String sessionId) {
+  /// Returns session data as a stream. On mobile returns [DocumentSnapshot],
+  /// on desktop returns [Map] with `exists` and `data` keys.
+  Stream<dynamic> sessionStream(String sessionId) {
     if (_isDesktop) {
-       final controller = StreamController<DocumentSnapshot<Map<String, dynamic>>>();
-       Timer? timer;
+      final controller = StreamController<dynamic>();
+      Timer? timer;
 
-       void fetchData() async {
-         final data = await FirestoreRESTClient.getDocument(_sessionsCol, sessionId);
-         if (!controller.isClosed) {
-           controller.add(_MockDocumentSnapshot(data, sessionId) as DocumentSnapshot<Map<String, dynamic>>);
-         }
-       }
+      void fetchData() async {
+        final data = await FirestoreRESTClient.getDocument(
+          _sessionsCol,
+          sessionId,
+        );
+        if (!controller.isClosed) {
+          controller.add({
+            'exists': data != null,
+            'data': data,
+            'status': data?['status'] ?? 'disconnected',
+            'permission': data?['permission'] ?? 'read',
+          });
+        }
+      }
 
-       timer = Timer.periodic(const Duration(seconds: 4), (_) => fetchData());
-       fetchData();
+      timer = Timer.periodic(const Duration(seconds: 4), (_) => fetchData());
+      fetchData();
 
-       controller.onCancel = () => timer?.cancel();
-       return controller.stream;
+      controller.onCancel = () => timer?.cancel();
+      return controller.stream;
     }
 
     return _db.collection(_sessionsCol).doc(sessionId).snapshots();
@@ -203,12 +338,20 @@ class LinkedDevicesService {
     }
   }
 
-  Future<void> updateSessionPermission(String sessionId, SessionPermission permission) async {
+  Future<void> updateSessionPermission(
+    String sessionId,
+    SessionPermission permission,
+  ) async {
     final permStr = permission == SessionPermission.write ? 'write' : 'read';
+    final data = {
+      'permission': permStr,
+      'editableCode': null,
+      'editableCodeExpiresAt': null,
+    };
     if (_isDesktop) {
-      await FirestoreRESTClient.updateDocument(_sessionsCol, sessionId, {'permission': permStr});
+      await FirestoreRESTClient.updateDocument(_sessionsCol, sessionId, data);
     } else {
-      await _db.collection(_sessionsCol).doc(sessionId).update({'permission': permStr});
+      await _db.collection(_sessionsCol).doc(sessionId).update(data);
     }
   }
 
@@ -225,14 +368,24 @@ class LinkedDevicesService {
   }
 
   /// ✅ Alias for backward compatibility with Admin Panel
-  Future<void> removeLinkedDevice(String adminId, String linkedId, String sessionId) async {
+  Future<void> removeLinkedDevice(
+    String adminId,
+    String linkedId,
+    String sessionId,
+  ) async {
     await disconnectSession(sessionId);
   }
 
-  Future<String> generateEditableCode(String sessionId, String adminDeviceId) async {
+  Future<String> generateEditableCode(
+    String sessionId,
+    String adminDeviceId,
+  ) async {
     final code = _generateOtp();
+    final expiry = DateTime.now().add(const Duration(minutes: 10));
     final data = {
       'editableCode': code,
+      'editableCodeExpiresAt': expiry.toIso8601String(),
+      'editableCodeGeneratedAt': DateTime.now().toIso8601String(),
       'permission': 'read',
     };
     if (_isDesktop) {
@@ -247,6 +400,7 @@ class LinkedDevicesService {
     final data = {
       'permission': 'read',
       'editableCode': null,
+      'editableCodeExpiresAt': null,
     };
     if (_isDesktop) {
       await FirestoreRESTClient.updateDocument(_sessionsCol, sessionId, data);
@@ -255,7 +409,30 @@ class LinkedDevicesService {
     }
   }
 
-  Future<Map<String, dynamic>> verifyEditCode(String sessionId, String enteredCode) async {
+  /// Update a field in the session document.
+  Future<void> updateSessionField(
+    String sessionId,
+    Map<String, dynamic> fields,
+  ) async {
+    try {
+      if (_isDesktop) {
+        await FirestoreRESTClient.updateDocument(
+          _sessionsCol,
+          sessionId,
+          fields,
+        );
+      } else {
+        await _db.collection(_sessionsCol).doc(sessionId).update(fields);
+      }
+    } catch (e) {
+      debugPrint('updateSessionField error: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> verifyEditCode(
+    String sessionId,
+    String enteredCode,
+  ) async {
     try {
       Map<String, dynamic>? data;
       if (_isDesktop) {
@@ -265,9 +442,12 @@ class LinkedDevicesService {
         data = doc.data();
       }
 
-      if (data == null) return {'success': false, 'error': 'Session not found.'};
+      if (data == null) {
+        return {'success': false, 'error': 'Session not found.'};
+      }
 
-      final storedCode = data['editableCode'] as String?;
+      final rawStoredCode = data['editableCode']?.toString();
+      final storedCode = rawStoredCode == 'null' ? null : rawStoredCode;
       if (storedCode == null || storedCode.isEmpty) {
         return {'success': false, 'error': 'No edit code generated.'};
       }
@@ -275,9 +455,25 @@ class LinkedDevicesService {
         return {'success': false, 'error': 'Incorrect code.'};
       }
 
-      final updateData = {'permission': 'write', 'editableCode': null};
+      final expiresAtStr = data['editableCodeExpiresAt'] as String?;
+      if (expiresAtStr != null) {
+        final expiresAt = DateTime.tryParse(expiresAtStr);
+        if (expiresAt != null && DateTime.now().isAfter(expiresAt)) {
+          return {'success': false, 'error': 'Edit code has expired.'};
+        }
+      }
+
+      final updateData = {
+        'permission': 'write',
+        'editableCode': null,
+        'editableCodeExpiresAt': null,
+      };
       if (_isDesktop) {
-        await FirestoreRESTClient.updateDocument(_sessionsCol, sessionId, updateData);
+        await FirestoreRESTClient.updateDocument(
+          _sessionsCol,
+          sessionId,
+          updateData,
+        );
       } else {
         await _db.collection(_sessionsCol).doc(sessionId).update(updateData);
       }
@@ -297,13 +493,45 @@ class LinkedDevicesService {
     final rand = Random();
     return (100000 + rand.nextInt(900000)).toString();
   }
-}
 
-class _MockDocumentSnapshot {
-  final Map<String, dynamic>? _data;
-  final String _id;
-  _MockDocumentSnapshot(this._data, this._id);
-  bool get exists => _data != null;
-  Map<String, dynamic>? data() => _data;
-  String get id => _id;
+  Future<void> _expireOpenInvitesForAdmin(String adminDeviceId) async {
+    try {
+      final now = DateTime.now().toIso8601String();
+      if (_isDesktop) {
+        final invites = await FirestoreRESTClient.getCollection(
+          _invitesCol,
+          whereField: 'adminDeviceId',
+          isEqualTo: adminDeviceId,
+        );
+        for (final invite in invites) {
+          final docId = invite['id']?.toString();
+          if (docId == null || docId.isEmpty) continue;
+          if (invite['used'] == true || invite['revoked'] == true) continue;
+          await FirestoreRESTClient.updateDocument(_invitesCol, docId, {
+            'used': true,
+            'revoked': true,
+            'expiresAt': now,
+            'revokedAt': now,
+          });
+        }
+        return;
+      }
+
+      final snap = await _db
+          .collection(_invitesCol)
+          .where('adminDeviceId', isEqualTo: adminDeviceId)
+          .where('used', isEqualTo: false)
+          .get();
+      for (final doc in snap.docs) {
+        await doc.reference.update({
+          'used': true,
+          'revoked': true,
+          'expiresAt': now,
+          'revokedAt': now,
+        });
+      }
+    } catch (e) {
+      debugPrint('expireOpenInvitesForAdmin error: $e');
+    }
+  }
 }

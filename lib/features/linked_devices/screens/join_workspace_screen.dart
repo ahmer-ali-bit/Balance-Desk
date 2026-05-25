@@ -1,13 +1,13 @@
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 
+import '../../../models/linked_device_models.dart';
+import '../providers/linked_session_provider.dart';
 import '../services/linked_devices_service.dart';
 import '../services/workspace_sync_service.dart';
 import '../utils/linked_devices_utils.dart';
 import '../widgets/qr_scanner_widget.dart';
-import 'linked_devices_screen.dart';
 
 class JoinWorkspaceScreen extends StatefulWidget {
   const JoinWorkspaceScreen({super.key});
@@ -19,7 +19,7 @@ class JoinWorkspaceScreen extends StatefulWidget {
 class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
   final _service = LinkedDevicesService.instance;
   final _tokenController = TextEditingController();
-  
+
   bool _isLoading = false;
   bool _showQrScanner = false;
   String? _errorMessage;
@@ -58,23 +58,34 @@ class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
     }
 
     try {
-      final joiningDeviceId = await LinkedDevicesUtils.getPersistentDeviceId(); 
+      final joiningDeviceId = await LinkedDevicesUtils.getPersistentDeviceId();
+      final joiningDeviceName =
+          await LinkedDevicesUtils.getPersistentDeviceName();
 
       // ✅ BACKUP OWN WORKSPACE BEFORE JOINING
       // This ensures we can restore the local data when we disconnect later.
-      await WorkspaceSyncService.instance.uploadFullSnapshot(joiningDeviceId);
+      await WorkspaceSyncService.instance.uploadFullSnapshot(
+        LinkedSessionProvider.localBackupSnapshotId(joiningDeviceId),
+      );
 
       final result = await _service.joinWorkspace(
         joiningDeviceId,
         token,
+        joiningDeviceName: joiningDeviceName,
       );
 
       if (result['success']) {
         final sessionId = result['sessionId'] as String;
-        
-        // Save session ID to local storage
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('linked_session_id', sessionId);
+        final adminDeviceId = result['adminDeviceId']?.toString();
+
+        if (mounted) {
+          await context.read<LinkedSessionProvider>().saveSession(
+            sessionId: sessionId,
+            iAmAdmin: false,
+            adminDeviceId: adminDeviceId,
+            workspaceMode: WorkspaceMode.linked,
+          );
+        }
 
         if (mounted) {
           setState(() {
@@ -84,18 +95,17 @@ class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
 
           // Wait a moment for the user to see the success message
           await Future.delayed(const Duration(seconds: 1));
-          
+
           if (mounted) {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const LinkedDevicesScreen()),
-            );
+            Navigator.of(context).pop();
           }
         }
       } else {
         if (mounted) {
           setState(() {
             _isLoading = false;
-            _errorMessage = result['error'] ?? 'Join failed. Please check the link.';
+            _errorMessage =
+                result['error'] ?? 'Join failed. Please check the link.';
           });
         }
       }
@@ -120,11 +130,14 @@ class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final isMobile = !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
+    final isMobile =
+        !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Connect to Workspace'),
+        title: const Text('Join Workspace'),
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -154,14 +167,18 @@ class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'Join Distributed Workspace',
-                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                    'Join Workspace',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Synchronize with a central administrative instance.',
-                    style: theme.textTheme.labelMedium?.copyWith(color: cs.onSurfaceVariant),
+                    'Paste an invite code or scan the QR code on mobile.',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -170,7 +187,7 @@ class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
             const SizedBox(height: 24),
 
             // ── Join Module (Manual & QR) ──
-            _buildSectionHeader(theme, 'LINK PROTOCOL', Icons.link_rounded),
+            _buildSectionHeader(theme, 'INVITE CODE', Icons.link_rounded),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(24),
@@ -184,11 +201,17 @@ class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
                   // --- Option 1: Manual Token ---
                   TextField(
                     controller: _tokenController,
-                    style: const TextStyle(fontFamily: 'RobotoMono', fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontFamily: 'RobotoMono',
+                      fontWeight: FontWeight.bold,
+                    ),
                     decoration: InputDecoration(
-                      labelText: 'Access Token / Invite Link',
-                      hintText: 'Paste token or link here',
-                      prefixIcon: Icon(Icons.vpn_key_rounded, color: cs.primary),
+                      labelText: 'Invite Code / Link',
+                      hintText: 'Paste invite code here',
+                      prefixIcon: Icon(
+                        Icons.vpn_key_rounded,
+                        color: cs.primary,
+                      ),
                       filled: true,
                       fillColor: cs.surfaceContainerHigh,
                       border: OutlineInputBorder(
@@ -200,10 +223,12 @@ class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
                   ),
                   const SizedBox(height: 20),
                   _buildPremiumActionButton(
-                    onPressed: _isLoading ? null : () => _handleJoin(_tokenController.text),
+                    onPressed: _isLoading
+                        ? null
+                        : () => _handleJoin(_tokenController.text),
                     isLoading: _isLoading,
                     icon: Icons.login_rounded,
-                    label: 'Establish Connection',
+                    label: 'Join',
                     cs: cs,
                   ),
 
@@ -216,7 +241,13 @@ class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
                           Expanded(child: Divider(color: cs.outline)),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: Text('OR', style: theme.textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w900)),
+                            child: Text(
+                              'OR',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: cs.onSurfaceVariant,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
                           ),
                           Expanded(child: Divider(color: cs.outline)),
                         ],
@@ -229,7 +260,7 @@ class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
                         theme: theme,
                         cs: cs,
                         icon: Icons.qr_code_scanner_rounded,
-                        title: 'Scan QR Authorization',
+                        title: 'Scan QR Code',
                         subtitle: 'Use camera to join instantly',
                         onTap: () => setState(() => _showQrScanner = true),
                       )
@@ -265,7 +296,16 @@ class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
                   children: [
                     Icon(Icons.warning_amber_rounded, color: cs.error),
                     const SizedBox(width: 16),
-                    Expanded(child: Text(_errorMessage!, style: TextStyle(color: cs.error, fontWeight: FontWeight.bold, fontSize: 13))),
+                    Expanded(
+                      child: Text(
+                        _errorMessage!,
+                        style: TextStyle(
+                          color: cs.error,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -277,13 +317,24 @@ class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
                 decoration: BoxDecoration(
                   color: Colors.green.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.green.withValues(alpha: 0.2)),
+                  border: Border.all(
+                    color: Colors.green.withValues(alpha: 0.2),
+                  ),
                 ),
                 child: Row(
                   children: [
                     const Icon(Icons.verified_rounded, color: Colors.green),
                     const SizedBox(width: 16),
-                    Expanded(child: Text(_successMessage!, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w900, fontSize: 13))),
+                    Expanded(
+                      child: Text(
+                        _successMessage!,
+                        style: const TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -328,7 +379,10 @@ class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
       ),
       child: ListTile(
         onTap: onTap,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 24,
+          vertical: 12,
+        ),
         leading: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -337,8 +391,18 @@ class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
           ),
           child: Icon(icon, color: cs.primary, size: 24),
         ),
-        title: Text(title, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
-        subtitle: Text(subtitle, style: theme.textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
+        title: Text(
+          title,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: cs.onSurfaceVariant,
+          ),
+        ),
         trailing: Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       ),
@@ -371,14 +435,23 @@ class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
       child: ElevatedButton.icon(
         onPressed: onPressed,
         icon: isLoading
-            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Colors.white,
+                ),
+              )
             : Icon(icon, color: cs.onPrimary),
         label: Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
           foregroundColor: cs.onPrimary,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
         ),
       ),
     );

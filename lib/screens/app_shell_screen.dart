@@ -1262,13 +1262,11 @@ class _SidebarContentState extends State<_SidebarContent> {
                     label: 'Company Profile',
                     onTap: canEdit ? widget.onCompanyProfileRequested : null,
                   ),
-                  /*
                   _DrawerListTile(
                     icon: Icons.devices_other_outlined,
                     label: 'Linked Devices',
                     onTap: widget.onLinkedDevicesRequested,
                   ),
-                  */
                   _DrawerListTile(
                     icon: Icons.edit_note_outlined,
                     label: 'Notes',
