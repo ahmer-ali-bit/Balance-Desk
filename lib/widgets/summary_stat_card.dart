@@ -90,19 +90,24 @@ class SummaryStatCard extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      label.toUpperCase(),
-                      style: labelStyle?.copyWith(
-                        letterSpacing: 0.5,
-                        fontSize: compact ? 9 : 10,
-                        color: labelColor ??
-                            (isMetric
-                                ? Colors.white.withValues(alpha: 0.7)
-                                : colorScheme.onSurfaceVariant),
+                    children: <Widget>[
+                    SizedBox(
+                      width: double.infinity,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          label.toUpperCase(),
+                          style: labelStyle?.copyWith(
+                            letterSpacing: 0.5,
+                            fontSize: compact ? 9 : 10,
+                            color: labelColor ??
+                                (isMetric
+                                    ? Colors.white.withValues(alpha: 0.7)
+                                    : colorScheme.onSurfaceVariant),
+                          ),
+                        ),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
                     SizedBox(height: height != null ? 1 : (compact ? 2 : 4)),
                     SizedBox(
@@ -117,7 +122,6 @@ class SummaryStatCard extends StatelessWidget {
                             color: labelColor ??
                                 (isMetric ? Colors.white : null),
                           ),
-                          maxLines: 1,
                         ),
                       ),
                     ),

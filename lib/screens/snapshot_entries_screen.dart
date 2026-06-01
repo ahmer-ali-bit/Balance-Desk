@@ -1712,17 +1712,19 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(
-                      label.toUpperCase(),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: isMetric
-                            ? Colors.white.withValues(alpha: 0.7)
-                            : colorScheme.onSurfaceVariant,
-                        fontSize: 9,
-                        letterSpacing: 0.5,
-                        fontWeight: FontWeight.w800,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        label.toUpperCase(),
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: isMetric
+                              ? Colors.white.withValues(alpha: 0.7)
+                              : colorScheme.onSurfaceVariant,
+                          fontSize: 9,
+                          letterSpacing: 0.5,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -1731,7 +1733,6 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                       alignment: Alignment.centerLeft,
                       child: Text(
                         value,
-                        maxLines: 1,
                         style: theme.textTheme.titleSmall?.copyWith(
                           color: isMetric
                               ? Colors.white
@@ -1792,12 +1793,14 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                       ),
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      value,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        value,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
                   ],
@@ -2060,21 +2063,25 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(
-                      item.customerName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        item.customerName,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 3),
-                    Text(
-                      '${_formatDate(item.entry.entryDate)} - ${_formatDescription(item)}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '${_formatDate(item.entry.entryDate)} - ${_formatDescription(item)}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
                   ],
@@ -2364,24 +2371,28 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(
-                      item.customerName,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${_formatDate(item.entry.entryDate)} • ${_formatDescription(item)}',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant.withValues(
-                          alpha: 0.7,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        item.customerName,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '${_formatDate(item.entry.entryDate)} • ${_formatDescription(item)}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.7,
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -2800,12 +2811,14 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    item.customerName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      item.customerName,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
@@ -2849,12 +2862,14 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            Text(
-              '${_formatDate(item.entry.entryDate)} - ${_formatDescription(item)}',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '${_formatDate(item.entry.entryDate)} - ${_formatDescription(item)}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                ),
               ),
             ),
             const SizedBox(height: 10),
@@ -2952,26 +2967,39 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
             Icon(icon, size: 12, color: color),
             const SizedBox(width: 4),
             Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w800,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  label,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            value,
-            maxLines: 1,
-            style: theme.textTheme.labelLarge?.copyWith(
+            const SizedBox(height: 4),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: theme.textTheme.labelLarge?.copyWith(
               fontWeight: FontWeight.w900,
             ),
           ),

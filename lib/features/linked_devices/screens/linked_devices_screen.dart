@@ -1141,16 +1141,18 @@ class _CreateWorkspaceScreenState extends State<_CreateWorkspaceScreen> {
                             child: Row(
                               children: <Widget>[
                                 Expanded(
-                                  child: Text(
-                                    _inviteToken!,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.titleMedium
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      _inviteToken!,
+                                      style: theme.textTheme.titleMedium
                                         ?.copyWith(
                                           fontFamily: 'RobotoMono',
                                           fontWeight: FontWeight.w900,
                                           letterSpacing: 1,
                                         ),
+                                      ),
                                   ),
                                 ),
                                 Icon(

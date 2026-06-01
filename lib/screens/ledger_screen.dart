@@ -1331,12 +1331,14 @@ class _LedgerViewState extends State<_LedgerView> {
                 ),
                 SizedBox(width: compactForDesktop ? 8 : 10),
                 Expanded(
-                  child: Text(
-                    'Date Filters',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Date Filters',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
@@ -1520,12 +1522,14 @@ class _LedgerViewState extends State<_LedgerView> {
                     ),
                     SizedBox(width: compactForDesktop ? 8 : 10),
                     Expanded(
-                      child: Text(
-                        'Opening Balance',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Opening Balance',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ),
@@ -1949,12 +1953,14 @@ class _LedgerViewState extends State<_LedgerView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(
-                      provider.customerName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        provider.customerName,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 5),
@@ -2077,12 +2083,15 @@ class _LedgerViewState extends State<_LedgerView> {
                     ),
                   ),
                   Flexible(
-                    child: Text(
-                      provider.formatBalance(displayBalance),
-                      textAlign: TextAlign.end,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        provider.formatBalance(displayBalance),
+                        textAlign: TextAlign.end,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                     ),
                   ),
@@ -2165,12 +2174,14 @@ class _LedgerViewState extends State<_LedgerView> {
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w900,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ),
         ],
@@ -2199,13 +2210,15 @@ class _LedgerViewState extends State<_LedgerView> {
           Icon(icon, size: 14, color: colorScheme.onSurfaceVariant),
           const SizedBox(width: 7),
           Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ),
@@ -2308,15 +2321,17 @@ class _LedgerViewState extends State<_LedgerView> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Flexible(
-                                    child: Text(
-                                      provider.customerName,
-                                      style: theme.textTheme.headlineSmall?.copyWith(
-                                        color: colorScheme.onSurface,
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 23,
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        provider.customerName,
+                                        style: theme.textTheme.headlineSmall?.copyWith(
+                                          color: colorScheme.onSurface,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 23,
+                                        ),
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                   const SizedBox(width: 10),
@@ -2602,13 +2617,15 @@ class _LedgerViewState extends State<_LedgerView> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Flexible(
-                          child: Text(
-                            provider.customerName,
-                            style: theme.textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              provider.customerName,
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -2725,8 +2742,6 @@ class _LedgerViewState extends State<_LedgerView> {
             alignment: Alignment.centerLeft,
             child: Text(
               label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
               style: theme.textTheme.labelMedium?.copyWith(color: Colors.white70),
             ),
           ),
@@ -2736,8 +2751,6 @@ class _LedgerViewState extends State<_LedgerView> {
             alignment: Alignment.centerLeft,
             child: Text(
               value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
               style: theme.textTheme.titleLarge?.copyWith(
                 color: Colors.white,
                 fontWeight: FontWeight.w800,
@@ -3362,9 +3375,10 @@ class _LedgerViewState extends State<_LedgerView> {
           debit != 0 || credit != 0 || buyBags.trim().isNotEmpty && buyBags.trim() != '0' || sellBags.trim().isNotEmpty && sellBags.trim() != '0';
       var balanceLabel = '';
       var remainingBagsLabel = '';
+      double currentBalance = 0;
 
       if (hasValue) {
-        final currentBalance = provider.isStockLedger
+        currentBalance = provider.isStockLedger
             ? (runningBalance ?? 0) + credit - debit
             : (runningBalance ?? 0) + debit - credit;
         runningBalance = currentBalance;
@@ -3385,6 +3399,7 @@ class _LedgerViewState extends State<_LedgerView> {
           provider,
           entry: entry,
           balanceLabel: balanceLabel,
+          balance: currentBalance,
           remainingBagsLabel: remainingBagsLabel,
           isOpeningBalanceEntry: isOpeningBalanceEntry,
         ),
@@ -3410,6 +3425,7 @@ class _LedgerViewState extends State<_LedgerView> {
     LedgerProvider provider, {
     required Entry entry,
     required String balanceLabel,
+    double balance = 0,
     String remainingBagsLabel = '',
     required bool isOpeningBalanceEntry,
   }) {
@@ -3485,14 +3501,16 @@ class _LedgerViewState extends State<_LedgerView> {
             ),
           ),
           const SizedBox(height: 10),
-          Text(
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
             isOpeningBalanceEntry ? 'Opening Balance' : entry.displayDescription,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w800,
             ),
           ),
+        ),
           const SizedBox(height: 10),
           LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) {
@@ -3568,7 +3586,7 @@ class _LedgerViewState extends State<_LedgerView> {
                               context,
                               label: 'Balance',
                               value: balanceLabel.isEmpty ? 'No change' : balanceLabel,
-                              accentColor: accentColor,
+                              accentColor: AppColors.balanceColor(balance),
                             ),
                           ),
                         ],
@@ -3625,9 +3643,9 @@ class _LedgerViewState extends State<_LedgerView> {
                           width: tileWidth,
                           child: _buildEntryMetricTile(
                             context,
-                            label: 'Balance',
-                            value: balanceLabel.isEmpty ? 'No change' : balanceLabel,
-                            accentColor: accentColor,
+                              label: 'Balance',
+                              value: balanceLabel.isEmpty ? 'No change' : balanceLabel,
+                              accentColor: AppColors.balanceColor(balance),
                           ),
                         ),
                       ],
@@ -3668,7 +3686,7 @@ class _LedgerViewState extends State<_LedgerView> {
                       context,
                       label: 'Balance',
                       value: balanceLabel.isEmpty ? 'No change' : balanceLabel,
-                      accentColor: accentColor,
+                      accentColor: AppColors.balanceColor(balance),
                     ),
                   ),
                 ],
@@ -3733,12 +3751,15 @@ class _LedgerViewState extends State<_LedgerView> {
           ),
           const SizedBox(width: 8),
           Flexible(
-            child: Text(
-              label,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: highlight ? accentColor : colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: highlight ? accentColor : colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ),
@@ -3837,13 +3858,15 @@ class _LedgerViewState extends State<_LedgerView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: accentColor,
-            fontWeight: FontWeight.w800,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: accentColor,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ),
         const SizedBox(height: 4),
@@ -3852,7 +3875,6 @@ class _LedgerViewState extends State<_LedgerView> {
           alignment: Alignment.centerLeft,
           child: Text(
             value,
-            maxLines: 1,
             style: theme.textTheme.labelLarge?.copyWith(
               fontWeight: FontWeight.w900,
             ),
@@ -3880,27 +3902,23 @@ class _LedgerViewState extends State<_LedgerView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: accentColor,
-                fontWeight: FontWeight.w700,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                label,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: accentColor,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 6),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            const SizedBox(height: 6),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w800,
               ),
@@ -4034,8 +4052,6 @@ class _LedgerViewState extends State<_LedgerView> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.labelMedium?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                     ),
@@ -4047,8 +4063,6 @@ class _LedgerViewState extends State<_LedgerView> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w800,
                     ),
@@ -4660,13 +4674,15 @@ class _LedgerEntryDateCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 3),
-                    Text(
-                      supportingText,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        height: 1.2,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        supportingText,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          height: 1.2,
+                        ),
                       ),
                     ),
                   ],
@@ -5751,13 +5767,15 @@ class _CustomerIdentityItem extends StatelessWidget {
                   letterSpacing: 0.5,
                 ),
               ),
-              Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurface,
-                  fontWeight: FontWeight.w600,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
