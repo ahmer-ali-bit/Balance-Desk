@@ -8,6 +8,7 @@ import '../services/linked_devices_service.dart';
 import '../services/workspace_sync_service.dart';
 import '../utils/linked_devices_utils.dart';
 import '../widgets/qr_scanner_widget.dart';
+import '../../../widgets/mobile_premium.dart';
 
 class JoinWorkspaceScreen extends StatefulWidget {
   const JoinWorkspaceScreen({super.key});
@@ -135,6 +136,10 @@ class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
         (defaultTargetPlatform == TargetPlatform.android ||
             defaultTargetPlatform == TargetPlatform.iOS);
 
+    if (isMobile) {
+      return _buildPremiumMobileJoinWorkspace(theme, cs);
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Join Workspace'),
@@ -153,7 +158,6 @@ class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
               decoration: BoxDecoration(
                 color: cs.surfaceContainer,
                 borderRadius: BorderRadius.circular(32),
-                border: Border.all(color: cs.outline, width: 1),
               ),
               child: Column(
                 children: [
@@ -194,7 +198,6 @@ class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
               decoration: BoxDecoration(
                 color: cs.surfaceContainer,
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: cs.outline, width: 1),
               ),
               child: Column(
                 children: [
@@ -290,7 +293,6 @@ class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
                 decoration: BoxDecoration(
                   color: cs.error.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: cs.error.withValues(alpha: 0.2)),
                 ),
                 child: Row(
                   children: [
@@ -317,9 +319,6 @@ class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
                 decoration: BoxDecoration(
                   color: Colors.green.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: Colors.green.withValues(alpha: 0.2),
-                  ),
                 ),
                 child: Row(
                   children: [
@@ -346,6 +345,137 @@ class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
     );
   }
 
+  Widget _buildPremiumMobileJoinWorkspace(ThemeData theme, ColorScheme cs) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Join Workspace'),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: SingleChildScrollView(
+        child: MobilePremiumPage(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              const MobilePremiumHeader(
+                icon: Icons.hub_rounded,
+                title: 'Join Workspace',
+                subtitle: 'Enter an invite code or scan a QR.',
+              ),
+              const SizedBox(height: 12),
+              MobilePremiumPanel(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    TextField(
+                      controller: _tokenController,
+                      style: const TextStyle(
+                        fontFamily: 'RobotoMono',
+                        fontWeight: FontWeight.bold,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Invite Code / Link',
+                        prefixIcon: Icon(Icons.vpn_key_rounded),
+                      ),
+                      enabled: !_isLoading,
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: _isLoading
+                          ? null
+                          : () => _handleJoin(_tokenController.text),
+                      icon: _isLoading
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.4,
+                              ),
+                            )
+                          : const Icon(Icons.login_rounded),
+                      label: const Text('Join'),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _isLoading
+                          ? null
+                          : () => setState(
+                              () => _showQrScanner = !_showQrScanner,
+                            ),
+                      icon: const Icon(Icons.qr_code_scanner_rounded),
+                      label: Text(_showQrScanner ? 'Hide Scanner' : 'Scan QR'),
+                    ),
+                    if (_showQrScanner) ...<Widget>[
+                      const SizedBox(height: 12),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(
+                          kMobilePremiumRadius,
+                        ),
+                        child: SizedBox(
+                          height: 300,
+                          child: QrScannerWidget(
+                            onScanned: _handleQrScanned,
+                            onClose: () =>
+                                setState(() => _showQrScanner = false),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (_errorMessage != null) ...<Widget>[
+                const SizedBox(height: 12),
+                MobilePremiumPanel(
+                  accentColor: cs.error,
+                  child: Row(
+                    children: <Widget>[
+                      Icon(Icons.warning_amber_rounded, color: cs.error),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: TextStyle(
+                            color: cs.error,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              if (_successMessage != null) ...<Widget>[
+                const SizedBox(height: 12),
+                MobilePremiumPanel(
+                  accentColor: cs.primary,
+                  child: Row(
+                    children: <Widget>[
+                      Icon(Icons.verified_rounded, color: cs.primary),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _successMessage!,
+                          style: TextStyle(
+                            color: cs.primary,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSectionHeader(ThemeData theme, String title, IconData icon) {
     return Row(
       children: [
@@ -354,8 +484,8 @@ class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
         Text(
           title,
           style: theme.textTheme.labelSmall?.copyWith(
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.0,
             color: theme.colorScheme.primary,
           ),
         ),
@@ -374,37 +504,45 @@ class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
     return Container(
       decoration: BoxDecoration(
         color: cs.surfaceContainer,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: cs.outline, width: 1),
+        borderRadius: BorderRadius.circular(20),
       ),
-      child: ListTile(
-        onTap: onTap,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 24,
-          vertical: 12,
-        ),
-        leading: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: cs.primary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(16),
+      child: Material(
+        color: Colors.transparent,
+        child: ListTile(
+          onTap: onTap,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 8,
           ),
-          child: Icon(icon, color: cs.primary, size: 24),
-        ),
-        title: Text(
-          title,
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w900,
+          leading: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: cs.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: cs.primary, size: 22),
           ),
-        ),
-        subtitle: Text(
-          subtitle,
-          style: theme.textTheme.labelSmall?.copyWith(
+          title: Text(
+            title,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          subtitle: Text(
+            subtitle,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+          trailing: Icon(
+            Icons.chevron_right_rounded,
             color: cs.onSurfaceVariant,
+            size: 20,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
           ),
         ),
-        trailing: Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       ),
     );
   }
@@ -416,42 +554,30 @@ class _JoinWorkspaceScreenState extends State<JoinWorkspaceScreen> {
     required String label,
     required ColorScheme cs,
   }) {
-    return Container(
-      height: 60,
+    return SizedBox(
       width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [cs.primary, cs.primary.withValues(alpha: 0.8)],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: cs.primary.withValues(alpha: 0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+      height: 52,
       child: ElevatedButton.icon(
         onPressed: onPressed,
         icon: isLoading
             ? const SizedBox(
-                width: 20,
-                height: 20,
+                width: 18,
+                height: 18,
                 child: CircularProgressIndicator(
                   strokeWidth: 2.5,
                   color: Colors.white,
                 ),
               )
-            : Icon(icon, color: cs.onPrimary),
-        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
+            : Icon(icon, size: 20),
+        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
+          backgroundColor: cs.primary,
           foregroundColor: cs.onPrimary,
+          elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(16),
           ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         ),
       ),
     );

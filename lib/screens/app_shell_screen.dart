@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'dart:ui';
+import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +16,7 @@ import '../services/company_profile_service.dart';
 import '../services/manual_update_service.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/app_pin_dialogs.dart';
+import '../widgets/mobile_premium.dart';
 import '../widgets/platform_shell_layouts.dart';
 import '../widgets/scale_down_width.dart';
 import 'customer_list_screen.dart';
@@ -180,102 +181,59 @@ class _AppShellScreenState extends State<AppShellScreen> {
     required Widget content,
     required Widget drawerChild,
   }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
     final destination = _destinations[_selectedIndex];
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
       backgroundColor: colorScheme.surface,
-      extendBodyBehindAppBar: true,
+      extendBody: true,
+      drawerScrimColor: Colors.black.withValues(alpha: 0.58),
       drawer: Drawer(
-        backgroundColor: colorScheme.surface,
+        width: math.min(MediaQuery.sizeOf(context).width * 0.88, 356),
+        backgroundColor: colorScheme.surfaceContainerLow,
         elevation: 0,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.horizontal(right: Radius.circular(32)),
+          borderRadius: BorderRadius.horizontal(right: Radius.circular(12)),
         ),
         child: SafeArea(top: false, child: drawerChild),
       ),
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(kToolbarHeight + 10),
-        child: Container(
-          decoration: BoxDecoration(
-            color: colorScheme.surface.withValues(alpha: 0.8),
-          ),
-          child: ClipRRect(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-              child: AppBar(
-                backgroundColor: Colors.transparent,
-                surfaceTintColor: Colors.transparent,
-                elevation: 0,
-                centerTitle: true,
-                leading: Builder(
-                  builder: (context) => IconButton(
-                    icon: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: colorScheme.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: colorScheme.outlineVariant),
-                      ),
-                      child: const Icon(Icons.menu_rounded, size: 20),
-                    ),
-                    onPressed: () => Scaffold.of(context).openDrawer(),
-                  ),
-                ),
-                title: Text(
-                  destination.label,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: colorScheme.onSurface,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                actions: const [
-                  // SyncStatusIndicator(), // Temporarily hidden
-                  SizedBox(width: 16),
-                ],
-              ),
-            ),
+        preferredSize: const Size.fromHeight(78),
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+            child: _MobileTopBar(destination: destination),
           ),
         ),
       ),
       body: _buildMobileMain(content),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: colorScheme.surface,
-          border: Border(
-            top: BorderSide(color: colorScheme.outlineVariant, width: 1),
-          ),
+      bottomNavigationBar: _MobileBottomNav(
+        selectedIndex: _selectedIndex,
+        destinations: _destinations,
+        onSelected: _selectIndex,
+      ),
+    );
+  }
+
+  Widget _buildMobileMain(Widget content) {
+    return DecoratedBox(
+      key: const ValueKey<String>('mobile-content'),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[
+            Theme.of(context).colorScheme.surfaceContainerLowest,
+            Theme.of(context).colorScheme.surface,
+          ],
         ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: NavigationBar(
-              backgroundColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              elevation: 0,
-              height: 64,
-              selectedIndex: _selectedIndex,
-              onDestinationSelected: _selectIndex,
-              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-              indicatorColor: colorScheme.primary.withValues(alpha: 0.1),
-              destinations: <NavigationDestination>[
-                for (final item in _destinations)
-                  NavigationDestination(
-                    icon: Icon(item.icon, size: 22),
-                    selectedIcon: Icon(
-                      item.selectedIcon,
-                      size: 24,
-                      color: colorScheme.primary,
-                    ),
-                    label: item.label,
-                  ),
-              ],
-            ),
-          ),
-        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[Expanded(child: content)],
       ),
     );
   }
@@ -295,14 +253,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
           Expanded(child: content),
         ],
       ),
-    );
-  }
-
-  Widget _buildMobileMain(Widget content) {
-    return Column(
-      key: const ValueKey<String>('mobile-content'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[Expanded(child: content)],
     );
   }
 
@@ -401,7 +351,9 @@ class _AppShellScreenState extends State<AppShellScreen> {
   Future<void> _loadBiometricStatus() async {
     final available = await _biometricService.isBiometricAvailable();
     final enabled = await _biometricService.isBiometricEnabled();
-    final label = available ? await _biometricService.getBiometricLabel() : 'Fingerprint';
+    final label = available
+        ? await _biometricService.getBiometricLabel()
+        : 'Fingerprint';
     if (!mounted) {
       return;
     }
@@ -831,27 +783,35 @@ class _AppShellScreenState extends State<AppShellScreen> {
             Widget logoPreview() {
               if (removeLogo) return const SizedBox.shrink();
               final path = pickedLogoPath;
-              if (path == null || path.trim().isEmpty) return const SizedBox.shrink();
+              if (path == null || path.trim().isEmpty) {
+                return const SizedBox.shrink();
+              }
               final file = File(path);
               if (!file.existsSync()) return const SizedBox.shrink();
               return CircleAvatar(radius: 28, backgroundImage: FileImage(file));
             }
 
             return AlertDialog(
-              title: Text(isInitial ? 'Set Company Profile' : 'Company Profile'),
+              title: Text(
+                isInitial ? 'Set Company Profile' : 'Company Profile',
+              ),
               content: SizedBox(
                 width: 380,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text('Company name and logo are optional. You can update them anytime.',
-                        style: Theme.of(context).textTheme.bodySmall),
+                    Text(
+                      'Company name and logo are optional. You can update them anytime.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                     const SizedBox(height: 16),
                     TextField(
                       controller: nameController,
                       textInputAction: TextInputAction.done,
-                      decoration: const InputDecoration(labelText: 'Company name'),
+                      decoration: const InputDecoration(
+                        labelText: 'Company name',
+                      ),
                     ),
                     const SizedBox(height: 16),
                     Row(
@@ -860,28 +820,49 @@ class _AppShellScreenState extends State<AppShellScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Wrap(
-                            spacing: 8, runSpacing: 8,
+                            spacing: 8,
+                            runSpacing: 8,
                             children: <Widget>[
                               OutlinedButton.icon(
                                 onPressed: () async {
                                   try {
                                     final result = await FilePicker.pickFiles(
                                       type: FileType.custom,
-                                      allowedExtensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'],
+                                      allowedExtensions: [
+                                        'jpg',
+                                        'jpeg',
+                                        'png',
+                                        'gif',
+                                        'bmp',
+                                        'webp',
+                                      ],
                                       allowMultiple: false,
                                     );
-                                    if (result == null || result.files.isEmpty || result.files.first.path == null) return;
-                                    setState(() { pickedLogoPath = result.files.first.path; removeLogo = false; });
+                                    if (result == null ||
+                                        result.files.isEmpty ||
+                                        result.files.first.path == null) {
+                                      return;
+                                    }
+                                    setState(() {
+                                      pickedLogoPath = result.files.first.path;
+                                      removeLogo = false;
+                                    });
                                   } catch (e) {
-                                    print('FilePicker error: $e');
+                                    debugPrint('FilePicker error: $e');
                                   }
                                 },
                                 icon: const Icon(Icons.upload_file_outlined),
                                 label: const Text('Choose Logo'),
                               ),
-                              if (pickedLogoPath != null && pickedLogoPath!.trim().isNotEmpty)
+                              if (pickedLogoPath != null &&
+                                  pickedLogoPath!.trim().isNotEmpty)
                                 TextButton(
-                                  onPressed: () { setState(() { removeLogo = true; pickedLogoPath = null; }); },
+                                  onPressed: () {
+                                    setState(() {
+                                      removeLogo = true;
+                                      pickedLogoPath = null;
+                                    });
+                                  },
                                   child: const Text('Remove Logo'),
                                 ),
                             ],
@@ -905,9 +886,11 @@ class _AppShellScreenState extends State<AppShellScreen> {
                     if (removeLogo) {
                       await _companyProfileService.clearLogo();
                       logoPath = '';
-                    } else if (pickedLogoPath != null && pickedLogoPath!.trim().isNotEmpty) {
+                    } else if (pickedLogoPath != null &&
+                        pickedLogoPath!.trim().isNotEmpty) {
                       if (pickedLogoPath != _companyProfile.logoPath) {
-                        logoPath = await _companyProfileService.copyLogoToAppDir(pickedLogoPath!);
+                        logoPath = await _companyProfileService
+                            .copyLogoToAppDir(pickedLogoPath!);
                       } else {
                         logoPath = _companyProfile.logoPath;
                       }
@@ -915,7 +898,10 @@ class _AppShellScreenState extends State<AppShellScreen> {
                       logoPath = _companyProfile.logoPath;
                     }
 
-                    await _companyProfileService.saveProfile(name: name, logoPath: logoPath);
+                    await _companyProfileService.saveProfile(
+                      name: name,
+                      logoPath: logoPath,
+                    );
                     if (!dialogContext.mounted) return;
                     Navigator.of(dialogContext).pop(false);
                     if (!mounted) return;
@@ -1064,6 +1050,10 @@ class _SidebarContentState extends State<_SidebarContent> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final canEdit = context.watch<LinkedSessionProvider>().canEdit;
+
+    if (!PlatformHelper.isDesktop) {
+      return _buildMobileDrawer(context, canEdit: canEdit);
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1237,6 +1227,168 @@ class _SidebarContentState extends State<_SidebarContent> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildMobileDrawer(BuildContext context, {required bool canEdit}) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(color: colorScheme.surfaceContainerLow),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Container(
+            padding: const EdgeInsets.fromLTRB(18, 54, 18, 16),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainer,
+              border: Border(
+                bottom: BorderSide(color: colorScheme.outlineVariant),
+              ),
+            ),
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(kMobilePremiumRadius),
+                    border: Border.all(
+                      color: colorScheme.primary.withValues(alpha: 0.22),
+                    ),
+                  ),
+                  child:
+                      widget.companyLogoPath == null ||
+                          widget.companyLogoPath!.trim().isEmpty
+                      ? Icon(
+                          Icons.account_balance_wallet_rounded,
+                          color: colorScheme.primary,
+                        )
+                      : ClipRRect(
+                          borderRadius: BorderRadius.circular(
+                            kMobilePremiumRadius,
+                          ),
+                          child: Image.file(
+                            File(widget.companyLogoPath!),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => Icon(
+                              Icons.account_balance_wallet_rounded,
+                              color: colorScheme.primary,
+                            ),
+                          ),
+                        ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        widget.companyName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        widget.subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Scrollbar(
+              controller: _scrollController,
+              child: SingleChildScrollView(
+                controller: _scrollController,
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    _buildYearSwitcher(
+                      context: context,
+                      provider: context.watch<LedgerYearProvider>(),
+                      onDeleteRequested: canEdit
+                          ? widget.onDeleteYearRequested
+                          : () {},
+                    ),
+                    const SizedBox(height: 10),
+                    _WorkspaceSwitcher(
+                      onWorkspaceSwitched: widget.onWorkspaceSwitched,
+                    ),
+                    const SizedBox(height: 14),
+                    MobileSectionHeader(title: 'Workspace Tools'),
+                    const SizedBox(height: 8),
+                    _MobileDrawerAction(
+                      icon: Icons.business_outlined,
+                      label: 'Company Profile',
+                      onTap: canEdit ? widget.onCompanyProfileRequested : null,
+                    ),
+                    _MobileDrawerAction(
+                      icon: Icons.devices_other_outlined,
+                      label: 'Linked Devices',
+                      onTap: widget.onLinkedDevicesRequested,
+                    ),
+                    _MobileDrawerAction(
+                      icon: Icons.edit_note_outlined,
+                      label: 'Notes',
+                      trailing: widget.hasNotes
+                          ? MobileStatusPill(
+                              icon: Icons.check_rounded,
+                              label: 'Saved',
+                              color: colorScheme.secondary,
+                            )
+                          : null,
+                      onTap: canEdit ? widget.onNotesRequested : null,
+                    ),
+                    const SizedBox(height: 12),
+                    MobileSectionHeader(title: 'Data & Security'),
+                    const SizedBox(height: 8),
+                    _MobileDrawerAction(
+                      icon: Icons.backup_rounded,
+                      label: 'Backup & Restore',
+                      onTap: canEdit ? widget.onBackupRequested : null,
+                    ),
+                    _MobileDrawerAction(
+                      icon: Icons.lock_outline_rounded,
+                      label: widget.pinButtonLabel,
+                      onTap: canEdit ? widget.onPinRequested : null,
+                    ),
+                    _MobileDrawerAction(
+                      icon: Icons.system_update_alt_outlined,
+                      label: 'Check for Update',
+                      onTap: widget.onCheckUpdateRequested,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+            child: Text(
+              'Balance Desk',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1537,13 +1689,11 @@ class _PinSettingsDialogState extends State<_PinSettingsDialog> {
           child: const Text('Cancel'),
         ),
         TextButton(
-          onPressed: () =>
-              Navigator.of(context).pop(_PinAction.disable),
+          onPressed: () => Navigator.of(context).pop(_PinAction.disable),
           child: const Text('Turn Off PIN'),
         ),
         FilledButton(
-          onPressed: () =>
-              Navigator.of(context).pop(_PinAction.change),
+          onPressed: () => Navigator.of(context).pop(_PinAction.change),
           child: const Text('Change PIN'),
         ),
       ],
@@ -2053,6 +2203,251 @@ class _ManualUpdateDialogState extends State<_ManualUpdateDialog> {
       },
     );
     return decision ?? false;
+  }
+}
+
+class _MobileTopBar extends StatelessWidget {
+  const _MobileTopBar({required this.destination});
+
+  final _ShellDestination destination;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return MobilePremiumPanel(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      child: Row(
+        children: <Widget>[
+          Builder(
+            builder: (BuildContext context) {
+              return IconButton(
+                tooltip: 'Open menu',
+                onPressed: () => Scaffold.of(context).openDrawer(),
+                style: IconButton.styleFrom(
+                  backgroundColor: colorScheme.surfaceContainerHigh,
+                  foregroundColor: colorScheme.onSurface,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(kMobilePremiumRadius),
+                  ),
+                ),
+                icon: const Icon(Icons.menu_rounded),
+              );
+            },
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Text(
+                  'Balance Desk',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  destination.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: colorScheme.primary.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(kMobilePremiumRadius),
+              border: Border.all(
+                color: colorScheme.primary.withValues(alpha: 0.2),
+              ),
+            ),
+            child: Icon(destination.selectedIcon, color: colorScheme.primary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MobileDrawerAction extends StatelessWidget {
+  const _MobileDrawerAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.trailing,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final enabled = onTap != null;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: MobilePremiumPanel(
+        onTap: onTap,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        child: Opacity(
+          opacity: enabled ? 1 : 0.42,
+          child: Row(
+            children: <Widget>[
+              Icon(
+                icon,
+                size: 19,
+                color: enabled
+                    ? colorScheme.primary
+                    : colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              if (trailing != null)
+                trailing!
+              else
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MobileBottomNav extends StatelessWidget {
+  const _MobileBottomNav({
+    required this.selectedIndex,
+    required this.destinations,
+    required this.onSelected,
+  });
+
+  final int selectedIndex;
+  final List<_ShellDestination> destinations;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
+        child: MobilePremiumPanel(
+          padding: const EdgeInsets.all(6),
+          child: Row(
+            children: <Widget>[
+              for (var i = 0; i < destinations.length; i++) ...<Widget>[
+                Expanded(
+                  child: _MobileBottomNavItem(
+                    label: destinations[i].label,
+                    icon: selectedIndex == i
+                        ? destinations[i].selectedIcon
+                        : destinations[i].icon,
+                    selected: selectedIndex == i,
+                    colorScheme: colorScheme,
+                    onTap: () => onSelected(i),
+                  ),
+                ),
+                if (i < destinations.length - 1) const SizedBox(width: 4),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MobileBottomNavItem extends StatelessWidget {
+  const _MobileBottomNavItem({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.colorScheme,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final ColorScheme colorScheme;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(kMobilePremiumRadius),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
+        decoration: BoxDecoration(
+          color: selected
+              ? colorScheme.primary.withValues(alpha: 0.16)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(kMobilePremiumRadius),
+          border: selected
+              ? Border.all(color: colorScheme.primary.withValues(alpha: 0.22))
+              : null,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(
+              icon,
+              size: 22,
+              color: selected
+                  ? colorScheme.primary
+                  : colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                color: selected
+                    ? colorScheme.primary
+                    : colorScheme.onSurfaceVariant,
+                fontSize: 10,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

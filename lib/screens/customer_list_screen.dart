@@ -7,6 +7,7 @@ import '../providers/customer_provider.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/customer_search_field.dart';
+import '../widgets/mobile_premium.dart';
 import '../widgets/scale_down_width.dart';
 import 'ledger_screen.dart';
 import '../features/linked_devices/providers/linked_session_provider.dart';
@@ -180,9 +181,9 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
               ),
               _CustomerIntent: CallbackAction<_CustomerIntent>(
                 onInvoke: (_CustomerIntent intent) {
-                  final canEdit = context.read<LinkedSessionProvider>().canEdit;
+                  final canEdit = _canEdit(context, listen: false);
                   if (intent.action == _CustomerShortcut.add && canEdit) {
-                      _showAddCustomerDialog();
+                    _showAddCustomerDialog();
                   } else if (intent.action == _CustomerShortcut.refresh) {
                     if (!provider.isLoading) {
                       provider.loadCustomers();
@@ -204,6 +205,14 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                 builder: (BuildContext context, BoxConstraints constraints) {
                   final isCompact = constraints.maxWidth < 720;
                   final isDesktop = PlatformHelper.isDesktop;
+                  if (!isDesktop) {
+                    return _buildPremiumMobileCustomerLayout(
+                      context: context,
+                      provider: provider,
+                      customers: customers,
+                    );
+                  }
+
                   final pagePadding = EdgeInsets.fromLTRB(
                     isCompact ? 14 : 16,
                     12,
@@ -218,41 +227,11 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                     embedInParentScroll: !isDesktop && isCompact,
                   );
 
-                  if (!isDesktop && isCompact) {
-                    return SingleChildScrollView(
-                      controller: _tableVerticalController,
-                      keyboardDismissBehavior:
-                          ScrollViewKeyboardDismissBehavior.onDrag,
-                      padding: pagePadding,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-
-                          _buildCustomerHero(
-                            context,
-                            totalCount: provider.customers.length,
-                            visibleCount: customers.length,
-                            isLoading: provider.isLoading,
-                          ),
-                          const SizedBox(height: 12),
-                          _buildCustomerToolbar(
-                            context: context,
-                            provider: provider,
-                            isCompact: true,
-                          ),
-                          const SizedBox(height: 12),
-                          body,
-                        ],
-                      ),
-                    );
-                  }
-
                   return Padding(
                     padding: pagePadding,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-
                         if (!isDesktop) ...<Widget>[
                           _buildCustomerHero(
                             context,
@@ -260,20 +239,20 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                             visibleCount: customers.length,
                             isLoading: provider.isLoading,
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 8),
                         ],
                         _buildCustomerToolbar(
                           context: context,
                           provider: provider,
                           isCompact: isDesktop ? false : isCompact,
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
                         if (isDesktop) ...<Widget>[
                           _buildDesktopDirectoryHeading(
                             context,
                             count: customers.length,
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 8),
                         ],
                         Expanded(child: body),
                       ],
@@ -299,6 +278,176 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
         _searchController.clear();
         provider.updateSearchQuery('');
       },
+    );
+  }
+
+  bool _canEdit(BuildContext context, {bool listen = true}) {
+    try {
+      return listen
+          ? context.watch<LinkedSessionProvider>().canEdit
+          : context.read<LinkedSessionProvider>().canEdit;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  Widget _buildPremiumMobileCustomerLayout({
+    required BuildContext context,
+    required CustomerProvider provider,
+    required List<Customer> customers,
+  }) {
+    final canEdit = _canEdit(context);
+    final state = _buildCustomerState(provider: provider, customers: customers);
+
+    return SingleChildScrollView(
+      controller: _tableVerticalController,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      child: MobilePremiumPage(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 112),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+             MobilePremiumPanel(
+               padding: const EdgeInsets.all(12),
+               child: Column(
+                 crossAxisAlignment: CrossAxisAlignment.stretch,
+                 children: <Widget>[
+                   _buildSearchField(provider),
+                   const SizedBox(height: 10),
+                   Row(
+                     children: <Widget>[
+                       Expanded(
+                         child: OutlinedButton.icon(
+                           onPressed: provider.isLoading
+                               ? null
+                               : provider.loadCustomers,
+                           icon: const Icon(Icons.refresh_rounded),
+                           label: const Text('Refresh'),
+                         ),
+                       ),
+                       const SizedBox(width: 10),
+                       Expanded(
+                         child: FilledButton.icon(
+                           onPressed: canEdit ? _showAddCustomerDialog : null,
+                           icon: const Icon(Icons.person_add_alt_1_rounded),
+                           label: const Text('Add'),
+                         ),
+                       ),
+                     ],
+                   ),
+                 ],
+               ),
+             ),
+             const SizedBox(height: 16),
+             MobileSectionHeader(
+               title: 'Directory',
+               count: '${provider.customers.length}',
+             ),
+             const SizedBox(height: 10),
+             if (state != null)
+               MobilePremiumPanel(child: state)
+             else
+               _buildPremiumMobileCustomerCards(
+                 context: context,
+                 customers: customers,
+                 canEdit: canEdit,
+               ),
+           ],
+         ),
+       ),
+     );
+   }
+
+  Widget _buildPremiumMobileCustomerCards({
+    required BuildContext context,
+    required List<Customer> customers,
+    required bool canEdit,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Column(
+      children: <Widget>[
+        for (var index = 0; index < customers.length; index++) ...<Widget>[
+          if (index != 0) const SizedBox(height: 10),
+          MobilePremiumPanel(
+            onTap: () => _openLedger(customers[index]),
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(kMobilePremiumRadius),
+                    border: Border.all(
+                      color: colorScheme.primary.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      customers[index].name.trim().isEmpty
+                          ? '?'
+                          : customers[index].name.trim()[0].toUpperCase(),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        customers[index].name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: <Widget>[
+                          MobileStatusPill(
+                            icon: Icons.tag_rounded,
+                            label: '${customers[index].id ?? '-'}',
+                            color: colorScheme.tertiary,
+                          ),
+                          if (customers[index].isStockLedger)
+                            MobileStatusPill(
+                              icon: Icons.inventory_2_outlined,
+                              label: 'Stock',
+                              color: colorScheme.secondary,
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: 'Open ledger',
+                  onPressed: () => _openLedger(customers[index]),
+                  icon: const Icon(Icons.arrow_forward_rounded),
+                ),
+                if (canEdit)
+                  IconButton(
+                    tooltip: 'Delete customer',
+                    onPressed: () => _confirmDelete(customers[index]),
+                    icon: const Icon(Icons.delete_outline_rounded),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -357,7 +506,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
           label: const Text('Refresh'),
         ),
         FilledButton.icon(
-          onPressed: context.watch<LinkedSessionProvider>().canEdit ? _showAddCustomerDialog : null,
+          onPressed: _canEdit(context) ? _showAddCustomerDialog : null,
           icon: const Icon(Icons.person_add_alt_1_rounded),
           label: const Text('Add Customer'),
         ),
@@ -409,8 +558,8 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
         icon: Icons.people_outline,
         title: 'No customers yet',
         message: 'Add your first customer to start managing ledgers.',
-        actionLabel: context.watch<LinkedSessionProvider>().canEdit ? 'Add Customer' : null,
-        onAction: context.watch<LinkedSessionProvider>().canEdit ? _showAddCustomerDialog : null,
+        actionLabel: _canEdit(context) ? 'Add Customer' : null,
+        onAction: _canEdit(context) ? _showAddCustomerDialog : null,
       );
     }
 
@@ -437,10 +586,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     required bool compactCards,
     required bool embedInParentScroll,
   }) {
-    final state = _buildCustomerState(
-      provider: provider,
-      customers: customers,
-    );
+    final state = _buildCustomerState(provider: provider, customers: customers);
     if (state != null) {
       return state;
     }
@@ -554,7 +700,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                               ),
                             ),
                             DataCell(
-                              context.watch<LinkedSessionProvider>().canEdit
+                              _canEdit(context)
                                   ? IconButton(
                                       tooltip: 'Delete customer',
                                       onPressed: () => _confirmDelete(customer),
@@ -652,7 +798,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                     onPressed: () => _openLedger(customer),
                     icon: const Icon(Icons.chevron_right_rounded),
                   ),
-                  if (context.watch<LinkedSessionProvider>().canEdit)
+                  if (_canEdit(context))
                     IconButton(
                       tooltip: 'Delete customer',
                       onPressed: () => _confirmDelete(customer),

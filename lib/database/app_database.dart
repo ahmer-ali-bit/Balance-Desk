@@ -1119,7 +1119,7 @@ class DatabaseHelper {
       <String, Object?>{
         'showInDailyLog': 1,
         'createdAt': savedAt,
-        if (dailyLogPageNo != null) 'dailyLogPageNo': dailyLogPageNo,
+        'dailyLogPageNo': ?dailyLogPageNo,
       },
       where: 'id = ?',
       whereArgs: <Object?>[entryId],

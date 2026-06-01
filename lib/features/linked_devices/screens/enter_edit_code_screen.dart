@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../utils/platform_helper.dart';
+import '../../../widgets/mobile_premium.dart';
 import '../providers/linked_session_provider.dart';
 import '../services/linked_devices_service.dart';
 
@@ -81,6 +83,10 @@ class _EnterEditCodeScreenState extends State<EnterEditCodeScreen> {
     final cs = theme.colorScheme;
     const amber = Color(0xFFF59E0B);
 
+    if (!PlatformHelper.isDesktop) {
+      return _buildPremiumMobileEditCode(theme, cs, amber);
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Enter Authorization Code'),
@@ -115,15 +121,17 @@ class _EnterEditCodeScreenState extends State<EnterEditCodeScreen> {
                 // ── Title ──
                 Text(
                   'Enter Edit Authorization',
-                  style: theme.textTheme.titleLarge
-                      ?.copyWith(fontWeight: FontWeight.w900),
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'Ask the admin for the one-time code to unlock write access.',
-                  style: theme.textTheme.labelMedium
-                      ?.copyWith(color: cs.onSurfaceVariant),
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
@@ -149,12 +157,13 @@ class _EnterEditCodeScreenState extends State<EnterEditCodeScreen> {
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20),
                       borderSide: BorderSide(
-                          color: amber.withValues(alpha: 0.3), width: 1.5),
+                        color: amber.withValues(alpha: 0.3),
+                        width: 1.5,
+                      ),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20),
-                      borderSide:
-                          const BorderSide(color: amber, width: 2),
+                      borderSide: const BorderSide(color: amber, width: 2),
                     ),
                   ),
                   onSubmitted: (_) => _verifyCode(),
@@ -171,15 +180,21 @@ class _EnterEditCodeScreenState extends State<EnterEditCodeScreen> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.warning_amber_rounded,
-                            color: cs.error, size: 18),
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          color: cs.error,
+                          size: 18,
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: Text(_errorMessage!,
-                              style: TextStyle(
-                                  color: cs.error,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13)),
+                          child: Text(
+                            _errorMessage!,
+                            style: TextStyle(
+                              color: cs.error,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -191,6 +206,106 @@ class _EnterEditCodeScreenState extends State<EnterEditCodeScreen> {
                 _buildPremiumButton(cs, amber),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumMobileEditCode(
+    ThemeData theme,
+    ColorScheme cs,
+    Color amber,
+  ) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Authorization Code'),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: SingleChildScrollView(
+        child: MobilePremiumPage(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              MobilePremiumHeader(
+                icon: Icons.key_rounded,
+                title: 'Edit Access',
+                subtitle: 'Enter the one-time authorization code.',
+                children: <Widget>[
+                  MobileMetricGrid(
+                    children: <Widget>[
+                      MobileMetricTile(
+                        label: 'Code',
+                        value: '6 digits',
+                        icon: Icons.pin_outlined,
+                        color: amber,
+                      ),
+                      MobileMetricTile(
+                        label: 'Access',
+                        value: 'Write',
+                        icon: Icons.edit_outlined,
+                        color: cs.primary,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              MobilePremiumPanel(
+                accentColor: amber,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    TextField(
+                      controller: _codeController,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      maxLength: 6,
+                      style: TextStyle(
+                        fontFamily: 'RobotoMono',
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 4,
+                        color: amber,
+                      ),
+                      decoration: const InputDecoration(
+                        hintText: '000000',
+                        counterText: '',
+                        prefixIcon: Icon(Icons.pin_outlined),
+                      ),
+                      onSubmitted: (_) => _verifyCode(),
+                    ),
+                    if (_errorMessage != null) ...<Widget>[
+                      const SizedBox(height: 10),
+                      Text(
+                        _errorMessage!,
+                        style: TextStyle(
+                          color: cs.error,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    FilledButton.icon(
+                      onPressed: _isLoading ? null : _verifyCode,
+                      icon: _isLoading
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.4,
+                              ),
+                            )
+                          : const Icon(Icons.lock_open_rounded),
+                      label: const Text('Verify'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -221,16 +336,21 @@ class _EnterEditCodeScreenState extends State<EnterEditCodeScreen> {
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2.5, color: Colors.white))
+                  strokeWidth: 2.5,
+                  color: Colors.white,
+                ),
+              )
             : const Icon(Icons.verified_user_rounded, color: Colors.white),
-        label: const Text('Verify & Unlock',
-            style: TextStyle(
-                fontWeight: FontWeight.w900, color: Colors.white)),
+        label: const Text(
+          'Verify & Unlock',
+          style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white),
+        ),
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
         ),
       ),
     );

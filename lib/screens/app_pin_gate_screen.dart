@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 
 import '../services/app_pin_service.dart';
 import '../services/biometric_auth_service.dart';
+import '../utils/platform_helper.dart';
 import '../widgets/app_pin_dialogs.dart';
+import '../widgets/mobile_premium.dart';
 
 class AppPinGateScreen extends StatefulWidget {
   const AppPinGateScreen({super.key, required this.child});
@@ -195,6 +197,10 @@ class _AppPinGateScreenState extends State<AppPinGateScreen> {
       return widget.child;
     }
 
+    if (!PlatformHelper.isDesktop) {
+      return _buildPremiumMobileGate(context);
+    }
+
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -213,6 +219,137 @@ class _AppPinGateScreenState extends State<AppPinGateScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildPremiumMobileGate(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: MobilePremiumPage(
+            padding: const EdgeInsets.fromLTRB(20, 28, 20, 28),
+            child: _buildPremiumMobileGateBody(context),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumMobileGateBody(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    switch (_view) {
+      case _AppPinGateView.loading:
+        return const SizedBox(
+          height: 360,
+          child: Center(child: CircularProgressIndicator()),
+        );
+      case _AppPinGateView.setupPrompt:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            const MobilePremiumHeader(
+              icon: Icons.shield_outlined,
+              title: 'Protect Device',
+              subtitle: 'Set a private app PIN for this phone.',
+            ),
+            const SizedBox(height: 12),
+            MobilePremiumPanel(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  FilledButton.icon(
+                    onPressed: _savePin,
+                    icon: const Icon(Icons.lock_outline_rounded),
+                    label: const Text('Set App PIN'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextButton(
+                    onPressed: _skipPinSetup,
+                    child: const Text('Continue Without PIN'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      case _AppPinGateView.unlock:
+        return Form(
+          key: _unlockFormKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              MobilePremiumHeader(
+                icon: Icons.lock_rounded,
+                title: 'Unlock Balance Desk',
+                subtitle: _biometricReady
+                    ? 'Use $_biometricLabel or enter your PIN.'
+                    : 'Enter your app PIN.',
+              ),
+              const SizedBox(height: 12),
+              MobilePremiumPanel(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    if (_biometricReady) ...<Widget>[
+                      OutlinedButton.icon(
+                        onPressed: _authenticateWithBiometric,
+                        icon: Icon(_biometricIcon),
+                        label: Text('Use $_biometricLabel'),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    TextFormField(
+                      controller: _unlockPinController,
+                      focusNode: _unlockPinFocusNode,
+                      autofocus: !_biometricReady,
+                      keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.done,
+                      obscureText: true,
+                      maxLength: 6,
+                      inputFormatters: <TextInputFormatter>[
+                        FilteringTextInputFormatter.digitsOnly,
+                      ],
+                      decoration: const InputDecoration(
+                        labelText: 'PIN',
+                        counterText: '',
+                        prefixIcon: Icon(Icons.pin_outlined),
+                      ),
+                      validator: AppPinService.validatePin,
+                      onFieldSubmitted: (_) => _unlock(),
+                    ),
+                    if ((_errorMessage ?? '').isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 8),
+                      Text(
+                        _errorMessage!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.error,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    FilledButton(
+                      onPressed: _isSubmitting ? null : _unlock,
+                      child: _isSubmitting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.2,
+                              ),
+                            )
+                          : const Text('Unlock'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      case _AppPinGateView.app:
+        return const SizedBox.shrink();
+    }
   }
 
   Widget _buildGateBody(BuildContext context) {
@@ -306,8 +443,7 @@ class _AppPinGateScreenState extends State<AppPinGateScreen> {
                       child: Text(
                         'or enter PIN',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color:
-                              Theme.of(context).colorScheme.onSurfaceVariant,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ),

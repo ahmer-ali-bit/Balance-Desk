@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../utils/platform_helper.dart';
+import '../../../widgets/mobile_premium.dart';
 import '../providers/linked_session_provider.dart';
 
 class DisconnectConfirmScreen extends StatefulWidget {
   const DisconnectConfirmScreen({super.key});
 
   @override
-  State<DisconnectConfirmScreen> createState() => _DisconnectConfirmScreenState();
+  State<DisconnectConfirmScreen> createState() =>
+      _DisconnectConfirmScreenState();
 }
 
 class _DisconnectConfirmScreenState extends State<DisconnectConfirmScreen> {
@@ -14,7 +17,7 @@ class _DisconnectConfirmScreenState extends State<DisconnectConfirmScreen> {
 
   Future<void> _handleDisconnect() async {
     setState(() => _isLoading = true);
-    
+
     final provider = context.read<LinkedSessionProvider>();
     await provider.disconnect(context);
 
@@ -22,11 +25,15 @@ class _DisconnectConfirmScreenState extends State<DisconnectConfirmScreen> {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Disconnected successfully. Your own workspace has been restored.'),
+          content: Text(
+            'Disconnected successfully. Your own workspace has been restored.',
+          ),
           backgroundColor: Colors.green,
         ),
       );
-      Navigator.of(context).pop(); // Go back to LinkedDevicesScreen which will reflect the state
+      Navigator.of(
+        context,
+      ).pop(); // Go back to LinkedDevicesScreen which will reflect the state
     }
   }
 
@@ -34,6 +41,10 @@ class _DisconnectConfirmScreenState extends State<DisconnectConfirmScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+
+    if (!PlatformHelper.isDesktop) {
+      return _buildPremiumMobileDisconnect(theme, cs);
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -61,18 +72,26 @@ class _DisconnectConfirmScreenState extends State<DisconnectConfirmScreen> {
                     color: cs.error.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(Icons.link_off_rounded, size: 48, color: cs.error),
+                  child: Icon(
+                    Icons.link_off_rounded,
+                    size: 48,
+                    color: cs.error,
+                  ),
                 ),
                 const SizedBox(height: 32),
                 Text(
                   'Disconnect Instance?',
-                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
                 Text(
                   'This action will terminate your connection to the administrative node. Your local workspace will be fully restored.',
-                  style: theme.textTheme.labelMedium?.copyWith(color: cs.onSurfaceVariant),
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 48),
@@ -88,11 +107,88 @@ class _DisconnectConfirmScreenState extends State<DisconnectConfirmScreen> {
                   const SizedBox(height: 16),
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: Text('Cancel Operation', style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.bold)),
+                    child: Text(
+                      'Cancel Operation',
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ],
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumMobileDisconnect(ThemeData theme, ColorScheme cs) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Disconnect'),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: SingleChildScrollView(
+        child: MobilePremiumPage(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              MobilePremiumHeader(
+                icon: Icons.link_off_rounded,
+                title: 'Disconnect Instance',
+                subtitle: 'Restore this device to its own local workspace.',
+                children: <Widget>[
+                  MobileMetricGrid(
+                    children: <Widget>[
+                      MobileMetricTile(
+                        label: 'Linked',
+                        value: 'Off',
+                        icon: Icons.cloud_off_rounded,
+                        color: cs.error,
+                      ),
+                      MobileMetricTile(
+                        label: 'Local',
+                        value: 'Restore',
+                        icon: Icons.restore_rounded,
+                        color: cs.primary,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              MobilePremiumPanel(
+                accentColor: cs.error,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    if (_isLoading)
+                      const Center(child: CircularProgressIndicator())
+                    else ...<Widget>[
+                      FilledButton.icon(
+                        onPressed: _handleDisconnect,
+                        icon: const Icon(Icons.link_off_rounded),
+                        label: const Text('Disconnect'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: cs.error,
+                          foregroundColor: cs.onError,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -110,9 +206,7 @@ class _DisconnectConfirmScreenState extends State<DisconnectConfirmScreen> {
       height: 60,
       width: double.infinity,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [color, color.withValues(alpha: 0.8)],
-        ),
+        gradient: LinearGradient(colors: [color, color.withValues(alpha: 0.8)]),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -128,7 +222,9 @@ class _DisconnectConfirmScreenState extends State<DisconnectConfirmScreen> {
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
         ),
         child: Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
       ),

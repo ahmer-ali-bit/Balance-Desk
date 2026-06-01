@@ -1,5 +1,3 @@
-
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -13,6 +11,7 @@ import '../utils/app_colors.dart';
 import '../utils/number_format_utils.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/customer_search_field.dart';
+import '../widgets/mobile_premium.dart';
 import '../widgets/summary_stat_card.dart';
 import '../providers/customer_provider.dart';
 import 'ledger_screen.dart';
@@ -97,11 +96,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
         );
         final totalBuyBags = entries.fold<double>(
           0,
-          (double sum, Entry entry) => sum + (double.tryParse(entry.buyBags) ?? 0),
+          (double sum, Entry entry) =>
+              sum + (double.tryParse(entry.buyBags) ?? 0),
         );
         final totalSellBags = entries.fold<double>(
           0,
-          (double sum, Entry entry) => sum + (double.tryParse(entry.sellBags) ?? 0),
+          (double sum, Entry entry) =>
+              sum + (double.tryParse(entry.sellBags) ?? 0),
         );
         final latestPageNo = entries.isEmpty ? '' : entries.last.pageNo;
 
@@ -151,9 +152,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
       setState(() {
         _isLoading = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading summary: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error loading summary: $e')));
     }
   }
 
@@ -167,17 +168,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
               value: customerProvider,
             ),
           ],
-          child: LedgerScreen(
-            customer: customer,
-            autoOpenAddEntry: false,
-          ),
+          child: LedgerScreen(customer: customer, autoOpenAddEntry: false),
         ),
       ),
     );
     // Reload summary when returning in case data changed
     _loadSummary();
   }
-
 
   Future<void> _exportSummaryPdf() async {
     final rows = _buildSummaryPdfRows();
@@ -400,6 +397,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
               final bottomPadding =
                   12.0 + MediaQuery.viewInsetsOf(context).bottom;
 
+              if (!isDesktop) {
+                return _buildPremiumMobileSummaryPage(context);
+              }
+
               final page = SingleChildScrollView(
                 controller: _tableVerticalController,
                 keyboardDismissBehavior:
@@ -418,7 +419,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     else ...<Widget>[
                       _buildSummaryToolbar(isCompact: !isDesktop && isCompact),
                     ],
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     _buildMainContent(
                       context,
                       compactLayout: !isDesktop && isCompact,
@@ -500,6 +501,262 @@ class _SummaryScreenState extends State<SummaryScreen> {
     );
   }
 
+  Widget _buildPremiumMobileSummaryPage(BuildContext context) {
+    final filteredCustomers = _filteredCustomers();
+    final overallBalance = _summaryData.finalBalance;
+    final balanceColor = AppColors.balanceColor(overallBalance);
+
+    return SingleChildScrollView(
+      controller: _tableVerticalController,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      child: MobilePremiumPage(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 112),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            MobilePremiumHeader(
+              icon: Icons.analytics_rounded,
+              title: 'Summary',
+              subtitle: '${filteredCustomers.length} active customer totals',
+              trailing: _isLoading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2.2),
+                    )
+                  : null,
+              children: <Widget>[
+                Column(
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: MobileMetricTile(
+                            label: 'Debit',
+                            value: _formatAmount(_summaryData.overallDebit),
+                            icon: Icons.south_west_rounded,
+                            color: AppColors.debit,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: MobileMetricTile(
+                            label: 'Credit',
+                            value: _formatAmount(_summaryData.overallCredit),
+                            icon: Icons.north_east_rounded,
+                            color: AppColors.credit,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    MobileMetricTile(
+                      label: 'Balance',
+                      value: _formatBalance(overallBalance),
+                      icon: Icons.account_balance_wallet_outlined,
+                      color: balanceColor,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildPremiumMobileSummaryControls(context),
+            const SizedBox(height: 16),
+            if (_isLoading)
+              const MobilePremiumPanel(
+                child: SizedBox(
+                  height: 180,
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              )
+            else if (_errorMessage != null)
+              MobilePremiumPanel(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    const Icon(Icons.error_outline_rounded, size: 40),
+                    const SizedBox(height: 10),
+                    Text(_errorMessage!, textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: _loadSummary,
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              )
+            else ...<Widget>[
+              MobileSectionHeader(
+                title: 'Customer Balances',
+                count: '${filteredCustomers.length}',
+              ),
+              const SizedBox(height: 10),
+              if (filteredCustomers.isEmpty)
+                MobilePremiumPanel(child: _buildEmptyState(context))
+              else
+                _buildPremiumMobileSummaryCards(context, filteredCustomers),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumMobileSummaryControls(BuildContext context) {
+    final canExport = !_isLoading && _summaryData.customers.isNotEmpty;
+
+    return MobilePremiumPanel(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          CustomerSearchField(
+            controller: _searchController,
+            focusNode: _searchFocusNode,
+            hintText: 'Search customers',
+            onChanged: (String value) {
+              setState(() {
+                _searchQuery = value;
+              });
+            },
+            onClear: () {
+              _searchController.clear();
+              setState(() {
+                _searchQuery = '';
+              });
+            },
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isLoading ? null : _loadSummary,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Refresh'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: canExport ? _exportSummary : null,
+                  icon: const Icon(Icons.file_download_outlined),
+                  label: const Text('Export'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPremiumMobileSummaryCards(
+    BuildContext context,
+    List<_CustomerSummary> customers,
+  ) {
+    return Column(
+      children: <Widget>[
+        for (var index = 0; index < customers.length; index++) ...<Widget>[
+          if (index != 0) const SizedBox(height: 10),
+          _buildPremiumMobileSummaryCard(context, customers[index]),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildPremiumMobileSummaryCard(
+    BuildContext context,
+    _CustomerSummary item,
+  ) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final balanceColor = AppColors.balanceColor(item.balance);
+
+    return MobilePremiumPanel(
+      onTap: () => _navigateToCustomerLedger(item.customer),
+      padding: const EdgeInsets.all(12),
+      accentColor: balanceColor,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(kMobilePremiumRadius),
+                ),
+                child: Center(
+                  child: Text(
+                    item.customer.name.trim().isEmpty
+                        ? '?'
+                        : item.customer.name.trim()[0].toUpperCase(),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: colorScheme.primary,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  item.customer.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Column(
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: MobileMetricTile(
+                      label: item.customer.isStockLedger ? 'Buy' : 'Debit',
+                      value: _formatAmount(item.totalDebit),
+                      icon: Icons.south_west_rounded,
+                      color: item.customer.isStockLedger
+                          ? AppColors.credit
+                          : AppColors.debit,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: MobileMetricTile(
+                      label: item.customer.isStockLedger ? 'Sell' : 'Credit',
+                      value: _formatAmount(item.totalCredit),
+                      icon: Icons.north_east_rounded,
+                      color: item.customer.isStockLedger
+                          ? AppColors.debit
+                          : AppColors.credit,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              MobileMetricTile(
+                label: 'Balance',
+                value: _formatBalance(item.balance),
+                icon: Icons.account_balance_wallet_outlined,
+                color: balanceColor,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCompactSummaryControls(BuildContext context) {
     final totalsLabel = _formatBalance(_summaryData.finalBalance);
 
@@ -569,30 +826,25 @@ class _SummaryScreenState extends State<SummaryScreen> {
     final colorScheme = theme.colorScheme;
 
     return Material(
-      color: Colors.transparent,
+      color: colorScheme.surfaceContainer,
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Ink(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: colorScheme.outlineVariant),
-          ),
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
           child: Row(
             children: <Widget>[
               Container(
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
+                  color: colorScheme.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(icon, color: colorScheme.primary, size: 18),
               ),
-              const SizedBox(width: 11),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -600,28 +852,27 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     Text(
                       title,
                       style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 2),
                     Text(
                       value,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelMedium?.copyWith(
+                      style: theme.textTheme.labelSmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
               Icon(
                 expanded
                     ? Icons.keyboard_arrow_up_rounded
                     : Icons.keyboard_arrow_down_rounded,
                 color: colorScheme.onSurfaceVariant,
+                size: 20,
               ),
             ],
           ),
@@ -711,7 +962,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
     BuildContext context, {
     required double overallBalance,
   }) {
-
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final columns = constraints.maxWidth >= 760
@@ -761,13 +1011,15 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 icon: overallBalance > 0
                     ? Icons.arrow_downward_rounded
                     : (overallBalance < 0
-                        ? Icons.arrow_upward_rounded
-                        : Icons.account_balance_wallet_rounded),
-                backgroundColor: AppColors.balanceColor(overallBalance) == AppColors.debit
+                          ? Icons.arrow_upward_rounded
+                          : Icons.account_balance_wallet_rounded),
+                backgroundColor:
+                    AppColors.balanceColor(overallBalance) == AppColors.debit
                     ? AppColors.debit
-                    : (AppColors.balanceColor(overallBalance) == AppColors.credit
-                        ? AppColors.credit
-                        : Colors.grey.shade600),
+                    : (AppColors.balanceColor(overallBalance) ==
+                              AppColors.credit
+                          ? AppColors.credit
+                          : Colors.grey.shade600),
                 labelColor: Colors.white,
               ),
             ),
@@ -794,49 +1046,70 @@ class _SummaryScreenState extends State<SummaryScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Card(
-      child: ListTile(
-        contentPadding: EdgeInsets.symmetric(
-          horizontal: compactLayout ? 12 : 16,
-          vertical: compactLayout ? 2 : 4,
-        ),
-        title: Text(
-          'Customer Summary',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        trailing: CircleAvatar(
-          radius: 16,
-          backgroundColor: colorScheme.primaryContainer,
-          foregroundColor: colorScheme.primary,
-          child: Text(
-            '$count',
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: colorScheme.primary,
-              fontWeight: FontWeight.w700,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
+      child: Row(
+        children: <Widget>[
+          Text(
+            'Customer Summary',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
             ),
           ),
-        ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: colorScheme.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '$count',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: colorScheme.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    return const SizedBox(
-      height: 240,
-      child: Card(
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Icon(Icons.groups_2_outlined, size: 52),
-              SizedBox(height: 12),
-              Text('No summary entries available.'),
-              SizedBox(height: 8),
-              Text('Add ledger entries to see the summary.'),
-            ],
-          ),
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      height: 220,
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(
+              Icons.groups_2_outlined,
+              size: 44,
+              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'No summary entries available.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Add ledger entries to see the summary.',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -888,7 +1161,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 rows: <DataRow>[
                   ...customers.map((item) {
                     return DataRow(
-                      onLongPress: () => _navigateToCustomerLedger(item.customer),
+                      onLongPress: () =>
+                          _navigateToCustomerLedger(item.customer),
                       cells: <DataCell>[
                         DataCell(
                           SizedBox(
@@ -900,9 +1174,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                             ),
                           ),
                         ),
-                        DataCell(
-                          Text(item.pageNo.isEmpty ? '-' : item.pageNo),
-                        ),
+                        DataCell(Text(item.pageNo.isEmpty ? '-' : item.pageNo)),
                         DataCell(
                           Text(
                             _formatAmount(item.totalDebit),
@@ -921,7 +1193,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
                             child: Text(
                               _formatBalance(item.balance),
                               style: TextStyle(
-                                  color: AppColors.balanceColor(item.balance)),
+                                color: AppColors.balanceColor(item.balance),
+                              ),
                             ),
                           ),
                         ),
@@ -961,53 +1234,77 @@ class _SummaryScreenState extends State<SummaryScreen> {
       onLongPress: () => _navigateToCustomerLedger(item.customer),
       child: Container(
         padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  item.customer.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainer,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Center(
+                    child: Text(
+                      item.customer.name.trim().isEmpty
+                          ? '?'
+                          : item.customer.name.trim()[0].toUpperCase(),
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    item.customer.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainer,
-                  borderRadius: BorderRadius.circular(999),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Pg ${item.pageNo.isEmpty ? '-' : item.pageNo}',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant.withValues(
+                        alpha: 0.7,
+                      ),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
-                child: Text(
-                  'Page ${item.pageNo.isEmpty ? '-' : item.pageNo}',
-                  style: theme.textTheme.labelMedium,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _buildSummaryAmountStrip(
-            context,
-            isStock: item.customer.isStockLedger,
-            debit: _formatAmount(item.totalDebit),
-            credit: _formatAmount(item.totalCredit),
-            balance: _formatBalance(item.balance),
-            balanceColor: balanceColor,
-          ),
-        ],
-      ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildSummaryAmountStrip(
+              context,
+              isStock: item.customer.isStockLedger,
+              debit: _formatAmount(item.totalDebit),
+              credit: _formatAmount(item.totalCredit),
+              balance: _formatBalance(item.balance),
+              balanceColor: balanceColor,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1023,11 +1320,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow.withValues(alpha: 0.86),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outlineVariant),
+        color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         children: <Widget>[

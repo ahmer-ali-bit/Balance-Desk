@@ -15,6 +15,7 @@ import '../services/pdf_service.dart';
 import '../utils/app_colors.dart';
 import '../utils/number_format_utils.dart';
 import '../utils/platform_helper.dart';
+import '../widgets/mobile_premium.dart';
 import 'ledger_screen.dart';
 
 class SnapshotEntriesScreen extends StatefulWidget {
@@ -519,9 +520,11 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(newPageNo.isEmpty
-              ? 'DL page number cleared.'
-              : 'DL page number updated to "$newPageNo".'),
+          content: Text(
+            newPageNo.isEmpty
+                ? 'DL page number cleared.'
+                : 'DL page number updated to "$newPageNo".',
+          ),
         ),
       );
     } catch (e) {
@@ -554,10 +557,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
               value: customerProvider,
             ),
           ],
-          child: LedgerScreen(
-            customer: customer,
-            autoOpenAddEntry: false,
-          ),
+          child: LedgerScreen(customer: customer, autoOpenAddEntry: false),
         ),
       ),
     );
@@ -697,9 +697,9 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
               ) <=
               0) {
         final entry = _entries[entryIndex];
-        
+
         // Individual entries in this export view don't currently show running balance/bags in the row list
-    // to maintain a clean snapshot total focus.
+        // to maintain a clean snapshot total focus.
 
         snapshotEntries.add(<String>[
           entry.customerName,
@@ -722,11 +722,13 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           _formatAmount(snapshot.overallDebit),
           _formatAmount(snapshot.overallCredit),
           _formatBalance(snapshot.finalBalance),
-          snapshot.dailyLogPageNo.isNotEmpty ? 'DL Pg ${snapshot.dailyLogPageNo}' : '-',
+          snapshot.dailyLogPageNo.isNotEmpty
+              ? 'DL Pg ${snapshot.dailyLogPageNo}'
+              : '-',
         ]);
 
         // Next snapshot starts fresh with its own total calculation
-        
+
         final carryForward = _balanceToOpening(snapshot.finalBalance);
         if (carryForward.hasValue) {
           rows.add(<String>[
@@ -771,9 +773,11 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     }
 
     final latestSnapshot = _latestSnapshot;
-    final finalBalance = latestSnapshot?.finalBalance ??
-        ((totalBuyAmt + _openingDebitBalance) - (totalSellAmt + _openingCreditBalance));
-    
+    final finalBalance =
+        latestSnapshot?.finalBalance ??
+        ((totalBuyAmt + _openingDebitBalance) -
+            (totalSellAmt + _openingCreditBalance));
+
     items.add((label: 'Total Entries', value: _entries.length.toString()));
     items.add((label: 'Total Debit', value: _formatAmount(totalBuyAmt)));
     items.add((label: 'Total Credit', value: _formatAmount(totalSellAmt)));
@@ -813,7 +817,10 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 'Starting amount',
                 _formatAmount(_effectiveOpeningBalance.debit),
                 _formatAmount(_effectiveOpeningBalance.credit),
-                _formatBalance(_effectiveOpeningBalance.debit - _effectiveOpeningBalance.credit),
+                _formatBalance(
+                  _effectiveOpeningBalance.debit -
+                      _effectiveOpeningBalance.credit,
+                ),
                 '-',
               ]
             : null,
@@ -965,9 +972,19 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                   !PlatformHelper.isDesktop && constraints.maxWidth < 760;
               final isDesktop = PlatformHelper.isDesktop;
               final latestSnapshot = _latestSnapshot;
-              final headerActions = _buildHeaderActions(isCompact: isCompact, canEdit: canEdit);
+              final headerActions = _buildHeaderActions(
+                isCompact: isCompact,
+                canEdit: canEdit,
+              );
               final bottomPadding =
                   12.0 + MediaQuery.viewInsetsOf(context).bottom;
+
+              if (!isDesktop) {
+                return _buildPremiumMobileDailyLogPage(
+                  context,
+                  canEdit: canEdit,
+                );
+              }
 
               final page = SingleChildScrollView(
                 controller: _entryTableVerticalController,
@@ -984,21 +1001,13 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                   children: <Widget>[
                     if (!isDesktop) ...<Widget>[
                       _buildSnapshotHero(context, compact: isCompact),
-                      SizedBox(height: isCompact ? 10 : 12),
+                      SizedBox(height: isCompact ? 6 : 8),
                       if (isCompact)
                         _buildCompactDailyLogControls(
                           context,
                           headerActions: headerActions,
-                        )
-                      else
-                        headerActions,
-                    ] else
-                      headerActions,
-
-                    if (isCompact) ...<Widget>[
-                      const SizedBox(height: 10),
-                    ] else ...<Widget>[
-                      const SizedBox(height: 12),
+                        ),
+                      const SizedBox(height: 8),
                       if (isDesktop && latestSnapshot != null) ...<Widget>[
                         _buildDesktopSnapshotSummarySection(
                           context,
@@ -1041,6 +1050,199 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     );
   }
 
+  Widget _buildPremiumMobileDailyLogPage(
+    BuildContext context, {
+    required bool canEdit,
+  }) {
+    final latestSnapshot = _latestSnapshot;
+    final snapshotLabel = latestSnapshot != null
+        ? _formatBalance(latestSnapshot.finalBalance)
+        : 'No snapshot';
+    final openingLabel = _hasOpeningBalance
+        ? _formatBalance(_effectiveOpeningBalance.finalBalance)
+        : '0';
+
+    return SingleChildScrollView(
+      controller: _entryTableVerticalController,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      child: MobilePremiumPage(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 112),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: _buildDailyToggleHeader(
+                    context,
+                    icon: Icons.bookmark_added_outlined,
+                    title: 'Last Saved Snapshot',
+                    value: snapshotLabel,
+                    expanded: _showDailyLatestSnapshot,
+                    onTap: () {
+                      setState(() {
+                        _showDailyLatestSnapshot = !_showDailyLatestSnapshot;
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildDailyToggleHeader(
+                    context,
+                    icon: Icons.account_balance_wallet_outlined,
+                    title: 'Opening Balance',
+                    value: openingLabel,
+                    expanded: _showDailyOpeningBalance,
+                    onTap: () {
+                      setState(() {
+                        _showDailyOpeningBalance = !_showDailyOpeningBalance;
+                      });
+                    },
+                  ),
+                ),
+              ],
+            ),
+            Column(
+              children: <Widget>[
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
+                  child: _showDailyLatestSnapshot && latestSnapshot != null
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: _buildCompactSnapshotSummaryCard(
+                            context, latestSnapshot,
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
+                  child: _showDailyOpeningBalance
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: _buildOpeningBalanceSection(context),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildPremiumMobileDailyActions(context, canEdit: canEdit),
+            if (_snapshots.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 12),
+              _buildSearchBar(compact: true),
+            ],
+            const SizedBox(height: 16),
+            MobileSectionHeader(
+              title: 'Timeline',
+              count: '${_entries.length + _snapshots.length}',
+            ),
+            const SizedBox(height: 10),
+            _buildPremiumMobileTimelineContent(context),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumMobileDailyActions(
+    BuildContext context, {
+    required bool canEdit,
+  }) {
+    final canSave =
+        !_isLoading &&
+        !_isSavingSnapshot &&
+        _hasCurrentPeriodEntries &&
+        canEdit;
+    final canUseHistory =
+        !_isLoading && !_isSavingSnapshot && _snapshots.isNotEmpty;
+
+    return MobilePremiumPanel(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isLoading || _isSavingSnapshot ? null : _loadTimeline,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Refresh'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isLoading || _isSavingSnapshot ? null : _exportSnapshot,
+                  icon: const Icon(Icons.file_download_outlined),
+                  label: const Text('Export'),
+                ),
+              ),
+              if (_snapshots.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: canUseHistory && canEdit
+                        ? _recalculateSnapshots
+                        : null,
+                    icon: const Icon(Icons.calculate_outlined),
+                    label: const Text('Recalc'),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (_snapshots.isNotEmpty) const SizedBox(height: 8),
+          if (_snapshots.isNotEmpty)
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: canUseHistory && canEdit ? _clearAllSnapshots : null,
+                    icon: const Icon(Icons.delete_sweep_outlined),
+                    label: const Text('Clear'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: canSave ? _saveSnapshot : null,
+                    icon: _isSavingSnapshot
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.bookmark_add_outlined),
+                    label: Text(_isSavingSnapshot ? 'Saving' : 'Save'),
+                  ),
+                ),
+              ],
+            )
+          else
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: canSave ? _saveSnapshot : null,
+                icon: _isSavingSnapshot
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.bookmark_add_outlined),
+                label: Text(_isSavingSnapshot ? 'Saving' : 'Save'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSearchBar({required bool compact}) {
     return TextField(
       decoration: InputDecoration(
@@ -1069,36 +1271,58 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Card(
-      child: ListTile(
-        contentPadding: EdgeInsets.symmetric(
-          horizontal: compact ? 14 : 18,
-          vertical: compact ? 6 : 8,
-        ),
-        leading: CircleAvatar(
-          backgroundColor: colorScheme.tertiaryContainer,
-          foregroundColor: colorScheme.tertiary,
-          child: const Icon(Icons.timeline_rounded),
-        ),
-        title: Text(
-          'Daily Logs',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: colorScheme.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              Icons.timeline_rounded,
+              size: 24,
+              color: colorScheme.primary,
+            ),
           ),
-        ),
-        subtitle: Text(
-          '${_entries.length} entries, ${_snapshots.length} snapshots',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: colorScheme.onSurfaceVariant,
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Daily Logs',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${_entries.length} entries, ${_snapshots.length} snapshots',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        trailing: _isLoading || _isSavingSnapshot
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2.4),
-              )
-            : null,
+          if (_isLoading || _isSavingSnapshot)
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: colorScheme.primary,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -1117,7 +1341,9 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         ),
         if (_snapshots.isNotEmpty)
           OutlinedButton.icon(
-            onPressed: _isLoading || _isSavingSnapshot || !canEdit ? null : _recalculateSnapshots,
+            onPressed: _isLoading || _isSavingSnapshot || !canEdit
+                ? null
+                : _recalculateSnapshots,
             icon: const Icon(Icons.calculate_outlined),
             label: const Text('Recalculate'),
           ),
@@ -1128,13 +1354,18 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         ),
         if (_snapshots.isNotEmpty)
           TextButton.icon(
-            onPressed: _isLoading || _isSavingSnapshot || !canEdit ? null : _clearAllSnapshots,
+            onPressed: _isLoading || _isSavingSnapshot || !canEdit
+                ? null
+                : _clearAllSnapshots,
             icon: const Icon(Icons.delete_sweep_outlined),
             label: Text(isDesktop ? 'Clear Snapshots' : 'Clear'),
           ),
         FilledButton.icon(
           onPressed:
-              _isLoading || _isSavingSnapshot || !_hasCurrentPeriodEntries || !canEdit
+              _isLoading ||
+                  _isSavingSnapshot ||
+                  !_hasCurrentPeriodEntries ||
+                  !canEdit
               ? null
               : _saveSnapshot,
           icon: _isSavingSnapshot
@@ -1248,48 +1479,87 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     BuildContext context,
     SummarySnapshot snapshot,
   ) {
-    return Card(
-      color: Theme.of(context).colorScheme.primaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              _formatDateTime(snapshot.savedAt),
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: <Widget>[
-                _CompactAmountChip(
-                  label: 'Debit',
-                  value: _formatEntryAmount(snapshot.overallDebit),
-                  icon: Icons.arrow_downward_rounded,
-                  color: AppColors.debit,
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colorScheme.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                _CompactAmountChip(
-                  label: 'Credit',
-                  value: _formatEntryAmount(snapshot.overallCredit),
-                  icon: Icons.arrow_upward_rounded,
-                  color: AppColors.credit,
+                child: Icon(
+                  Icons.history_rounded,
+                  size: 16,
+                  color: colorScheme.primary,
                 ),
-                _CompactAmountChip(
-                  label: 'Balance',
-                  value: _formatBalance(snapshot.finalBalance),
-                  icon: snapshot.finalBalance > 0
-                      ? Icons.arrow_downward_rounded
-                      : (snapshot.finalBalance < 0
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'Latest Snapshot',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                _formatDateTime(snapshot.savedAt),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Column(
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: _CompactAmountChip(
+                      label: 'Debit',
+                      value: _formatEntryAmount(snapshot.overallDebit),
+                      icon: Icons.arrow_downward_rounded,
+                      color: AppColors.debit,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _CompactAmountChip(
+                      label: 'Credit',
+                      value: _formatEntryAmount(snapshot.overallCredit),
+                      icon: Icons.arrow_upward_rounded,
+                      color: AppColors.credit,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              _CompactAmountChip(
+                label: 'Balance',
+                value: _formatBalance(snapshot.finalBalance),
+                icon: snapshot.finalBalance > 0
+                    ? Icons.arrow_downward_rounded
+                    : (snapshot.finalBalance < 0
                           ? Icons.arrow_upward_rounded
                           : Icons.account_balance_wallet_outlined),
-                  color: AppColors.balanceColor(snapshot.finalBalance),
-                ),
-              ],
-            ),
-          ],
-        ),
+                color: AppColors.balanceColor(snapshot.finalBalance),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1343,16 +1613,16 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                   icon: snapshot.finalBalance > 0
                       ? Icons.arrow_downward_rounded
                       : (snapshot.finalBalance < 0
-                          ? Icons.arrow_upward_rounded
-                          : Icons.account_balance_wallet_outlined),
+                            ? Icons.arrow_upward_rounded
+                            : Icons.account_balance_wallet_outlined),
                   accentColor:
                       AppColors.balanceColor(snapshot.finalBalance) ==
-                              AppColors.debit
-                          ? AppColors.debit
-                          : (AppColors.balanceColor(snapshot.finalBalance) ==
-                                    AppColors.credit
-                                ? AppColors.credit
-                                : Colors.grey.shade600),
+                          AppColors.debit
+                      ? AppColors.debit
+                      : (AppColors.balanceColor(snapshot.finalBalance) ==
+                                AppColors.credit
+                            ? AppColors.credit
+                            : Colors.grey.shade600),
                 ),
               ),
             ],
@@ -1414,8 +1684,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 : null,
             borderRadius: borderRadius,
             border: Border.all(
-              color: isMetric 
-                  ? accentColor.withValues(alpha: 0.3) 
+              color: isMetric
+                  ? accentColor.withValues(alpha: 0.3)
                   : colorScheme.outlineVariant.withValues(alpha: 0.2),
               width: 1.2,
             ),
@@ -1425,7 +1695,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: (isMetric ? Colors.white : colorScheme.primary).withValues(alpha: 0.1),
+                  color: (isMetric ? Colors.white : colorScheme.primary)
+                      .withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
@@ -1462,7 +1733,9 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                         value,
                         maxLines: 1,
                         style: theme.textTheme.titleSmall?.copyWith(
-                          color: isMetric ? Colors.white : colorScheme.onSurface,
+                          color: isMetric
+                              ? Colors.white
+                              : colorScheme.onSurface,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -1489,30 +1762,25 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     final colorScheme = theme.colorScheme;
 
     return Material(
-      color: Colors.transparent,
+      color: colorScheme.surfaceContainer,
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Ink(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: colorScheme.outlineVariant),
-          ),
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
           child: Row(
             children: <Widget>[
               Container(
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: colorScheme.tertiaryContainer,
-                  borderRadius: BorderRadius.circular(12),
+                  color: colorScheme.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: colorScheme.tertiary, size: 18),
+                child: Icon(icon, color: colorScheme.primary, size: 18),
               ),
-              const SizedBox(width: 11),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1520,28 +1788,27 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                     Text(
                       title,
                       style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 2),
                     Text(
                       value,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelMedium?.copyWith(
+                      style: theme.textTheme.labelSmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
               Icon(
                 expanded
                     ? Icons.keyboard_arrow_up_rounded
                     : Icons.keyboard_arrow_down_rounded,
                 color: colorScheme.onSurfaceVariant,
+                size: 20,
               ),
             ],
           ),
@@ -1551,44 +1818,47 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   }
 
   Widget _buildOpeningBalanceSection(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final debitField = _buildOpeningBalanceField(
-              controller: _debitOpeningBalanceController,
-              label: 'Debit Opening Balance',
-              icon: Icons.arrow_downward_rounded,
-              readOnly: false,
-            );
-            final creditField = _buildOpeningBalanceField(
-              controller: _creditOpeningBalanceController,
-              label: 'Credit Opening Balance',
-              icon: Icons.arrow_upward_rounded,
-              readOnly: false,
-            );
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final debitField = _buildOpeningBalanceField(
+            controller: _debitOpeningBalanceController,
+            label: 'Debit Opening Balance',
+            icon: Icons.arrow_downward_rounded,
+            readOnly: false,
+          );
+          final creditField = _buildOpeningBalanceField(
+            controller: _creditOpeningBalanceController,
+            label: 'Credit Opening Balance',
+            icon: Icons.arrow_upward_rounded,
+            readOnly: false,
+          );
 
-            if (constraints.maxWidth < 560) {
-              return Column(
-                children: <Widget>[
-                  debitField,
-                  const SizedBox(height: 12),
-                  creditField,
-                ],
-              );
-            }
-
-            return Row(
+          if (constraints.maxWidth < 560) {
+            return Column(
               children: <Widget>[
-                Expanded(child: debitField),
-                const SizedBox(width: 12),
-                Expanded(child: creditField),
+                debitField,
+                const SizedBox(height: 12),
+                creditField,
               ],
             );
-          },
-        ),
+          }
+
+          return Row(
+            children: <Widget>[
+              Expanded(child: debitField),
+              const SizedBox(width: 12),
+              Expanded(child: creditField),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1614,6 +1884,393 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         labelText: label,
         hintText: '0',
         prefixIcon: Icon(icon),
+      ),
+    );
+  }
+
+  Widget _buildPremiumMobileTimelineContent(BuildContext context) {
+    if (_isLoading) {
+      return const MobilePremiumPanel(
+        child: SizedBox(
+          height: 180,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return MobilePremiumPanel(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const Icon(Icons.error_outline_rounded, size: 40),
+            const SizedBox(height: 10),
+            Text(_errorMessage!, textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            FilledButton(onPressed: _loadTimeline, child: const Text('Retry')),
+          ],
+        ),
+      );
+    }
+
+    if (_entries.isEmpty && _snapshots.isEmpty && !_hasOpeningBalance) {
+      return const MobilePremiumPanel(
+        child: SizedBox(
+          height: 150,
+          child: Center(child: Text('No customer entries yet.')),
+        ),
+      );
+    }
+
+    return _buildPremiumMobileTimeline(context);
+  }
+
+  Widget _buildPremiumMobileTimeline(BuildContext context) {
+    final items = <Widget>[];
+    var entryIndex = _entries.length - 1;
+
+    final currentEntries = <Widget>[];
+    while (entryIndex >= 0 &&
+        (_snapshots.isEmpty ||
+            _compareMoments(
+                  _entries[entryIndex].entry.createdAt,
+                  _snapshots.last.savedAt,
+                ) >
+                0)) {
+      currentEntries.add(
+        _buildPremiumMobileTimelineEntry(context, _entries[entryIndex]),
+      );
+      entryIndex--;
+    }
+    if (_searchQuery.isEmpty) {
+      items.addAll(currentEntries);
+    }
+
+    for (var i = _snapshots.length - 1; i >= 0; i--) {
+      final snapshot = _snapshots[i];
+      final previousSnapshot = i > 0 ? _snapshots[i - 1] : null;
+      final isExpanded = _expandedSnapshots.contains(snapshot.savedAt);
+      final snapshotEntries = <Widget>[];
+
+      while (entryIndex >= 0 &&
+          (previousSnapshot == null ||
+              _compareMoments(
+                    _entries[entryIndex].entry.createdAt,
+                    previousSnapshot.savedAt,
+                  ) >
+                  0)) {
+        if (isExpanded) {
+          snapshotEntries.add(
+            _buildPremiumMobileTimelineEntry(context, _entries[entryIndex]),
+          );
+        }
+        entryIndex--;
+      }
+
+      final matchesSearch =
+          _searchQuery.isEmpty ||
+          snapshot.dailyLogPageNo.toLowerCase().contains(
+            _searchQuery.toLowerCase(),
+          );
+
+      if (matchesSearch) {
+        items.add(
+          _buildPremiumMobileSnapshotCard(
+            context,
+            snapshot,
+            isExpanded: isExpanded,
+          ),
+        );
+        if (isExpanded) {
+          items.addAll(snapshotEntries);
+        }
+
+        if (previousSnapshot != null) {
+          final carryForward = _balanceToOpening(previousSnapshot.finalBalance);
+          if (carryForward.hasValue) {
+            items.add(
+              _buildPremiumMobileBalanceCard(
+                context,
+                carryForward,
+                title: 'Balance B/F',
+              ),
+            );
+          }
+        } else if (_hasOpeningBalance) {
+          items.add(
+            _buildPremiumMobileBalanceCard(context, _effectiveOpeningBalance),
+          );
+        }
+      }
+    }
+
+    if (_snapshots.isEmpty && _hasOpeningBalance && _searchQuery.isEmpty) {
+      items.add(
+        _buildPremiumMobileBalanceCard(context, _effectiveOpeningBalance),
+      );
+    }
+
+    return Column(
+      children: <Widget>[
+        for (var index = 0; index < items.length; index++) ...<Widget>[
+          if (index != 0) const SizedBox(height: 10),
+          items[index],
+        ],
+      ],
+    );
+  }
+
+  Widget _buildPremiumMobileTimelineEntry(
+    BuildContext context,
+    _SnapshotEntry item,
+  ) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final canEdit = context.watch<LinkedSessionProvider>().canEdit;
+
+    return MobilePremiumPanel(
+      onTap: () => _navigateToCustomerLedger(item),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(kMobilePremiumRadius),
+                ),
+                child: Center(
+                  child: Text(
+                    item.customerName.trim().isEmpty
+                        ? '?'
+                        : item.customerName.trim()[0].toUpperCase(),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: colorScheme.primary,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      item.customerName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${_formatDate(item.entry.entryDate)} - ${_formatDescription(item)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (canEdit)
+                IconButton(
+                  tooltip: 'Delete or Remove Entry',
+                  onPressed: () => _removeEntryFromDailyLog(item.entry),
+                  icon: const Icon(Icons.remove_circle_outline_rounded),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          MobileMetricGrid(
+            children: <Widget>[
+              MobileMetricTile(
+                label: 'Debit',
+                value: _formatEntryAmount(item.debit),
+                icon: Icons.south_west_rounded,
+                color: AppColors.debit,
+              ),
+              MobileMetricTile(
+                label: 'Credit',
+                value: _formatEntryAmount(item.credit),
+                icon: Icons.north_east_rounded,
+                color: AppColors.credit,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPremiumMobileSnapshotCard(
+    BuildContext context,
+    SummarySnapshot snapshot, {
+    required bool isExpanded,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final balanceColor = AppColors.balanceColor(snapshot.finalBalance);
+    final canEdit = context.watch<LinkedSessionProvider>().canEdit;
+
+    return MobilePremiumPanel(
+      accentColor: balanceColor,
+      onTap: () {
+        setState(() {
+          if (isExpanded) {
+            _expandedSnapshots.remove(snapshot.savedAt);
+          } else {
+            _expandedSnapshots.add(snapshot.savedAt);
+          }
+        });
+      },
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Icon(
+                isExpanded
+                    ? Icons.keyboard_arrow_up_rounded
+                    : Icons.keyboard_arrow_down_rounded,
+                color: colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Snapshot Total',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              if (snapshot.dailyLogPageNo.isNotEmpty)
+                MobileStatusPill(
+                  icon: Icons.menu_book_outlined,
+                  label: snapshot.dailyLogPageNo,
+                  color: colorScheme.tertiary,
+                ),
+              if (canEdit) ...<Widget>[
+                IconButton(
+                  tooltip: snapshot.dailyLogPageNo.isEmpty
+                      ? 'Add DL Page No'
+                      : 'Edit DL Page No',
+                  onPressed: _isLoading || _isSavingSnapshot
+                      ? null
+                      : () => _editSnapshotPageNo(snapshot),
+                  icon: const Icon(Icons.edit_note_rounded),
+                ),
+                IconButton(
+                  tooltip: 'Delete snapshot',
+                  onPressed: _isLoading || _isSavingSnapshot
+                      ? null
+                      : () => _deleteSnapshot(snapshot),
+                  icon: const Icon(Icons.delete_outline_rounded),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _formatDateTime(snapshot.savedAt),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Column(
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: MobileMetricTile(
+                      label: 'Debit',
+                      value: _formatEntryAmount(snapshot.overallDebit),
+                      icon: Icons.south_west_rounded,
+                      color: AppColors.debit,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: MobileMetricTile(
+                      label: 'Credit',
+                      value: _formatEntryAmount(snapshot.overallCredit),
+                      icon: Icons.north_east_rounded,
+                      color: AppColors.credit,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              MobileMetricTile(
+                label: 'Balance',
+                value: _formatBalance(snapshot.finalBalance),
+                icon: Icons.account_balance_wallet_outlined,
+                color: balanceColor,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPremiumMobileBalanceCard(
+    BuildContext context,
+    SnapshotOpeningBalance balance, {
+    String title = 'Opening Balance',
+  }) {
+    final balanceColor = AppColors.balanceColor(balance.finalBalance);
+
+    return MobilePremiumPanel(
+      accentColor: balanceColor,
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          MobileSectionHeader(title: title),
+          const SizedBox(height: 12),
+          Column(
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: MobileMetricTile(
+                      label: 'Debit',
+                      value: _formatEntryAmount(balance.debit),
+                      icon: Icons.south_west_rounded,
+                      color: AppColors.debit,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: MobileMetricTile(
+                      label: 'Credit',
+                      value: _formatEntryAmount(balance.credit),
+                      icon: Icons.north_east_rounded,
+                      color: AppColors.credit,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              MobileMetricTile(
+                label: 'Balance',
+                value: _formatBalance(balance.finalBalance),
+                icon: Icons.account_balance_wallet_outlined,
+                color: balanceColor,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1669,67 +2326,105 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
 
   // ignore: unused_element
   Widget _buildCompactEntryCard(BuildContext context, _SnapshotEntry item) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Center(
                   child: Text(
-                    item.customerName,
-                    style: Theme.of(context).textTheme.titleMedium,
+                    item.customerName.isNotEmpty
+                        ? item.customerName[0].toUpperCase()
+                        : '?',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: colorScheme.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-                if (item.entry.pageNo.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.primary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      'Page ${item.entry.pageNo}',
-                      style: Theme.of(context).textTheme.labelMedium,
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '${_formatDate(item.entry.entryDate)} • ${_formatDescription(item)}',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
-            ),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: <Widget>[
-                _CompactAmountChip(
-                  label: 'Debit',
-                  value: _formatEntryAmount(item.debit),
-                  icon: Icons.arrow_downward_rounded,
-                  color: AppColors.debit,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      item.customerName,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${_formatDate(item.entry.entryDate)} • ${_formatDescription(item)}',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant.withValues(
+                          alpha: 0.7,
+                        ),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
-                _CompactAmountChip(
-                  label: 'Credit',
-                  value: _formatEntryAmount(item.credit),
-                  icon: Icons.arrow_upward_rounded,
-                  color: AppColors.credit,
+              ),
+              if (item.entry.pageNo.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Pg ${item.entry.pageNo}',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: colorScheme.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
-              ],
-            ),
-          ],
-        ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: <Widget>[
+              _CompactAmountChip(
+                label: 'Debit',
+                value: _formatEntryAmount(item.debit),
+                icon: Icons.arrow_downward_rounded,
+                color: AppColors.debit,
+              ),
+              const SizedBox(width: 8),
+              _CompactAmountChip(
+                label: 'Credit',
+                value: _formatEntryAmount(item.credit),
+                icon: Icons.arrow_upward_rounded,
+                color: AppColors.credit,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1739,122 +2434,159 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     SummarySnapshot snapshot, {
     required bool isExpanded,
   }) {
-    return Card(
-      color: Theme.of(context).colorScheme.primaryContainer,
-      child: InkWell(
-        onTap: () {
-          setState(() {
-            if (isExpanded) {
-              _expandedSnapshots.remove(snapshot.savedAt);
-            } else {
-              _expandedSnapshots.add(snapshot.savedAt);
-            }
-          });
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Row(
-                children: <Widget>[
-                  Icon(
-                    isExpanded
-                        ? Icons.keyboard_arrow_up
-                        : Icons.keyboard_arrow_down,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Snapshot Total',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                  ),
-                  if (snapshot.dailyLogPageNo.isNotEmpty) ...[
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            setState(() {
+              if (isExpanded) {
+                _expandedSnapshots.remove(snapshot.savedAt);
+              } else {
+                _expandedSnapshots.add(snapshot.savedAt);
+              }
+            });
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
+                      width: 32,
+                      height: 32,
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.tertiaryContainer,
-                        borderRadius: BorderRadius.circular(4),
+                        color: colorScheme.primary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
                       ),
+                      child: Icon(
+                        isExpanded
+                            ? Icons.keyboard_arrow_up_rounded
+                            : Icons.keyboard_arrow_down_rounded,
+                        size: 20,
+                        color: colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
                       child: Text(
-                        'DL Pg ${snapshot.dailyLogPageNo}',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onTertiaryContainer,
+                        'Snapshot Total',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                  ],
-                  // Feature 7: Edit DL page number icon
-                  if (context.watch<LinkedSessionProvider>().canEdit) ...[
-                    IconButton(
-                      tooltip: snapshot.dailyLogPageNo.isEmpty
-                          ? 'Add DL Page No'
-                          : 'Edit DL Page No',
-                      onPressed: _isLoading || _isSavingSnapshot
-                          ? null
-                          : () => _editSnapshotPageNo(snapshot),
-                      icon: Icon(
-                        snapshot.dailyLogPageNo.isEmpty
-                            ? Icons.post_add_rounded
-                            : Icons.edit_note_rounded,
-                        size: 20,
+                    if (snapshot.dailyLogPageNo.isNotEmpty) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'DL Pg ${snapshot.dailyLogPageNo}',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: colorScheme.primary,
+                          ),
+                        ),
                       ),
-                      visualDensity: VisualDensity.compact,
+                      const SizedBox(width: 6),
+                    ],
+                    if (context.watch<LinkedSessionProvider>().canEdit) ...[
+                      IconButton(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 32,
+                        ),
+                        tooltip: snapshot.dailyLogPageNo.isEmpty
+                            ? 'Add DL Page No'
+                            : 'Edit DL Page No',
+                        onPressed: _isLoading || _isSavingSnapshot
+                            ? null
+                            : () => _editSnapshotPageNo(snapshot),
+                        icon: Icon(
+                          snapshot.dailyLogPageNo.isEmpty
+                              ? Icons.post_add_rounded
+                              : Icons.edit_note_rounded,
+                          size: 18,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      IconButton(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 32,
+                        ),
+                        tooltip: 'Delete snapshot',
+                        onPressed: _isLoading || _isSavingSnapshot
+                            ? null
+                            : () => _deleteSnapshot(snapshot),
+                        icon: Icon(
+                          Icons.delete_outline_rounded,
+                          size: 18,
+                          color: colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _formatDateTime(snapshot.savedAt),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: <Widget>[
+                    _CompactAmountChip(
+                      label: 'Debit',
+                      value: _formatEntryAmount(snapshot.overallDebit),
+                      icon: Icons.arrow_downward_rounded,
+                      color: AppColors.debit,
                     ),
-                    IconButton(
-                      tooltip: 'Delete snapshot',
-                      onPressed: _isLoading || _isSavingSnapshot
-                          ? null
-                          : () => _deleteSnapshot(snapshot),
-                      icon: const Icon(Icons.delete_outline),
+                    _CompactAmountChip(
+                      label: 'Credit',
+                      value: _formatEntryAmount(snapshot.overallCredit),
+                      icon: Icons.arrow_upward_rounded,
+                      color: AppColors.credit,
+                    ),
+                    _CompactAmountChip(
+                      label: 'Balance',
+                      value: _formatBalance(snapshot.finalBalance),
+                      icon: snapshot.finalBalance > 0
+                          ? Icons.arrow_downward_rounded
+                          : (snapshot.finalBalance < 0
+                                ? Icons.arrow_upward_rounded
+                                : Icons.account_balance_wallet_outlined),
+                      color: AppColors.balanceColor(snapshot.finalBalance),
                     ),
                   ],
-                ],
-              ),
-              Text(
-                _formatDateTime(snapshot.savedAt),
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: <Widget>[
-                  _CompactAmountChip(
-                    label: 'Debit',
-                    value: _formatEntryAmount(snapshot.overallDebit),
-                    icon: Icons.arrow_downward_rounded,
-                    color: AppColors.debit,
-                  ),
-                  _CompactAmountChip(
-                    label: 'Credit',
-                    value: _formatEntryAmount(snapshot.overallCredit),
-                    icon: Icons.arrow_upward_rounded,
-                    color: AppColors.credit,
-                  ),
-                  _CompactAmountChip(
-                    label: 'Balance',
-                    value: _formatBalance(snapshot.finalBalance),
-                    icon: snapshot.finalBalance > 0
-                        ? Icons.arrow_downward_rounded
-                        : (snapshot.finalBalance < 0
-                            ? Icons.arrow_upward_rounded
-                            : Icons.account_balance_wallet_outlined),
-                    color: AppColors.balanceColor(snapshot.finalBalance),
-                  ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1867,52 +2599,72 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     String title = 'Opening Balance',
     String subtitle = 'Starting amount',
   }) {
-    return Card(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(title, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.account_balance_wallet_rounded,
+                  size: 16,
+                  color: colorScheme.primary,
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: <Widget>[
-                _CompactAmountChip(
-                  label: 'Debit',
-                  value: _formatEntryAmount(balance.debit),
-                  icon: Icons.arrow_downward_rounded,
-                  color: AppColors.debit,
+              const SizedBox(width: 10),
+              Text(
+                title,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
                 ),
-                _CompactAmountChip(
-                  label: 'Credit',
-                  value: _formatEntryAmount(balance.credit),
-                  icon: Icons.arrow_upward_rounded,
-                  color: AppColors.credit,
-                ),
-                _CompactAmountChip(
-                  label: 'Balance',
-                  value: _formatBalance(balance.finalBalance),
-                  icon: balance.finalBalance > 0
-                      ? Icons.arrow_downward_rounded
-                      : (balance.finalBalance < 0
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              _CompactAmountChip(
+                label: 'Debit',
+                value: _formatEntryAmount(balance.debit),
+                icon: Icons.arrow_downward_rounded,
+                color: AppColors.debit,
+              ),
+              _CompactAmountChip(
+                label: 'Credit',
+                value: _formatEntryAmount(balance.credit),
+                icon: Icons.arrow_upward_rounded,
+                color: AppColors.credit,
+              ),
+              _CompactAmountChip(
+                label: 'Balance',
+                value: _formatBalance(balance.finalBalance),
+                icon: balance.finalBalance > 0
+                    ? Icons.arrow_downward_rounded
+                    : (balance.finalBalance < 0
                           ? Icons.arrow_upward_rounded
                           : Icons.account_balance_wallet_outlined),
-                  color: AppColors.balanceColor(balance.finalBalance),
-                ),
-              ],
-            ),
-          ],
-        ),
+                color: AppColors.balanceColor(balance.finalBalance),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -2014,76 +2766,106 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    // Feature 8: Long-press to navigate to customer ledger
     return GestureDetector(
       onLongPress: () => _navigateToCustomerLedger(item),
       child: Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  item.customerName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              if (item.entry.pageNo.isNotEmpty) ...[
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainer,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
-                    color: colorScheme.surfaceContainer,
-                    borderRadius: BorderRadius.circular(999),
+                    color: colorScheme.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
                   ),
+                  child: Center(
+                    child: Text(
+                      item.customerName.trim().isEmpty
+                          ? '?'
+                          : item.customerName.trim()[0].toUpperCase(),
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
                   child: Text(
-                    'Page ${item.entry.pageNo}',
-                    style: theme.textTheme.labelMedium,
+                    item.customerName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                if (item.entry.pageNo.isNotEmpty) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'Pg ${item.entry.pageNo}',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                if (context.watch<LinkedSessionProvider>().canEdit)
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
+                    ),
+                    tooltip: 'Delete or Remove Entry',
+                    icon: Icon(
+                      Icons.remove_circle_outline,
+                      size: 18,
+                      color: colorScheme.onSurfaceVariant.withValues(
+                        alpha: 0.5,
+                      ),
+                    ),
+                    onPressed: () => _removeEntryFromDailyLog(item.entry),
+                  ),
               ],
-              if (context.watch<LinkedSessionProvider>().canEdit)
-                IconButton(
-                  tooltip: 'Delete or Remove Entry',
-                  icon: const Icon(Icons.remove_circle_outline),
-                  color: Theme.of(context).colorScheme.error,
-                  onPressed: () => _removeEntryFromDailyLog(item.entry),
-                  visualDensity: VisualDensity.compact,
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '${_formatDate(item.entry.entryDate)} - ${_formatDescription(item)}',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
             ),
-          ),
-          const SizedBox(height: 10),
-          _buildDailyAmountStrip(
-            context,
-            debit: _formatEntryAmount(item.debit),
-            credit: _formatEntryAmount(item.credit),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Text(
+              '${_formatDate(item.entry.entryDate)} - ${_formatDescription(item)}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+              ),
+            ),
+            const SizedBox(height: 10),
+            _buildDailyAmountStrip(
+              context,
+              debit: _formatEntryAmount(item.debit),
+              credit: _formatEntryAmount(item.credit),
+            ),
+          ],
+        ),
       ),
-    ),
     );
   }
 
@@ -2097,11 +2879,10 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow.withValues(alpha: 0.86),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outlineVariant),
+        color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: <Widget>[
@@ -2124,7 +2905,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
               color: AppColors.credit,
             ),
           ),
-          if (balance != null) ...<Widget>[
+          if (balance != null) ...[
             _dailyStripDivider(context),
             Expanded(
               child: _buildDailyStripItem(
@@ -2134,8 +2915,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 icon: balance.startsWith('-')
                     ? Icons.arrow_upward_rounded
                     : (balance == '-' || balance == '0'
-                        ? Icons.account_balance_wallet_outlined
-                        : Icons.arrow_downward_rounded),
+                          ? Icons.account_balance_wallet_outlined
+                          : Icons.arrow_downward_rounded),
                 color: balanceColor ?? colorScheme.tertiary,
               ),
             ),
@@ -2148,9 +2929,9 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   Widget _dailyStripDivider(BuildContext context) {
     return Container(
       width: 1,
-      height: 34,
+      height: 28,
       margin: const EdgeInsets.symmetric(horizontal: 8),
-      color: Theme.of(context).colorScheme.outlineVariant,
+      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
     );
   }
 
@@ -2534,13 +3315,17 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         DataCell(Text('Starting amount', style: rowStyle)),
         DataCell(
           Text(
-            _formatEntryAmount(openingBalance.credit), // Sell Amount in Debit column
+            _formatEntryAmount(
+              openingBalance.credit,
+            ), // Sell Amount in Debit column
             style: rowStyle?.copyWith(color: AppColors.debit),
           ),
         ),
         DataCell(
           Text(
-            _formatEntryAmount(openingBalance.debit), // Buy Amount in Credit column
+            _formatEntryAmount(
+              openingBalance.debit,
+            ), // Buy Amount in Credit column
             style: rowStyle?.copyWith(color: AppColors.credit),
           ),
         ),
@@ -2597,9 +3382,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         DataCell(
           Text(
             _formatBalance(balance),
-            style: rowStyle?.copyWith(
-              color: AppColors.balanceColor(balance),
-            ),
+            style: rowStyle?.copyWith(color: AppColors.balanceColor(balance)),
           ),
         ),
         const DataCell(Text('')), // Page No
@@ -2717,22 +3500,31 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     final desc = entry.description.trim();
     final lowerDesc = desc.toLowerCase();
     final parts = <String>[];
-    
+
     if (entry.buyBags.trim().isNotEmpty && entry.buyBags.trim() != '0') {
       final val = double.tryParse(entry.buyBags) ?? 0;
-      parts.add(useWeight ? "Buy Wt: ${formatWeight(val)}" : "Buy: ${entry.buyBags.trim()}");
+      parts.add(
+        useWeight
+            ? "Buy Wt: ${formatWeight(val)}"
+            : "Buy: ${entry.buyBags.trim()}",
+      );
     }
-    
+
     final parsedSellBags = double.tryParse(entry.sellBags) ?? 0;
-    if (parsedSellBags > 0 || (entry.sellBags.trim().isNotEmpty && entry.sellBags.trim() != '0')) {
+    if (parsedSellBags > 0 ||
+        (entry.sellBags.trim().isNotEmpty && entry.sellBags.trim() != '0')) {
       final val = double.tryParse(entry.sellBags) ?? 0;
-      parts.add(useWeight ? "Sell Wt: ${formatWeight(val)}" : "Sell: ${entry.sellBags.trim()}");
+      parts.add(
+        useWeight
+            ? "Sell Wt: ${formatWeight(val)}"
+            : "Sell: ${entry.sellBags.trim()}",
+      );
     }
 
     if (desc.isEmpty) {
       return parts.isEmpty ? "-" : parts.join(" | ");
     }
-    
+
     // If exact match, just show the auto-generated part (e.g., "Buy: 10")
     if ((lowerDesc == 'buy' || lowerDesc == 'sell') && parts.isNotEmpty) {
       return parts.join(" | ");
@@ -2742,13 +3534,17 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     final cleanParts = <String>[];
     for (final part in parts) {
       if (part.startsWith("Buy") && lowerDesc.contains("buy")) {
-        final valStr = useWeight ? formatWeight(double.tryParse(entry.buyBags) ?? 0) : entry.buyBags.trim();
+        final valStr = useWeight
+            ? formatWeight(double.tryParse(entry.buyBags) ?? 0)
+            : entry.buyBags.trim();
         if (lowerDesc.contains(valStr)) {
           continue; // completely omit if quantity is also present
         }
         cleanParts.add(part.replaceFirst(RegExp(r'Buy( Wt)?: '), ''));
       } else if (part.startsWith("Sell") && lowerDesc.contains("sell")) {
-        final valStr = useWeight ? formatWeight(double.tryParse(entry.sellBags) ?? 0) : entry.sellBags.trim();
+        final valStr = useWeight
+            ? formatWeight(double.tryParse(entry.sellBags) ?? 0)
+            : entry.sellBags.trim();
         if (lowerDesc.contains(valStr)) {
           continue; // completely omit if quantity is also present
         }
@@ -2817,34 +3613,35 @@ class _CompactAmountChip extends StatelessWidget {
 
     return Container(
       constraints: const BoxConstraints(minWidth: 80),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: primaryColor.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: primaryColor.withValues(alpha: 0.10)),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Row(
             children: <Widget>[
-              Icon(icon, size: 14, color: primaryColor),
-              const SizedBox(width: 6),
+              Icon(icon, size: 12, color: primaryColor),
+              const SizedBox(width: 4),
               Text(
                 label,
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: primaryColor,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 10,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             value,
             style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               color: primaryColor,
+              fontSize: 13,
             ),
           ),
         ],

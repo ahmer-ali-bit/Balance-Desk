@@ -74,10 +74,40 @@ class MobileLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      drawer: Drawer(child: SafeArea(child: drawerChild)),
-      body: SafeArea(child: content),
+      backgroundColor: colorScheme.surface,
+      resizeToAvoidBottomInset: true,
+      drawerScrimColor: colorScheme.primary.withValues(alpha: 0.3),
+      drawer: Drawer(
+        backgroundColor: colorScheme.surface,
+        elevation: 0,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.horizontal(right: Radius.circular(24)),
+        ),
+        child: SafeArea(top: false, child: drawerChild),
+      ),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: true,
+        title: Text(
+          title,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: Icon(Icons.menu_rounded, color: colorScheme.onSurface),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
+      ),
+      body: SafeArea(top: false, child: content),
     );
   }
 }

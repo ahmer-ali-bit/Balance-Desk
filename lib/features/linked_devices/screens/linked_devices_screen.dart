@@ -10,6 +10,7 @@ import '../../../models/linked_device_models.dart';
 import '../services/linked_devices_service.dart';
 import '../services/workspace_sync_service.dart';
 import '../utils/linked_devices_utils.dart';
+import '../../../widgets/mobile_premium.dart';
 
 // ✅ Real sub-screen imports
 import 'join_workspace_screen.dart';
@@ -106,6 +107,10 @@ class _LinkedDevicesScreenState extends State<LinkedDevicesScreen> {
         defaultTargetPlatform == TargetPlatform.macOS ||
         defaultTargetPlatform == TargetPlatform.linux;
 
+    if (!isDesktop) {
+      return _buildPremiumMobileLinkedDevices(context, theme, cs, sp, isLinked);
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Linked Devices'),
@@ -175,20 +180,104 @@ class _LinkedDevicesScreenState extends State<LinkedDevicesScreen> {
     );
   }
 
-  Widget _buildSectionHeader(ThemeData theme, String title, IconData icon) {
-    return Row(
-      children: [
-        Icon(icon, size: 14, color: theme.colorScheme.primary),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: theme.textTheme.labelSmall?.copyWith(
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.5,
-            color: theme.colorScheme.primary,
+  Widget _buildPremiumMobileLinkedDevices(
+    BuildContext context,
+    ThemeData theme,
+    ColorScheme cs,
+    LinkedSessionProvider? provider,
+    bool isLinked,
+  ) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Linked Devices'),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: <Widget>[
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: _loadSessionSafe,
+            icon: const Icon(Icons.refresh_rounded),
           ),
-        ),
-      ],
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _errorMessage != null
+          ? _buildErrorView(theme, cs)
+          : SingleChildScrollView(
+              child: MobilePremiumPage(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    MobilePremiumHeader(
+                      icon: Icons.smartphone_rounded,
+                      title: 'Mobile Instance',
+                      subtitle: isLinked
+                          ? 'Linked workspace'
+                          : 'Standalone workspace',
+                      children: <Widget>[
+                        MobileMetricGrid(
+                          children: <Widget>[
+                            MobileMetricTile(
+                              label: 'Status',
+                              value: isLinked ? 'Linked' : 'Solo',
+                              icon: isLinked
+                                  ? Icons.cloud_done_rounded
+                                  : Icons.cloud_off_rounded,
+                              color: isLinked ? cs.primary : cs.secondary,
+                            ),
+                            MobileMetricTile(
+                              label: 'Access',
+                              value:
+                                  provider?.permission ==
+                                      SessionPermission.write
+                                  ? 'Write'
+                                  : 'Read',
+                              icon: Icons.admin_panel_settings_outlined,
+                              color: cs.tertiary,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    if (isLinked && provider != null && !provider.iAmAdmin)
+                      _buildGuestLinkedCard(context, theme, cs, provider)
+                    else
+                      MobilePremiumPanel(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: <Widget>[
+                            FilledButton.icon(
+                              onPressed: () =>
+                                  _pushScreen(const _CreateWorkspaceScreen()),
+                              icon: const Icon(
+                                Icons.add_circle_outline_rounded,
+                              ),
+                              label: Text(
+                                isLinked && provider?.iAmAdmin == true
+                                    ? 'Manage Workspace'
+                                    : 'Create Workspace',
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            OutlinedButton.icon(
+                              onPressed: () =>
+                                  _pushScreen(const JoinWorkspaceScreen()),
+                              icon: const Icon(Icons.qr_code_scanner_rounded),
+                              label: const Text('Join Workspace'),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 
@@ -199,107 +288,98 @@ class _LinkedDevicesScreenState extends State<LinkedDevicesScreen> {
     bool isLinked,
   ) {
     return Container(
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: cs.surfaceContainer,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(
-          color: isLinked ? cs.primary.withValues(alpha: 0.3) : cs.outline,
-          width: 1,
-        ),
+        borderRadius: BorderRadius.circular(24),
       ),
-      padding: const EdgeInsets.all(24),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [cs.primary, cs.primary.withValues(alpha: 0.8)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: cs.primary.withValues(alpha: 0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+              color: cs.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(16),
             ),
             child: Icon(
               isDesktop
                   ? Icons.desktop_windows_rounded
                   : Icons.smartphone_rounded,
-              color: cs.onPrimary,
-              size: 24,
+              color: cs.primary,
+              size: 22,
             ),
           ),
-          const SizedBox(width: 20),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'Local Instance',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
+                const SizedBox(height: 2),
                 Text(
                   isDesktop ? 'Windows Desktop' : 'Mobile Application',
-                  style: theme.textTheme.labelMedium?.copyWith(
+                  style: theme.textTheme.labelSmall?.copyWith(
                     color: cs.onSurfaceVariant,
                   ),
                 ),
               ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: (isLinked ? Colors.green : cs.surfaceContainerHighest)
-                      .withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: (isLinked ? Colors.green : cs.outline).withValues(
-                      alpha: 0.3,
-                    ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: (isLinked ? Colors.green : cs.surfaceContainer).withValues(
+                alpha: 0.1,
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 5,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: isLinked ? Colors.green : cs.onSurfaceVariant,
+                    shape: BoxShape.circle,
                   ),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: isLinked ? Colors.green : cs.onSurfaceVariant,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      isLinked ? 'LINKED' : 'STANDALONE',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: isLinked ? Colors.green : cs.onSurfaceVariant,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 9,
-                      ),
-                    ),
-                  ],
+                const SizedBox(width: 4),
+                Text(
+                  isLinked ? 'LINKED' : 'STANDALONE',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: isLinked ? Colors.green : cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 9,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSectionHeader(ThemeData theme, String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: theme.colorScheme.primary),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: theme.textTheme.labelSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.0,
+            color: theme.colorScheme.primary,
+          ),
+        ),
+      ],
     );
   }
 
@@ -317,28 +397,26 @@ class _LinkedDevicesScreenState extends State<LinkedDevicesScreen> {
       decoration: BoxDecoration(
         color: cs.surfaceContainer,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: accentColor.withValues(alpha: 0.3), width: 1),
       ),
       child: Column(
         children: [
-          // ── Device info header ──
           Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(16),
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: accentColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(16),
+                    color: cs.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   child: Icon(
                     Icons.important_devices_rounded,
-                    color: accentColor,
-                    size: 24,
+                    color: cs.primary,
+                    size: 22,
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -346,32 +424,32 @@ class _LinkedDevicesScreenState extends State<LinkedDevicesScreen> {
                       Text(
                         'Linked Device',
                         style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Row(
                         children: [
                           Container(
-                            width: 6,
-                            height: 6,
+                            width: 5,
+                            height: 5,
                             decoration: BoxDecoration(
                               color: Colors.green,
                               shape: BoxShape.circle,
                             ),
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 4),
                           Text(
                             'Connected',
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: Colors.green,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
+                              horizontal: 6,
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
@@ -382,7 +460,7 @@ class _LinkedDevicesScreenState extends State<LinkedDevicesScreen> {
                               isWrite ? 'WRITE' : 'READ',
                               style: theme.textTheme.labelSmall?.copyWith(
                                 color: accentColor,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w700,
                                 fontSize: 8,
                               ),
                             ),
@@ -395,10 +473,8 @@ class _LinkedDevicesScreenState extends State<LinkedDevicesScreen> {
               ],
             ),
           ),
-          const Divider(height: 1, indent: 20, endIndent: 20),
-          // ── Workspace toggle ──
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: Row(
               children: [
                 Expanded(
@@ -433,7 +509,6 @@ class _LinkedDevicesScreenState extends State<LinkedDevicesScreen> {
               ],
             ),
           ),
-          // ── Action buttons ──
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -447,15 +522,17 @@ class _LinkedDevicesScreenState extends State<LinkedDevicesScreen> {
                       label: const Text('Enter Editable Code'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: accentColor,
-                        side: BorderSide(color: accentColor),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        side: BorderSide(
+                          color: accentColor.withValues(alpha: 0.5),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(14),
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                 ],
                 SizedBox(
                   width: double.infinity,
@@ -466,10 +543,10 @@ class _LinkedDevicesScreenState extends State<LinkedDevicesScreen> {
                     label: const Text('Disconnect'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: cs.error,
-                      side: BorderSide(color: cs.error.withValues(alpha: 0.5)),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      side: BorderSide(color: cs.error.withValues(alpha: 0.4)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(14),
                       ),
                     ),
                   ),
@@ -493,30 +570,27 @@ class _LinkedDevicesScreenState extends State<LinkedDevicesScreen> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           color: isSelected
-              ? cs.primary.withValues(alpha: 0.15)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isSelected ? cs.primary : cs.outline.withValues(alpha: 0.3),
-          ),
+              ? cs.primary.withValues(alpha: 0.1)
+              : cs.surfaceContainer,
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               icon,
-              size: 16,
+              size: 14,
               color: isSelected ? cs.primary : cs.onSurfaceVariant,
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 4),
             Text(
               label,
               style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
                 color: isSelected ? cs.primary : cs.onSurfaceVariant,
               ),
             ),
@@ -543,37 +617,48 @@ class _LinkedDevicesScreenState extends State<LinkedDevicesScreen> {
     required String subtitle,
     required VoidCallback onTap,
   }) {
-    return Card(
-      color: cs.surfaceContainer,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: cs.outline, width: 1),
-        borderRadius: BorderRadius.circular(24),
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainer,
+        borderRadius: BorderRadius.circular(20),
       ),
-      margin: EdgeInsets.zero,
-      child: ListTile(
-        onTap: onTap,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        leading: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: cs.primary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
+      child: Material(
+        color: Colors.transparent,
+        child: ListTile(
+          onTap: onTap,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 6,
           ),
-          child: Icon(icon, color: cs.primary, size: 20),
-        ),
-        title: Text(
-          title,
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w900,
+          leading: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: cs.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: cs.primary, size: 20),
           ),
-        ),
-        subtitle: Text(
-          subtitle,
-          style: theme.textTheme.labelSmall?.copyWith(
+          title: Text(
+            title,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          subtitle: Text(
+            subtitle,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+          trailing: Icon(
+            Icons.chevron_right_rounded,
             color: cs.onSurfaceVariant,
+            size: 20,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
           ),
         ),
-        trailing: Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
       ),
     );
   }
@@ -584,38 +669,20 @@ class _LinkedDevicesScreenState extends State<LinkedDevicesScreen> {
     required String label,
     required ColorScheme cs,
   }) {
-    return Container(
-      height: 64,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [cs.primary, cs.primary.withValues(alpha: 0.8)],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: cs.primary.withValues(alpha: 0.3),
-            blurRadius: 15,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
+    return SizedBox(
+      height: 56,
       child: ElevatedButton.icon(
         onPressed: onPressed,
-        icon: Icon(icon, color: cs.onPrimary),
-        label: Text(
-          label,
-          style: const TextStyle(
-            fontWeight: FontWeight.w900,
-            letterSpacing: 0.5,
-          ),
-        ),
+        icon: Icon(icon, size: 20),
+        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
+          backgroundColor: cs.primary,
           foregroundColor: cs.onPrimary,
+          elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(18),
           ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         ),
       ),
     );
@@ -758,6 +825,14 @@ class _CreateWorkspaceScreenState extends State<_CreateWorkspaceScreen> {
 
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final isDesktop =
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.linux;
+
+    if (!isDesktop) {
+      return _buildPremiumMobileCreateWorkspace(theme, cs);
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -778,7 +853,6 @@ class _CreateWorkspaceScreenState extends State<_CreateWorkspaceScreen> {
               decoration: BoxDecoration(
                 color: cs.surfaceContainer,
                 borderRadius: BorderRadius.circular(32),
-                border: Border.all(color: cs.outline, width: 1),
               ),
               child: Column(
                 children: [
@@ -846,9 +920,8 @@ class _CreateWorkspaceScreenState extends State<_CreateWorkspaceScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: cs.surfaceContainerHigh,
+                          color: cs.surfaceContainer,
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: cs.outline, width: 1),
                         ),
                         child: Row(
                           children: [
@@ -938,7 +1011,6 @@ class _CreateWorkspaceScreenState extends State<_CreateWorkspaceScreen> {
                       decoration: BoxDecoration(
                         color: cs.surfaceContainer,
                         borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: cs.outline, width: 1),
                       ),
                       child: Column(
                         children: [
@@ -974,6 +1046,189 @@ class _CreateWorkspaceScreenState extends State<_CreateWorkspaceScreen> {
     );
   }
 
+  Widget _buildPremiumMobileCreateWorkspace(ThemeData theme, ColorScheme cs) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Manage Workspace'),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: SingleChildScrollView(
+        child: MobilePremiumPage(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              MobilePremiumHeader(
+                icon: Icons.share_rounded,
+                title: 'Workspace Invite',
+                subtitle: _inviteToken == null
+                    ? 'Generating secure invite'
+                    : 'Ready to share',
+                children: <Widget>[
+                  MobileMetricGrid(
+                    children: <Widget>[
+                      MobileMetricTile(
+                        label: 'Code',
+                        value: _inviteToken == null ? '...' : 'Ready',
+                        icon: Icons.vpn_key_rounded,
+                        color: cs.primary,
+                      ),
+                      MobileMetricTile(
+                        label: 'Expiry',
+                        value: _inviteExpiresAt == null
+                            ? '-'
+                            : '${_minutesUntil(_inviteExpiresAt!)} min',
+                        icon: Icons.schedule_rounded,
+                        color: cs.secondary,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              if (_inviteToken != null) ...<Widget>[
+                const SizedBox(height: 12),
+                MobilePremiumPanel(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    children: <Widget>[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(
+                            kMobilePremiumRadius,
+                          ),
+                        ),
+                        child: QrImageView(
+                          data: 'balancedesk://join?token=$_inviteToken',
+                          version: QrVersions.auto,
+                          size: 184,
+                          backgroundColor: Colors.white,
+                          eyeStyle: const QrEyeStyle(
+                            eyeShape: QrEyeShape.square,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            Clipboard.setData(
+                              ClipboardData(text: _inviteToken!),
+                            );
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Invite code copied'),
+                              ),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(
+                            kMobilePremiumRadius,
+                          ),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: cs.surfaceContainerHigh,
+                              borderRadius: BorderRadius.circular(
+                                kMobilePremiumRadius,
+                              ),
+                              border: Border.all(color: cs.outlineVariant),
+                            ),
+                            child: Row(
+                              children: <Widget>[
+                                Expanded(
+                                  child: Text(
+                                    _inviteToken!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(
+                                          fontFamily: 'RobotoMono',
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 1,
+                                        ),
+                                  ),
+                                ),
+                                Icon(
+                                  Icons.content_copy_rounded,
+                                  color: cs.primary,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: _isLoading ? null : _generateInvite,
+                icon: _isLoading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2.4),
+                      )
+                    : Icon(
+                        _inviteToken != null
+                            ? Icons.refresh_rounded
+                            : Icons.vpn_key_rounded,
+                      ),
+                label: Text(
+                  _inviteToken != null ? 'Generate New Code' : 'Generate Code',
+                ),
+              ),
+              if (_myDeviceId != null) ...<Widget>[
+                const SizedBox(height: 18),
+                const MobileSectionHeader(title: 'Connected Devices'),
+                const SizedBox(height: 10),
+                StreamBuilder<List<LinkedSession>>(
+                  stream: LinkedDevicesService.instance.activeSessionsStream(
+                    _myDeviceId!,
+                  ),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const MobilePremiumPanel(
+                        child: SizedBox(
+                          height: 120,
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
+                      );
+                    }
+                    final sessions = snapshot.data ?? [];
+                    if (sessions.isEmpty) {
+                      return const MobilePremiumPanel(
+                        child: SizedBox(
+                          height: 120,
+                          child: Center(
+                            child: Text('No devices connected yet'),
+                          ),
+                        ),
+                      );
+                    }
+                    return Column(
+                      children: sessions
+                          .map(
+                            (session) => _buildDeviceCard(theme, cs, session),
+                          )
+                          .toList(),
+                    );
+                  },
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSectionHeader(ThemeData theme, String title, IconData icon) {
     return Row(
       children: [
@@ -982,8 +1237,8 @@ class _CreateWorkspaceScreenState extends State<_CreateWorkspaceScreen> {
         Text(
           title,
           style: theme.textTheme.labelSmall?.copyWith(
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.0,
             color: theme.colorScheme.primary,
           ),
         ),
@@ -1016,7 +1271,6 @@ class _CreateWorkspaceScreenState extends State<_CreateWorkspaceScreen> {
       decoration: BoxDecoration(
         color: cs.surfaceContainer,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: cs.outline, width: 1),
       ),
       child: Column(
         children: [
@@ -1059,11 +1313,12 @@ class _CreateWorkspaceScreenState extends State<_CreateWorkspaceScreen> {
               ),
             ),
             trailing: IconButton(
-              icon: Icon(Icons.cancel_rounded, color: cs.error, size: 28),
-              onPressed: () => _removeDevice(session),
-              style: IconButton.styleFrom(
-                backgroundColor: cs.error.withValues(alpha: 0.1),
+              icon: Icon(
+                Icons.cancel_rounded,
+                color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                size: 28,
               ),
+              onPressed: () => _removeDevice(session),
             ),
           ),
           if (!isWrite)
@@ -1091,9 +1346,6 @@ class _CreateWorkspaceScreenState extends State<_CreateWorkspaceScreen> {
                         decoration: BoxDecoration(
                           color: accentColor.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: accentColor.withValues(alpha: 0.25),
-                          ),
                         ),
                         child: Row(
                           children: [
@@ -1315,42 +1567,30 @@ class _CreateWorkspaceScreenState extends State<_CreateWorkspaceScreen> {
     required String label,
     required ColorScheme cs,
   }) {
-    return Container(
-      height: 60,
+    return SizedBox(
       width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [cs.primary, cs.primary.withValues(alpha: 0.8)],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: cs.primary.withValues(alpha: 0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+      height: 52,
       child: ElevatedButton.icon(
         onPressed: onPressed,
         icon: isLoading
             ? const SizedBox(
-                width: 20,
-                height: 20,
+                width: 18,
+                height: 18,
                 child: CircularProgressIndicator(
                   strokeWidth: 2.5,
                   color: Colors.white,
                 ),
               )
-            : Icon(icon, color: cs.onPrimary),
-        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
+            : Icon(icon, size: 20),
+        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
+          backgroundColor: cs.primary,
           foregroundColor: cs.onPrimary,
+          elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(16),
           ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         ),
       ),
     );

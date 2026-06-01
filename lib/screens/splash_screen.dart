@@ -2,6 +2,8 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../services/company_profile_service.dart';
+import '../utils/platform_helper.dart';
+import '../widgets/mobile_premium.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key, required this.child});
@@ -12,7 +14,8 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with TickerProviderStateMixin {
   final CompanyProfileService _companyProfileService = CompanyProfileService();
   CompanyProfile _profile = const CompanyProfile(name: '', logoPath: null);
 
@@ -35,17 +38,26 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
 
     _scaleAnimation = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0.0, end: 1.1).chain(CurveTween(curve: Curves.easeOutBack)),
+        tween: Tween<double>(
+          begin: 0.0,
+          end: 1.1,
+        ).chain(CurveTween(curve: Curves.easeOutBack)),
         weight: 60,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.1, end: 1.0).chain(CurveTween(curve: Curves.easeInOut)),
+        tween: Tween<double>(
+          begin: 1.1,
+          end: 1.0,
+        ).chain(CurveTween(curve: Curves.easeInOut)),
         weight: 40,
       ),
     ]).animate(_mainController);
 
     _opacityAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _mainController, curve: const Interval(0.0, 0.4, curve: Curves.easeIn)),
+      CurvedAnimation(
+        parent: _mainController,
+        curve: const Interval(0.0, 0.4, curve: Curves.easeIn),
+      ),
     );
 
     _mainController.forward();
@@ -85,9 +97,23 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final displayName = _profile.name.trim().isEmpty ? 'Balance Desk' : _profile.name.trim();
-    final logoFile = _profile.logoPath == null || _profile.logoPath!.trim().isEmpty ? null : File(_profile.logoPath!);
+    final displayName = _profile.name.trim().isEmpty
+        ? 'Balance Desk'
+        : _profile.name.trim();
+    final logoFile =
+        _profile.logoPath == null || _profile.logoPath!.trim().isEmpty
+        ? null
+        : File(_profile.logoPath!);
     final hasLogo = logoFile != null && logoFile.existsSync();
+
+    if (!PlatformHelper.isDesktop) {
+      return _buildPremiumMobileSplash(
+        context,
+        displayName: displayName,
+        logoFile: logoFile,
+        hasLogo: hasLogo,
+      );
+    }
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -108,7 +134,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
               ),
             ),
           ),
-          
+
           // Floating Abstract Shapes
           ...List.generate(3, (index) {
             return _PositionedMovingShape(
@@ -136,7 +162,8 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                             // Pulse Effect
                             ...List.generate(2, (i) {
                               final delay = i * 0.5;
-                              final progress = (_mainController.value - delay).clamp(0.0, 1.0);
+                              final progress = (_mainController.value - delay)
+                                  .clamp(0.0, 1.0);
                               return Opacity(
                                 opacity: (1.0 - progress) * 0.3,
                                 child: Container(
@@ -144,12 +171,15 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                   height: 140 + (progress * 100),
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    border: Border.all(color: colorScheme.primary, width: 2),
+                                    border: Border.all(
+                                      color: colorScheme.primary,
+                                      width: 2,
+                                    ),
                                   ),
                                 ),
                               );
                             }),
-                            
+
                             // Logo Card
                             Container(
                               width: 130,
@@ -158,12 +188,16 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                 color: colorScheme.surface,
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: colorScheme.primary.withValues(alpha: 0.2),
+                                  color: colorScheme.primary.withValues(
+                                    alpha: 0.2,
+                                  ),
                                   width: 4,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: colorScheme.primary.withValues(alpha: 0.15),
+                                    color: colorScheme.primary.withValues(
+                                      alpha: 0.15,
+                                    ),
                                     blurRadius: 30,
                                     offset: const Offset(0, 10),
                                   ),
@@ -173,9 +207,16 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                 child: hasLogo
                                     ? Padding(
                                         padding: const EdgeInsets.all(24),
-                                        child: Image.file(logoFile, fit: BoxFit.contain),
+                                        child: Image.file(
+                                          logoFile,
+                                          fit: BoxFit.contain,
+                                        ),
                                       )
-                                    : Icon(Icons.account_balance_rounded, size: 50, color: colorScheme.primary),
+                                    : Icon(
+                                        Icons.account_balance_rounded,
+                                        size: 50,
+                                        color: colorScheme.primary,
+                                      ),
                               ),
                             ),
                           ],
@@ -193,10 +234,13 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                           ),
                         ),
                         const SizedBox(height: 12),
-                        
+
                         // Premium Subtitle Tag
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
                             color: colorScheme.primary.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(20),
@@ -210,9 +254,9 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                             ),
                           ),
                         ),
-                        
+
                         const SizedBox(height: 64),
-                        
+
                         // Centered Progress Indicator
                         Column(
                           children: [
@@ -221,8 +265,12 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                               height: 40,
                               child: CircularProgressIndicator(
                                 strokeWidth: 3,
-                                valueColor: AlwaysStoppedAnimation<Color>(colorScheme.primary),
-                                backgroundColor: colorScheme.primary.withValues(alpha: 0.1),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  colorScheme.primary,
+                                ),
+                                backgroundColor: colorScheme.primary.withValues(
+                                  alpha: 0.1,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 24),
@@ -243,7 +291,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
               },
             ),
           ),
-          
+
           // Clean Developer Branding
           Align(
             alignment: Alignment.bottomCenter,
@@ -274,7 +322,9 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                     style: theme.textTheme.labelSmall?.copyWith(
                       letterSpacing: 3.0,
                       fontWeight: FontWeight.w600,
-                      color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+                      color: colorScheme.onSurfaceVariant.withValues(
+                        alpha: 0.4,
+                      ),
                       fontSize: 8,
                     ),
                   ),
@@ -283,6 +333,108 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPremiumMobileSplash(
+    BuildContext context, {
+    required String displayName,
+    required File? logoFile,
+    required bool hasLogo,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Scaffold(
+      body: SafeArea(
+        child: MobilePremiumPage(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 28),
+          child: AnimatedBuilder(
+            animation: _mainController,
+            builder: (context, child) {
+              return Opacity(
+                opacity: _opacityAnimation.value,
+                child: Transform.scale(
+                  scale: _scaleAnimation.value,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      const Spacer(),
+                      Center(
+                        child: Container(
+                          width: 104,
+                          height: 104,
+                          padding: const EdgeInsets.all(18),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surfaceContainer,
+                            borderRadius: BorderRadius.circular(
+                              kMobilePremiumRadius,
+                            ),
+                            border: Border.all(
+                              color: colorScheme.primary.withValues(
+                                alpha: 0.24,
+                              ),
+                            ),
+                            boxShadow: <BoxShadow>[
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.24),
+                                blurRadius: 22,
+                                offset: const Offset(0, 12),
+                              ),
+                            ],
+                          ),
+                          child: hasLogo
+                              ? Image.file(logoFile!, fit: BoxFit.contain)
+                              : Icon(
+                                  Icons.account_balance_rounded,
+                                  size: 46,
+                                  color: colorScheme.primary,
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                      Text(
+                        displayName,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Center(
+                        child: MobileStatusPill(
+                          icon: Icons.verified_rounded,
+                          label: 'Premium Accounting',
+                          color: colorScheme.secondary,
+                        ),
+                      ),
+                      const Spacer(),
+                      const Center(
+                        child: SizedBox(
+                          width: 34,
+                          height: 34,
+                          child: CircularProgressIndicator(strokeWidth: 3),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Text(
+                        'Preparing workspace',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -297,9 +449,10 @@ class _PositionedMovingShape extends StatefulWidget {
   State<_PositionedMovingShape> createState() => _PositionedMovingShapeState();
 }
 
-class _PositionedMovingShapeState extends State<_PositionedMovingShape> with SingleTickerProviderStateMixin {
+class _PositionedMovingShapeState extends State<_PositionedMovingShape>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  
+
   @override
   void initState() {
     super.initState();
@@ -308,7 +461,7 @@ class _PositionedMovingShapeState extends State<_PositionedMovingShape> with Sin
       duration: Duration(seconds: 10 + (widget.index * 2)),
     )..repeat();
   }
-  
+
   @override
   void dispose() {
     _controller.dispose();
@@ -322,8 +475,14 @@ class _PositionedMovingShapeState extends State<_PositionedMovingShape> with Sin
       builder: (context, child) {
         final angle = (_controller.value * 2 * math.pi) + (widget.index * 1.5);
         return Positioned(
-          left: (math.cos(angle) * 100) + (MediaQuery.of(context).size.width / 2) - 100,
-          top: (math.sin(angle) * 100) + (MediaQuery.of(context).size.height / 2) - 100,
+          left:
+              (math.cos(angle) * 100) +
+              (MediaQuery.of(context).size.width / 2) -
+              100,
+          top:
+              (math.sin(angle) * 100) +
+              (MediaQuery.of(context).size.height / 2) -
+              100,
           child: Container(
             width: 200,
             height: 200,
