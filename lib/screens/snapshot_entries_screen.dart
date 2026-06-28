@@ -1233,7 +1233,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                   label: shrink('Export'),
                 ),
               ),
-              if (_snapshots.isNotEmpty) ...[
+              if (_snapshots.isNotEmpty && canEdit) ...[
                 const SizedBox(width: 8),
                 Expanded(
                   child: premiumOutlinedButton(
@@ -1245,8 +1245,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
               ],
             ],
           ),
-          if (_snapshots.isNotEmpty) const SizedBox(height: 8),
-          if (_snapshots.isNotEmpty)
+          if (_snapshots.isNotEmpty && canEdit) const SizedBox(height: 8),
+          if (_snapshots.isNotEmpty && canEdit)
             Row(
               children: <Widget>[
                 Expanded(
@@ -1425,7 +1425,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           icon: const Icon(Icons.refresh_rounded),
           label: const Text('Refresh'),
         ),
-        if (_snapshots.isNotEmpty)
+        if (_snapshots.isNotEmpty && canEdit)
           OutlinedButton.icon(
             onPressed: _isLoading || _isSavingSnapshot
                 ? null
@@ -1438,7 +1438,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           icon: const Icon(Icons.file_download_outlined),
           label: const Text('Export'),
         ),
-        if (_snapshots.isNotEmpty)
+        if (_snapshots.isNotEmpty && canEdit)
           TextButton.icon(
             onPressed: _isLoading || _isSavingSnapshot
                 ? null

@@ -83,6 +83,7 @@ class CsvBackupService {
               'phone': row['phone'],
               'ledgerYear': row['ledgerYear'],
               'isStockLedger': row['isStockLedger'],
+              'useWeight': row['useWeight'],
             },
           )
           .toList(growable: false),
@@ -294,6 +295,7 @@ class CsvBackupService {
           'address',
           'phone',
           'isStockLedger',
+          'useWeight',
         ],
         ...customers.map<List<String>>((Map<String, dynamic> row) {
           return <String>[
@@ -303,6 +305,7 @@ class CsvBackupService {
             '${row['address'] ?? ''}',
             '${row['phone'] ?? ''}',
             '${row['isStockLedger'] ?? '0'}',
+            '${row['useWeight'] ?? '0'}',
           ];
         }),
       ],

@@ -180,6 +180,57 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     }
   }
 
+  Future<void> _renameDevice(LinkedSession session) async {
+    final controller = TextEditingController(
+      text: session.linkedDeviceName ?? '',
+    );
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rename Device'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Device Name',
+            hintText: 'Enter a name for this device',
+          ),
+          textCapitalization: TextCapitalization.words,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Rename'),
+          ),
+        ],
+      ),
+    );
+
+    if (newName != null && newName.isNotEmpty && _myDeviceId != null) {
+      try {
+        await LinkedDevicesService.instance.updateSessionField(
+          session.sessionId,
+          {'linkedDeviceName': newName},
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Device renamed to "$newName".')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to rename: $e')),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -660,16 +711,24 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               ),
             ),
             title: Text(
-              'Remote Node: ${LinkedDevicesUtils.formatDeviceId(session.linkedDeviceId)}',
+              session.linkedDeviceName ?? LinkedDevicesUtils.formatDeviceId(session.linkedDeviceId),
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w900,
-                fontFamily: 'RobotoMono',
               ),
             ),
             subtitle: Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Row(
                 children: [
+                  Text(
+                    LinkedDevicesUtils.formatDeviceId(session.linkedDeviceId),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontFamily: 'RobotoMono',
+                      fontSize: 10,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
@@ -691,12 +750,25 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 ],
               ),
             ),
-            trailing: IconButton(
-              icon: Icon(Icons.cancel_rounded, color: cs.error, size: 28),
-              onPressed: () => _removeDevice(session),
-              style: IconButton.styleFrom(
-                backgroundColor: cs.error.withValues(alpha: 0.1),
-              ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: Icon(Icons.edit_rounded, color: cs.primary, size: 22),
+                  onPressed: () => _renameDevice(session),
+                  style: IconButton.styleFrom(
+                    backgroundColor: cs.primary.withValues(alpha: 0.1),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: Icon(Icons.cancel_rounded, color: cs.error, size: 28),
+                  onPressed: () => _removeDevice(session),
+                  style: IconButton.styleFrom(
+                    backgroundColor: cs.error.withValues(alpha: 0.1),
+                  ),
+                ),
+              ],
             ),
           ),
 

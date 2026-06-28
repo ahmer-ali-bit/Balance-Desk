@@ -1200,6 +1200,7 @@ class DatabaseHelper {
         'phone',
         'ledgerYear',
         'isStockLedger',
+        'useWeight',
       ],
       orderBy: 'ledgerYear DESC, id ASC',
     );
@@ -1304,6 +1305,7 @@ class DatabaseHelper {
           'phone': row.length > 4 ? row[4] : '',
           'ledgerYear': int.tryParse(row[2]) ?? DateTime.now().year,
           'isStockLedger': row.length > 5 ? (int.tryParse(row[5]) ?? 0) : 0,
+          'useWeight': row.length > 6 ? (int.tryParse(row[6]) ?? 0) : 0,
         });
       }
 
@@ -1415,7 +1417,7 @@ class DatabaseHelper {
       );
       final sourceCustomers = await txn.query(
         customersTable,
-        columns: <String>['id', 'name', 'address', 'phone', 'isStockLedger'],
+        columns: <String>['id', 'name', 'address', 'phone', 'isStockLedger', 'useWeight'],
         where: 'ledgerYear = ?',
         whereArgs: <Object?>[sourceYear],
         orderBy: 'id ASC',
@@ -1429,6 +1431,7 @@ class DatabaseHelper {
               'address': customer['address'] as String? ?? '',
               'phone': customer['phone'] as String? ?? '',
               'isStockLedger': customer['isStockLedger'] as int? ?? 0,
+              'useWeight': customer['useWeight'] as int? ?? 0,
               'ledgerYear': year,
             });
 

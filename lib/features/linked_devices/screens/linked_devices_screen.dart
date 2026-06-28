@@ -1314,13 +1314,25 @@ class _CreateWorkspaceScreenState extends State<_CreateWorkspaceScreen> {
                 ),
               ),
             ),
-            trailing: IconButton(
-              icon: Icon(
-                Icons.cancel_rounded,
-                color: cs.onSurfaceVariant.withValues(alpha: 0.5),
-                size: 28,
-              ),
-              onPressed: () => _removeDevice(session),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: Icon(Icons.edit_rounded, color: cs.primary, size: 22),
+                  onPressed: () => _renameDevice(session),
+                  style: IconButton.styleFrom(
+                    backgroundColor: cs.primary.withValues(alpha: 0.1),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(
+                    Icons.cancel_rounded,
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                    size: 28,
+                  ),
+                  onPressed: () => _removeDevice(session),
+                ),
+              ],
             ),
           ),
           if (!isWrite)
@@ -1437,6 +1449,57 @@ class _CreateWorkspaceScreenState extends State<_CreateWorkspaceScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _renameDevice(LinkedSession session) async {
+    final controller = TextEditingController(
+      text: session.linkedDeviceName ?? '',
+    );
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rename Device'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Device Name',
+            hintText: 'Enter a name for this device',
+          ),
+          textCapitalization: TextCapitalization.words,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Rename'),
+          ),
+        ],
+      ),
+    );
+
+    if (newName != null && newName.isNotEmpty && _myDeviceId != null) {
+      try {
+        await LinkedDevicesService.instance.updateSessionField(
+          session.sessionId,
+          {'linkedDeviceName': newName},
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Device renamed to "$newName".')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to rename: $e')),
+          );
+        }
+      }
+    }
   }
 
   Future<void> _removeDevice(LinkedSession session) async {
