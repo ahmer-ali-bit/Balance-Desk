@@ -1484,7 +1484,8 @@ class _LedgerViewState extends State<_LedgerView> {
   }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final readOnly = false;
+    final canEdit = context.read<LinkedSessionProvider>().canEdit;
+    final readOnly = !canEdit;
     final hasInvalidAmount =
         _parseOpeningBalanceValue(_openingDebitController.text) == null ||
         _parseOpeningBalanceValue(_openingCreditController.text) == null;
@@ -2002,11 +2003,12 @@ class _LedgerViewState extends State<_LedgerView> {
                   ],
                 ),
               ),
-              IconButton.filledTonal(
-                tooltip: 'Edit customer details',
-                onPressed: () => _showEditCustomerDialog(provider),
-                icon: const Icon(Icons.edit_outlined, size: 18),
-              ),
+              if (context.read<LinkedSessionProvider>().canEdit)
+                IconButton.filledTonal(
+                  tooltip: 'Edit customer details',
+                  onPressed: () => _showEditCustomerDialog(provider),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                ),
             ],
           ),
           const SizedBox(height: 12),
@@ -2320,15 +2322,18 @@ class _LedgerViewState extends State<_LedgerView> {
               children: <Widget>[
                 LayoutBuilder(
                   builder: (BuildContext context, BoxConstraints constraints) {
-                    final editButton = IconButton.filledTonal(
-                      tooltip: 'Edit customer details',
-                      onPressed: () => _showEditCustomerDialog(provider),
-                      style: IconButton.styleFrom(
-                        backgroundColor: colorScheme.primaryContainer,
-                        foregroundColor: colorScheme.primary,
-                      ),
-                      icon: const Icon(Icons.edit_outlined),
-                    );
+                    final canEdit = context.read<LinkedSessionProvider>().canEdit;
+                    final editButton = canEdit
+                        ? IconButton.filledTonal(
+                            tooltip: 'Edit customer details',
+                            onPressed: () => _showEditCustomerDialog(provider),
+                            style: IconButton.styleFrom(
+                              backgroundColor: colorScheme.primaryContainer,
+                              foregroundColor: colorScheme.primary,
+                            ),
+                            icon: const Icon(Icons.edit_outlined),
+                          )
+                        : null;
 
                     final titleBlock = Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2417,8 +2422,8 @@ class _LedgerViewState extends State<_LedgerView> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(child: titleBlock),
-                            const SizedBox(width: 16),
-                            editButton,
+                            if (editButton != null) const SizedBox(width: 16),
+                            if (editButton != null) editButton,
                           ],
                         ),
                         const SizedBox(height: 16),
@@ -2670,15 +2675,18 @@ class _LedgerViewState extends State<_LedgerView> {
       );
     }
 
-    final editButton = IconButton.filledTonal(
-      tooltip: 'Edit customer details',
-      onPressed: () => _showEditCustomerDialog(provider),
-      style: IconButton.styleFrom(
-        backgroundColor: colorScheme.primaryContainer,
-        foregroundColor: colorScheme.primary,
-      ),
-      icon: const Icon(Icons.edit_outlined),
-    );
+    final canEdit = context.read<LinkedSessionProvider>().canEdit;
+    final editButton = canEdit
+        ? IconButton.filledTonal(
+            tooltip: 'Edit customer details',
+            onPressed: () => _showEditCustomerDialog(provider),
+            style: IconButton.styleFrom(
+              backgroundColor: colorScheme.primaryContainer,
+              foregroundColor: colorScheme.primary,
+            ),
+            icon: const Icon(Icons.edit_outlined),
+          )
+        : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2725,8 +2733,8 @@ class _LedgerViewState extends State<_LedgerView> {
                 ],
               ),
             ),
-            const SizedBox(width: 16),
-            editButton,
+            if (editButton != null) const SizedBox(width: 16),
+            if (editButton != null) editButton,
           ],
         ),
         const SizedBox(height: 20),
@@ -3131,9 +3139,11 @@ class _LedgerViewState extends State<_LedgerView> {
                                         ).colorScheme.onSurfaceVariant,
                                 ),
                                 value: provider.isStockLedger,
-                                onChanged: (bool value) {
-                                  provider.toggleStockLedger();
-                                },
+                                onChanged: context.read<LinkedSessionProvider>().canEdit
+                                    ? (bool value) {
+                                        provider.toggleStockLedger();
+                                      }
+                                    : null,
                                 trackColor:
                                     WidgetStateProperty.resolveWith<Color?>(
                                       (states) =>
@@ -3143,7 +3153,7 @@ class _LedgerViewState extends State<_LedgerView> {
                                                 .colorScheme
                                                 .onSurfaceVariant
                                                 .withValues(alpha: 0.4),
-                                    ),
+                                      ),
                                 contentPadding: EdgeInsets.zero,
                               ),
                               if (provider.isStockLedger) ...[
@@ -3174,8 +3184,10 @@ class _LedgerViewState extends State<_LedgerView> {
                                           ).colorScheme.onSurfaceVariant,
                                   ),
                                   value: provider.useWeight,
-                                  onChanged: (bool value) =>
-                                      provider.toggleStockWeight(),
+                                  onChanged: context.read<LinkedSessionProvider>().canEdit
+                                      ? (bool value) =>
+                                          provider.toggleStockWeight()
+                                      : null,
                                   trackColor:
                                       WidgetStateProperty.resolveWith<Color?>(
                                         (states) =>
@@ -3187,7 +3199,7 @@ class _LedgerViewState extends State<_LedgerView> {
                                                   .colorScheme
                                                   .onSurfaceVariant
                                                   .withValues(alpha: 0.4),
-                                      ),
+                                        ),
                                   contentPadding: EdgeInsets.zero,
                                 ),
                               ],

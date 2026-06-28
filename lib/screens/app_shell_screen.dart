@@ -199,11 +199,16 @@ class _AppShellScreenState extends State<AppShellScreen> {
         child: SafeArea(top: false, child: drawerChild),
       ),
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(78),
+        preferredSize: Size.fromHeight(MediaQuery.of(context).size.height * 0.096),
         child: SafeArea(
           bottom: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+            padding: EdgeInsets.fromLTRB(
+              MediaQuery.of(context).size.width * 0.037,
+              MediaQuery.of(context).size.height * 0.012,
+              MediaQuery.of(context).size.width * 0.037,
+              MediaQuery.of(context).size.height * 0.01,
+            ),
             child: _MobileTopBar(destination: destination),
           ),
         ),
@@ -2224,9 +2229,11 @@ class _MobileTopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final w = MediaQuery.of(context).size.width;
+    final h = MediaQuery.of(context).size.height;
 
     return MobilePremiumPanel(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: EdgeInsets.symmetric(horizontal: w * 0.027, vertical: h * 0.01),
       child: Row(
         children: <Widget>[
           Builder(
@@ -2245,7 +2252,7 @@ class _MobileTopBar extends StatelessWidget {
               );
             },
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: w * 0.027),
           Expanded(
             child: FittedBox(
               fit: BoxFit.scaleDown,
@@ -2263,7 +2270,7 @@ class _MobileTopBar extends StatelessWidget {
                       fontWeight: FontWeight.w900,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  SizedBox(height: h * 0.0025),
                   Text(
                     destination.label,
                     maxLines: 1,
@@ -2277,8 +2284,8 @@ class _MobileTopBar extends StatelessWidget {
             ),
           ),
           Container(
-            width: 42,
-            height: 42,
+            width: w * 0.112,
+            height: w * 0.112,
             decoration: BoxDecoration(
               color: colorScheme.primary.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(kMobilePremiumRadius),
