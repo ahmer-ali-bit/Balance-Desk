@@ -16,7 +16,10 @@ class LinkedSession {
   final DateTime? joinedAt;
   final String? lastSnapshotAt;
   final String? lastGuestSnapshotAt;
+  final String? lastGuestBaseSnapshotAt;
   final String? lastAdminAppliedGuestSnapshotAt;
+  final String? lastAdminAppliedGuestEntryIds;
+  final String? lastAdminAppliedGuestCustomerIds;
 
   const LinkedSession({
     required this.sessionId,
@@ -30,7 +33,10 @@ class LinkedSession {
     this.joinedAt,
     this.lastSnapshotAt,
     this.lastGuestSnapshotAt,
+    this.lastGuestBaseSnapshotAt,
     this.lastAdminAppliedGuestSnapshotAt,
+    this.lastAdminAppliedGuestEntryIds,
+    this.lastAdminAppliedGuestCustomerIds,
   });
 
   bool get hasActiveEditCode {
@@ -62,8 +68,11 @@ class LinkedSession {
         joinedAt: DateTime.tryParse(map['joinedAt']?.toString() ?? ''),
         lastSnapshotAt: map['lastSnapshotAt']?.toString(),
         lastGuestSnapshotAt: map['lastGuestSnapshotAt']?.toString(),
+        lastGuestBaseSnapshotAt: map['lastGuestBaseSnapshotAt']?.toString(),
         lastAdminAppliedGuestSnapshotAt: map['lastAdminAppliedGuestSnapshotAt']
             ?.toString(),
+        lastAdminAppliedGuestEntryIds: map['lastAdminAppliedGuestEntryIds']?.toString(),
+        lastAdminAppliedGuestCustomerIds: map['lastAdminAppliedGuestCustomerIds']?.toString(),
       );
     } catch (e) {
       debugPrint('LinkedSession.fromMap error: $e');
@@ -88,7 +97,10 @@ class LinkedSession {
     'joinedAt': joinedAt?.toIso8601String(),
     'lastSnapshotAt': lastSnapshotAt,
     'lastGuestSnapshotAt': lastGuestSnapshotAt,
+    'lastGuestBaseSnapshotAt': lastGuestBaseSnapshotAt,
     'lastAdminAppliedGuestSnapshotAt': lastAdminAppliedGuestSnapshotAt,
+    'lastAdminAppliedGuestEntryIds': lastAdminAppliedGuestEntryIds,
+    'lastAdminAppliedGuestCustomerIds': lastAdminAppliedGuestCustomerIds,
   };
 
   LinkedSession copyWith({
@@ -103,7 +115,10 @@ class LinkedSession {
     DateTime? joinedAt,
     String? lastSnapshotAt,
     String? lastGuestSnapshotAt,
+    String? lastGuestBaseSnapshotAt,
     String? lastAdminAppliedGuestSnapshotAt,
+    String? lastAdminAppliedGuestEntryIds,
+    String? lastAdminAppliedGuestCustomerIds,
     bool clearEditableCode = false,
   }) {
     return LinkedSession(
@@ -122,9 +137,15 @@ class LinkedSession {
       joinedAt: joinedAt ?? this.joinedAt,
       lastSnapshotAt: lastSnapshotAt ?? this.lastSnapshotAt,
       lastGuestSnapshotAt: lastGuestSnapshotAt ?? this.lastGuestSnapshotAt,
+      lastGuestBaseSnapshotAt:
+          lastGuestBaseSnapshotAt ?? this.lastGuestBaseSnapshotAt,
       lastAdminAppliedGuestSnapshotAt:
           lastAdminAppliedGuestSnapshotAt ??
           this.lastAdminAppliedGuestSnapshotAt,
+      lastAdminAppliedGuestEntryIds:
+          lastAdminAppliedGuestEntryIds ?? this.lastAdminAppliedGuestEntryIds,
+      lastAdminAppliedGuestCustomerIds:
+          lastAdminAppliedGuestCustomerIds ?? this.lastAdminAppliedGuestCustomerIds,
     );
   }
 }

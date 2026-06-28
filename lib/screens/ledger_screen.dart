@@ -92,6 +92,7 @@ class _LedgerViewState extends State<_LedgerView> {
   String _lastOpeningBalanceSignature = '';
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _didAutoOpenAddEntry = false;
+  Timer? _obDebounceTimer;
 
   @override
   void initState() {
@@ -268,10 +269,11 @@ class _LedgerViewState extends State<_LedgerView> {
     try {
       // 1. Fetch saved snapshots
       final snapshotRows = await AppDatabase.instance.getSummarySnapshots();
-      final snapshots = snapshotRows
-          .map<SummarySnapshot>((row) => SummarySnapshot.fromMap(row))
-          .toList()
-        ..sort((a, b) => b.savedAt.compareTo(a.savedAt)); // Newest first
+      final snapshots =
+          snapshotRows
+              .map<SummarySnapshot>((row) => SummarySnapshot.fromMap(row))
+              .toList()
+            ..sort((a, b) => b.savedAt.compareTo(a.savedAt)); // Newest first
 
       if (!mounted) return;
 
@@ -332,7 +334,7 @@ class _LedgerViewState extends State<_LedgerView> {
       } else if (choice == 'snapshot') {
         // Option 2: Add to a specific saved snapshot
         if (!mounted) return;
-        
+
         final selectedSnapshot = await showDialog<SummarySnapshot>(
           context: context,
           builder: (BuildContext context) {
@@ -349,7 +351,9 @@ class _LedgerViewState extends State<_LedgerView> {
                     final timeParts = snapshot.savedAt.split('T')[1].split(':');
                     final timeStr = '${timeParts[0]}:${timeParts[1]}';
                     final pageNo = snapshot.dailyLogPageNo;
-                    final pageSuffix = pageNo.isNotEmpty ? ' (Page: $pageNo)' : '';
+                    final pageSuffix = pageNo.isNotEmpty
+                        ? ' (Page: $pageNo)'
+                        : '';
                     return ListTile(
                       leading: const Icon(Icons.history_toggle_off),
                       title: Text('$dateStr $timeStr$pageSuffix'),
@@ -379,7 +383,9 @@ class _LedgerViewState extends State<_LedgerView> {
         await AppDatabase.instance.addEntryToSavedSnapshot(
           entryId: entry.id!,
           savedAt: selectedSnapshot.savedAt,
-          dailyLogPageNo: selectedSnapshot.dailyLogPageNo.isNotEmpty ? selectedSnapshot.dailyLogPageNo : null,
+          dailyLogPageNo: selectedSnapshot.dailyLogPageNo.isNotEmpty
+              ? selectedSnapshot.dailyLogPageNo
+              : null,
         );
 
         await provider.loadEntries();
@@ -387,7 +393,9 @@ class _LedgerViewState extends State<_LedgerView> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Entry added to the selected Saved Snapshot successfully.'),
+            content: Text(
+              'Entry added to the selected Saved Snapshot successfully.',
+            ),
           ),
         );
       }
@@ -437,108 +445,102 @@ class _LedgerViewState extends State<_LedgerView> {
                   ),
                 ),
                 const Divider(),
-                ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: colorScheme.primaryContainer,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.edit_outlined,
-                      color: colorScheme.onPrimaryContainer,
-                    ),
-                  ),
-                  title: const Text(
-                    'Edit Entry',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  onTap: context.read<LinkedSessionProvider>().canEdit
-                      ? () {
-                          Navigator.pop(context);
-                          _showEditEntryDialog(entry);
-                        }
-                      : null,
-                ),
-                ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: colorScheme.secondaryContainer,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.swap_horiz_rounded,
-                      color: colorScheme.onSecondaryContainer,
-                    ),
-                  ),
-                  title: const Text(
-                    'Transfer to another customer',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  onTap: context.read<LinkedSessionProvider>().canEdit
-                      ? () {
-                          Navigator.pop(context);
-                          _showTransferDialog(provider, entry);
-                        }
-                      : null,
-                ),
-                if (!entry.showInDailyLog)
+                if (context.read<LinkedSessionProvider>().canEdit) ...[
                   ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 24),
                     leading: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: colorScheme.tertiaryContainer,
+                        color: colorScheme.primaryContainer,
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
-                        Icons.playlist_add_rounded,
-                        color: colorScheme.onTertiaryContainer,
+                        Icons.edit_outlined,
+                        color: colorScheme.onPrimaryContainer,
                       ),
                     ),
                     title: const Text(
-                      'Add to Daily Log',
+                      'Edit Entry',
                       style: TextStyle(fontWeight: FontWeight.w600),
                     ),
-                    onTap: context.read<LinkedSessionProvider>().canEdit
-                        ? () {
-                            Navigator.pop(context);
-                            _addEntryToDailyLog(provider, entry);
-                          }
-                        : null,
-                    enabled: context.read<LinkedSessionProvider>().canEdit,
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showEditEntryDialog(entry);
+                    },
                   ),
-                ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: colorScheme.errorContainer,
-                      shape: BoxShape.circle,
+                  ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: colorScheme.secondaryContainer,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.swap_horiz_rounded,
+                        color: colorScheme.onSecondaryContainer,
+                      ),
                     ),
-                    child: Icon(
-                      Icons.delete_outline,
-                      color: colorScheme.onErrorContainer,
+                    title: const Text(
+                      'Transfer to another customer',
+                      style: TextStyle(fontWeight: FontWeight.w600),
                     ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showTransferDialog(provider, entry);
+                    },
                   ),
-                  title: Text(
-                    'Delete Entry',
-                    style: TextStyle(
-                      color: colorScheme.error,
-                      fontWeight: FontWeight.w600,
+                  if (!entry.showInDailyLog)
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                      ),
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: colorScheme.tertiaryContainer,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.playlist_add_rounded,
+                          color: colorScheme.onTertiaryContainer,
+                        ),
+                      ),
+                      title: const Text(
+                        'Add to Daily Log',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _addEntryToDailyLog(provider, entry);
+                      },
                     ),
+                  ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: colorScheme.errorContainer,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.delete_outline,
+                        color: colorScheme.onErrorContainer,
+                      ),
+                    ),
+                    title: Text(
+                      'Delete Entry',
+                      style: TextStyle(
+                        color: colorScheme.error,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _confirmDeleteEntry(entry);
+                    },
                   ),
-                  onTap: context.read<LinkedSessionProvider>().canEdit
-                      ? () {
-                          Navigator.pop(context);
-                          _confirmDeleteEntry(entry);
-                        }
-                      : null,
-                  enabled: context.read<LinkedSessionProvider>().canEdit,
-                ),
+                ],
               ],
             ),
           ),
@@ -895,13 +897,13 @@ class _LedgerViewState extends State<_LedgerView> {
     final buyBagsText = openingBalance.buyBags == 0
         ? ''
         : (provider.useWeight
-            ? number_format_utils.formatWeight(openingBalance.buyBags)
-            : number_format_utils.formatAmount(openingBalance.buyBags));
+              ? number_format_utils.formatWeight(openingBalance.buyBags)
+              : number_format_utils.formatAmount(openingBalance.buyBags));
     final sellBagsText = openingBalance.sellBags == 0
         ? ''
         : (provider.useWeight
-            ? number_format_utils.formatWeight(openingBalance.sellBags)
-            : number_format_utils.formatAmount(openingBalance.sellBags));
+              ? number_format_utils.formatWeight(openingBalance.sellBags)
+              : number_format_utils.formatAmount(openingBalance.sellBags));
 
     _openingDebitController.text = debitText;
     _openingCreditController.text = creditText;
@@ -924,7 +926,8 @@ class _LedgerViewState extends State<_LedgerView> {
       openingBalance.buyBags,
       openingBalance.sellBags,
     );
-    final isEditing = _openingDebitFocusNode.hasFocus ||
+    final isEditing =
+        _openingDebitFocusNode.hasFocus ||
         _openingCreditFocusNode.hasFocus ||
         _openingBuyBagsFocusNode.hasFocus ||
         _openingSellBagsFocusNode.hasFocus;
@@ -937,15 +940,16 @@ class _LedgerViewState extends State<_LedgerView> {
     final buyBagsText = openingBalance.buyBags == 0
         ? ''
         : (provider.useWeight
-            ? number_format_utils.formatWeight(openingBalance.buyBags)
-            : number_format_utils.formatAmount(openingBalance.buyBags));
+              ? number_format_utils.formatWeight(openingBalance.buyBags)
+              : number_format_utils.formatAmount(openingBalance.buyBags));
     final sellBagsText = openingBalance.sellBags == 0
         ? ''
         : (provider.useWeight
-            ? number_format_utils.formatWeight(openingBalance.sellBags)
-            : number_format_utils.formatAmount(openingBalance.sellBags));
+              ? number_format_utils.formatWeight(openingBalance.sellBags)
+              : number_format_utils.formatAmount(openingBalance.sellBags));
 
-    final matchesController = _openingDebitController.text == debitText &&
+    final matchesController =
+        _openingDebitController.text == debitText &&
         _openingCreditController.text == creditText &&
         _openingBuyBagsController.text == buyBagsText &&
         _openingSellBagsController.text == sellBagsText;
@@ -962,16 +966,32 @@ class _LedgerViewState extends State<_LedgerView> {
     _lastOpeningBalanceSignature = signature;
   }
 
+  void _debounceOpeningBalanceUpdate() {
+    _obDebounceTimer?.cancel();
+    _obDebounceTimer = Timer(const Duration(milliseconds: 80), () {
+      if (mounted) setState(() {});
+    });
+  }
+
   bool _hasOpeningBalanceDraftChanged(LedgerProvider provider) {
     final debit = _parseOpeningBalanceValue(_openingDebitController.text);
     final credit = _parseOpeningBalanceValue(_openingCreditController.text);
     final useWt = provider.useWeight;
-    final buyBags = _parseOpeningBalanceValue(_openingBuyBagsController.text, asWeight: useWt);
-    final sellBags = _parseOpeningBalanceValue(_openingSellBagsController.text, asWeight: useWt);
+    final buyBags = _parseOpeningBalanceValue(
+      _openingBuyBagsController.text,
+      asWeight: useWt,
+    );
+    final sellBags = _parseOpeningBalanceValue(
+      _openingSellBagsController.text,
+      asWeight: useWt,
+    );
 
     final openingBalance = _readOpeningBalance(provider);
 
-    if (debit == null || credit == null || buyBags == null || sellBags == null) {
+    if (debit == null ||
+        credit == null ||
+        buyBags == null ||
+        sellBags == null) {
       return false;
     }
 
@@ -988,10 +1008,19 @@ class _LedgerViewState extends State<_LedgerView> {
     final credit = _parseOpeningBalanceValue(_openingCreditController.text);
     final provider = context.read<LedgerProvider>();
     final useWt = provider.useWeight;
-    final buyBags = _parseOpeningBalanceValue(_openingBuyBagsController.text, asWeight: useWt);
-    final sellBags = _parseOpeningBalanceValue(_openingSellBagsController.text, asWeight: useWt);
+    final buyBags = _parseOpeningBalanceValue(
+      _openingBuyBagsController.text,
+      asWeight: useWt,
+    );
+    final sellBags = _parseOpeningBalanceValue(
+      _openingSellBagsController.text,
+      asWeight: useWt,
+    );
 
-    if (debit == null || credit == null || buyBags == null || sellBags == null) {
+    if (debit == null ||
+        credit == null ||
+        buyBags == null ||
+        sellBags == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Enter valid opening balance values.')),
       );
@@ -1068,11 +1097,11 @@ class _LedgerViewState extends State<_LedgerView> {
     }
 
     if (isCleared) {
-    _openingDebitController.clear();
-    _openingCreditController.clear();
-    _openingBuyBagsController.clear();
-    _openingSellBagsController.clear();
-    _lastOpeningBalanceSignature = _openingBalanceSignature(0, 0, 0, 0);
+      _openingDebitController.clear();
+      _openingCreditController.clear();
+      _openingBuyBagsController.clear();
+      _openingSellBagsController.clear();
+      _lastOpeningBalanceSignature = _openingBalanceSignature(0, 0, 0, 0);
       setState(() {});
     }
 
@@ -1161,15 +1190,15 @@ class _LedgerViewState extends State<_LedgerView> {
                     label: 'Print',
                   ),
                 ),
-                PopupMenuItem<_LedgerAppBarAction>(
-                  value: _LedgerAppBarAction.editCustomer,
-                  enabled: context.read<LinkedSessionProvider>().canEdit,
-                  child: _buildAppBarMenuItem(
-                    context,
-                    icon: Icons.edit_outlined,
-                    label: 'Edit Customer',
+                if (context.read<LinkedSessionProvider>().canEdit)
+                  PopupMenuItem<_LedgerAppBarAction>(
+                    value: _LedgerAppBarAction.editCustomer,
+                    child: _buildAppBarMenuItem(
+                      context,
+                      icon: Icons.edit_outlined,
+                      label: 'Edit Customer',
+                    ),
                   ),
-                ),
                 PopupMenuItem<_LedgerAppBarAction>(
                   value: _LedgerAppBarAction.filterAndBalance,
                   child: _buildAppBarMenuItem(
@@ -1220,14 +1249,14 @@ class _LedgerViewState extends State<_LedgerView> {
                   icon: const Icon(Icons.tune_rounded),
                   label: const Text('Menu'),
                 ),
-                const SizedBox(width: 10),
-                FilledButton.icon(
-                  onPressed: context.watch<LinkedSessionProvider>().canEdit
-                      ? _showAddEntryDialog
-                      : null,
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('Add Entry'),
-                ),
+                if (context.watch<LinkedSessionProvider>().canEdit) ...[
+                  const SizedBox(width: 10),
+                  FilledButton.icon(
+                    onPressed: _showAddEntryDialog,
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('Add Entry'),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1579,45 +1608,42 @@ class _LedgerViewState extends State<_LedgerView> {
                         ),
                         icon: const Icon(Icons.restart_alt_rounded, size: 18),
                       ),
-                      IconButton(
-                        tooltip: 'Clear opening balance',
-                        onPressed:
-                            !provider.hasOpeningBalance ||
-                                !context.read<LinkedSessionProvider>().canEdit
-                            ? null
-                            : () => _clearOpeningBalance(provider),
-                        style: IconButton.styleFrom(
-                          foregroundColor: colorScheme.error,
-                          backgroundColor: colorScheme.surface,
-                          side: BorderSide(color: colorScheme.outlineVariant),
+                      if (context.read<LinkedSessionProvider>().canEdit) ...[
+                        IconButton(
+                          tooltip: 'Clear opening balance',
+                          onPressed: !provider.hasOpeningBalance
+                              ? null
+                              : () => _clearOpeningBalance(provider),
+                          style: IconButton.styleFrom(
+                            foregroundColor: colorScheme.error,
+                            backgroundColor: colorScheme.surface,
+                            side: BorderSide(color: colorScheme.outlineVariant),
+                          ),
+                          icon: const Icon(
+                            Icons.delete_outline_rounded,
+                            size: 18,
+                          ),
                         ),
-                        icon: const Icon(
-                          Icons.delete_outline_rounded,
-                          size: 18,
+                        IconButton.filled(
+                          tooltip: 'Save opening balance',
+                          onPressed: hasInvalidAmount || !hasChanges
+                              ? null
+                              : _saveOpeningBalance,
+                          style: IconButton.styleFrom(
+                            backgroundColor: colorScheme.primary,
+                            foregroundColor: colorScheme.onPrimary,
+                          ),
+                          icon: provider.isLoading
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.2,
+                                  ),
+                                )
+                              : const Icon(Icons.save_outlined, size: 18),
                         ),
-                      ),
-                      IconButton.filled(
-                        tooltip: 'Save opening balance',
-                        onPressed:
-                            hasInvalidAmount ||
-                                !hasChanges ||
-                                !context.read<LinkedSessionProvider>().canEdit
-                            ? null
-                            : _saveOpeningBalance,
-                        style: IconButton.styleFrom(
-                          backgroundColor: colorScheme.primary,
-                          foregroundColor: colorScheme.onPrimary,
-                        ),
-                        icon: provider.isLoading
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.2,
-                                ),
-                              )
-                            : const Icon(Icons.save_outlined, size: 18),
-                      ),
+                      ],
                     ],
                   );
 
@@ -1735,12 +1761,14 @@ class _LedgerViewState extends State<_LedgerView> {
             LayoutBuilder(
               builder: (BuildContext context, BoxConstraints constraints) {
                 final isStock = provider.isStockLedger;
-                
+
                 Widget buildDebitField() => _buildOpeningBalanceField(
                   context: context,
                   controller: _openingDebitController,
                   focusNode: _openingDebitFocusNode,
-                  label: isStock ? 'Buy Amount Opening' : 'Debit Opening Balance',
+                  label: isStock
+                      ? 'Buy Amount Opening'
+                      : 'Debit Opening Balance',
                   icon: Icons.arrow_downward_rounded,
                   accentColor: isStock ? AppColors.credit : AppColors.debit,
                   readOnly: readOnly,
@@ -1751,7 +1779,9 @@ class _LedgerViewState extends State<_LedgerView> {
                   context: context,
                   controller: _openingCreditController,
                   focusNode: _openingCreditFocusNode,
-                  label: isStock ? 'Sell Amount Opening' : 'Credit Opening Balance',
+                  label: isStock
+                      ? 'Sell Amount Opening'
+                      : 'Credit Opening Balance',
                   icon: Icons.arrow_upward_rounded,
                   accentColor: isStock ? AppColors.debit : AppColors.credit,
                   readOnly: readOnly,
@@ -1774,7 +1804,9 @@ class _LedgerViewState extends State<_LedgerView> {
                   context: context,
                   controller: _openingSellBagsController,
                   focusNode: _openingSellBagsFocusNode,
-                  label: provider.useWeight ? 'Sell Wt Opening' : 'Sell Opening',
+                  label: provider.useWeight
+                      ? 'Sell Wt Opening'
+                      : 'Sell Opening',
                   icon: Icons.sell_outlined,
                   accentColor: isStock ? AppColors.debit : AppColors.credit,
                   readOnly: readOnly,
@@ -1843,8 +1875,8 @@ class _LedgerViewState extends State<_LedgerView> {
     return TextField(
       controller: controller,
       focusNode: focusNode,
-      keyboardType: isWeight 
-          ? const TextInputType.numberWithOptions(decimal: true, signed: true) 
+      keyboardType: isWeight
+          ? const TextInputType.numberWithOptions(decimal: true, signed: true)
           : const TextInputType.numberWithOptions(decimal: true),
       scrollPadding: const EdgeInsets.only(bottom: 180),
       readOnly: readOnly,
@@ -1857,7 +1889,7 @@ class _LedgerViewState extends State<_LedgerView> {
       onChanged: readOnly
           ? null
           : (_) {
-              setState(() {});
+              _debounceOpeningBalanceUpdate();
             },
       decoration: InputDecoration(
         isDense: compact,
@@ -1912,7 +1944,9 @@ class _LedgerViewState extends State<_LedgerView> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final customer = provider.customer;
-    final displayBalance = provider.isStockLedger ? -provider.finalBalance : provider.finalBalance;
+    final displayBalance = provider.isStockLedger
+        ? -provider.finalBalance
+        : provider.finalBalance;
     final balanceAccent = AppColors.balanceColor(displayBalance);
 
     return Container(
@@ -1957,19 +1991,14 @@ class _LedgerViewState extends State<_LedgerView> {
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        provider.customerName,
+                        'Total',
                         style: theme.textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
                     const SizedBox(height: 5),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: <Widget>[
-                      ],
-                    ),
+                    Wrap(spacing: 8, runSpacing: 8, children: <Widget>[]),
                   ],
                 ),
               ),
@@ -2014,7 +2043,9 @@ class _LedgerViewState extends State<_LedgerView> {
                           child: _buildMobileOverviewMetric(
                             context,
                             label: provider.useWeight ? 'Rem. Wt' : 'Remaining',
-                            value: provider.formatBags(provider.finalRemainingBags),
+                            value: provider.formatBags(
+                              provider.finalRemainingBags,
+                            ),
                             accentColor: colorScheme.primary,
                           ),
                         ),
@@ -2063,7 +2094,9 @@ class _LedgerViewState extends State<_LedgerView> {
               decoration: BoxDecoration(
                 color: balanceAccent.withValues(alpha: 0.09),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: balanceAccent.withValues(alpha: 0.16)),
+                border: Border.all(
+                  color: balanceAccent.withValues(alpha: 0.16),
+                ),
               ),
               child: Row(
                 children: <Widget>[
@@ -2325,12 +2358,13 @@ class _LedgerViewState extends State<_LedgerView> {
                                       fit: BoxFit.scaleDown,
                                       alignment: Alignment.centerLeft,
                                       child: Text(
-                                        provider.customerName,
-                                        style: theme.textTheme.headlineSmall?.copyWith(
-                                          color: colorScheme.onSurface,
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 23,
-                                        ),
+                                        'Total',
+                                        style: theme.textTheme.headlineSmall
+                                            ?.copyWith(
+                                              color: colorScheme.onSurface,
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 23,
+                                            ),
                                       ),
                                     ),
                                   ),
@@ -2342,14 +2376,22 @@ class _LedgerViewState extends State<_LedgerView> {
                             const SizedBox(width: 12),
                             Flexible(
                               flex: 3,
-                              child: _buildCustomerIdentityBar(context, customer, isCompact: true),
+                              child: _buildCustomerIdentityBar(
+                                context,
+                                customer,
+                                isCompact: true,
+                              ),
                             ),
                           ],
                         ),
                       ],
                     );
-                    final displayBalance = provider.isStockLedger ? -provider.finalBalance : provider.finalBalance;
-                    final balanceAccent = AppColors.balanceColor(displayBalance);
+                    final displayBalance = provider.isStockLedger
+                        ? -provider.finalBalance
+                        : provider.finalBalance;
+                    final balanceAccent = AppColors.balanceColor(
+                      displayBalance,
+                    );
                     final balanceCard = _buildHeroBalanceCard(
                       context,
                       value: provider.formatBalance(displayBalance),
@@ -2359,8 +2401,9 @@ class _LedgerViewState extends State<_LedgerView> {
                     final bagsCard = provider.isStockLedger
                         ? _buildHeroBalanceCard(
                             context,
-                            value:
-                                provider.finalRemainingBags.toStringAsFixed(0),
+                            value: provider.finalRemainingBags.toStringAsFixed(
+                              0,
+                            ),
                             accentColor: colorScheme.primary,
                             label: 'Remaining',
                             icon: Icons.inventory_2_outlined,
@@ -2415,39 +2458,48 @@ class _LedgerViewState extends State<_LedgerView> {
       child: Text(
         '#${id ?? '-'}',
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: colorScheme.secondary,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.5,
-            ),
+          color: colorScheme.secondary,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0.5,
+        ),
       ),
     );
   }
 
-  Widget _buildCustomerIdentityBar(BuildContext context, Customer customer, {bool isCompact = false, bool isFooter = false}) {
+  Widget _buildCustomerIdentityBar(
+    BuildContext context,
+    Customer customer, {
+    bool isCompact = false,
+    bool isFooter = false,
+  }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    
+
     return Container(
       padding: (isCompact || isFooter)
           ? const EdgeInsets.symmetric(horizontal: 14, vertical: 10)
           : const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: isFooter 
+        color: isFooter
             ? colorScheme.surfaceContainerLowest.withValues(alpha: 0.5)
-            : isCompact 
-                ? Colors.transparent 
-                : colorScheme.surfaceContainerLow,
+            : isCompact
+            ? Colors.transparent
+            : colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(16),
-        border: isFooter 
-            ? Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.3))
-            : isCompact 
-                ? null 
-                : Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
+        border: isFooter
+            ? Border.all(
+                color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+              )
+            : isCompact
+            ? null
+            : Border.all(
+                color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+              ),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final bool isWide = constraints.maxWidth > 500;
-          
+
           final items = [
             _CustomerIdentityItem(
               icon: Icons.call_outlined,
@@ -2511,12 +2563,18 @@ class _LedgerViewState extends State<_LedgerView> {
 
     final metricItems = <({String label, String value})>[
       if (provider.isStockLedger) ...[
-        (label: provider.useWeight ? 'Buy Wt' : 'Buy Qty', value: provider.formatBags(provider.totalBuyBags)),
+        (
+          label: provider.useWeight ? 'Buy Wt' : 'Buy Qty',
+          value: provider.formatBags(provider.totalBuyBags),
+        ),
         (
           label: 'Buy Amount',
           value: provider.formatAmount(provider.totalDebit),
         ),
-        (label: provider.useWeight ? 'Sell Wt' : 'Sell Qty', value: provider.formatBags(provider.totalSellBags)),
+        (
+          label: provider.useWeight ? 'Sell Wt' : 'Sell Qty',
+          value: provider.formatBags(provider.totalSellBags),
+        ),
         (
           label: 'Sell Amount',
           value: provider.formatAmount(provider.totalCredit),
@@ -2528,7 +2586,9 @@ class _LedgerViewState extends State<_LedgerView> {
         (
           label: 'Balance',
           value: provider.formatBalance(
-            provider.isStockLedger ? -provider.finalBalance : provider.finalBalance,
+            provider.isStockLedger
+                ? -provider.finalBalance
+                : provider.finalBalance,
           ),
         ),
       ] else ...[
@@ -2543,40 +2603,60 @@ class _LedgerViewState extends State<_LedgerView> {
         (
           label: 'Balance',
           value: provider.formatBalance(
-            provider.isStockLedger ? -provider.finalBalance : provider.finalBalance,
+            provider.isStockLedger
+                ? -provider.finalBalance
+                : provider.finalBalance,
           ),
         ),
       ],
     ];
 
-      Widget buildTile(({String label, String value}) item, bool isMetric, {double? maxWidth}) {
-        final isDebit =
-            item.label == 'Total Debit' ||
-            (provider.isStockLedger && (item.label == 'Buy Amount' || item.label == 'Buy' || item.label == 'Buy Wt')) ||
-            (!provider.isStockLedger && (item.label == 'Sell Amount' || item.label == 'Sell' || item.label == 'Sell Wt'));
-        final isCredit =
-            item.label == 'Total Credit' ||
-            (provider.isStockLedger && (item.label == 'Sell Amount' || item.label == 'Sell' || item.label == 'Sell Wt')) ||
-            (!provider.isStockLedger && (item.label == 'Buy Amount' || item.label == 'Buy' || item.label == 'Buy Wt'));
-        final isBalance = item.label == 'Balance';
-        final isBags = item.label == 'Remaining';
+    Widget buildTile(
+      ({String label, String value}) item,
+      bool isMetric, {
+      double? maxWidth,
+    }) {
+      final isDebit =
+          item.label == 'Total Debit' ||
+          (provider.isStockLedger &&
+              (item.label == 'Buy Amount' ||
+                  item.label == 'Buy' ||
+                  item.label == 'Buy Wt')) ||
+          (!provider.isStockLedger &&
+              (item.label == 'Sell Amount' ||
+                  item.label == 'Sell' ||
+                  item.label == 'Sell Wt'));
+      final isCredit =
+          item.label == 'Total Credit' ||
+          (provider.isStockLedger &&
+              (item.label == 'Sell Amount' ||
+                  item.label == 'Sell' ||
+                  item.label == 'Sell Wt')) ||
+          (!provider.isStockLedger &&
+              (item.label == 'Buy Amount' ||
+                  item.label == 'Buy' ||
+                  item.label == 'Buy Wt'));
+      final isBalance = item.label == 'Balance';
+      final isBags = item.label == 'Remaining';
 
-        final displayBalance = provider.isStockLedger ? -provider.finalBalance : provider.finalBalance;
-        final balanceColor = AppColors.balanceColor(displayBalance);
+      final displayBalance = provider.isStockLedger
+          ? -provider.finalBalance
+          : provider.finalBalance;
+      final balanceColor = AppColors.balanceColor(displayBalance);
 
-        final bgColor = isDebit
-            ? (provider.isStockLedger ? AppColors.credit : AppColors.debit)
-            : isCredit
-            ? (provider.isStockLedger ? AppColors.debit : AppColors.credit)
-            : isBags
-            ? colorScheme.primary
-            : isBalance
-            ? (balanceColor == AppColors.debit
+      final bgColor = isDebit
+          ? (provider.isStockLedger ? AppColors.credit : AppColors.debit)
+          : isCredit
+          ? (provider.isStockLedger ? AppColors.debit : AppColors.credit)
+          : isBags
+          ? colorScheme.primary
+          : isBalance
+          ? (balanceColor == AppColors.debit
                 ? AppColors.debit
                 : (balanceColor == AppColors.credit
-                    ? AppColors.credit
-                    : Colors.grey.shade600))
-            : colorScheme.surface;
+                      ? AppColors.credit
+                      : Colors.grey.shade600))
+          : colorScheme.surface;
 
       return _CustomerInfoTile(
         label: item.label,
@@ -2636,7 +2716,11 @@ class _LedgerViewState extends State<_LedgerView> {
                   const SizedBox(width: 12),
                   Flexible(
                     flex: 3,
-                    child: _buildCustomerIdentityBar(context, customer, isCompact: true),
+                    child: _buildCustomerIdentityBar(
+                      context,
+                      customer,
+                      isCompact: true,
+                    ),
                   ),
                 ],
               ),
@@ -2731,10 +2815,7 @@ class _LedgerViewState extends State<_LedgerView> {
               color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Icon(
-              icon,
-              color: Colors.white,
-            ),
+            child: Icon(icon, color: Colors.white),
           ),
           const SizedBox(height: 14),
           FittedBox(
@@ -2742,7 +2823,9 @@ class _LedgerViewState extends State<_LedgerView> {
             alignment: Alignment.centerLeft,
             child: Text(
               label,
-              style: theme.textTheme.labelMedium?.copyWith(color: Colors.white70),
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: Colors.white70,
+              ),
             ),
           ),
           const SizedBox(height: 4),
@@ -3024,11 +3107,14 @@ class _LedgerViewState extends State<_LedgerView> {
                               const SizedBox(height: 24),
                               Text(
                                 'LEDGER TYPE',
-                                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1.2,
-                                ),
+                                style: Theme.of(context).textTheme.labelMedium
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.2,
+                                    ),
                               ),
                               const SizedBox(height: 8),
                               SwitchListTile(
@@ -3040,28 +3126,38 @@ class _LedgerViewState extends State<_LedgerView> {
                                   Icons.inventory_2_outlined,
                                   color: provider.isStockLedger
                                       ? Theme.of(context).colorScheme.primary
-                                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                                      : Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
                                 ),
                                 value: provider.isStockLedger,
                                 onChanged: (bool value) {
                                   provider.toggleStockLedger();
                                 },
-                                trackColor: WidgetStateProperty.resolveWith<Color?>(
-                                  (states) => states.contains(WidgetState.selected)
-                                      ? null
-                                      : Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
-                                ),
+                                trackColor:
+                                    WidgetStateProperty.resolveWith<Color?>(
+                                      (states) =>
+                                          states.contains(WidgetState.selected)
+                                          ? null
+                                          : Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant
+                                                .withValues(alpha: 0.4),
+                                    ),
                                 contentPadding: EdgeInsets.zero,
                               ),
                               if (provider.isStockLedger) ...[
                                 const Divider(height: 32),
                                 Text(
                                   'STOCK SETTINGS',
-                                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                    color: Theme.of(context).colorScheme.primary,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1.2,
-                                  ),
+                                  style: Theme.of(context).textTheme.labelMedium
+                                      ?.copyWith(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 1.2,
+                                      ),
                                 ),
                                 const SizedBox(height: 8),
                                 SwitchListTile(
@@ -3073,16 +3169,25 @@ class _LedgerViewState extends State<_LedgerView> {
                                     Icons.scale_outlined,
                                     color: provider.useWeight
                                         ? Theme.of(context).colorScheme.primary
-                                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                                        : Theme.of(
+                                            context,
+                                          ).colorScheme.onSurfaceVariant,
                                   ),
                                   value: provider.useWeight,
                                   onChanged: (bool value) =>
                                       provider.toggleStockWeight(),
-                                  trackColor: WidgetStateProperty.resolveWith<Color?>(
-                                    (states) => states.contains(WidgetState.selected)
-                                        ? null
-                                        : Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
-                                  ),
+                                  trackColor:
+                                      WidgetStateProperty.resolveWith<Color?>(
+                                        (states) =>
+                                            states.contains(
+                                              WidgetState.selected,
+                                            )
+                                            ? null
+                                            : Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurfaceVariant
+                                                  .withValues(alpha: 0.4),
+                                      ),
                                   contentPadding: EdgeInsets.zero,
                                 ),
                               ],
@@ -3325,28 +3430,134 @@ class _LedgerViewState extends State<_LedgerView> {
                 ),
                 columns: provider.isStockLedger
                     ? <DataColumn>[
-                        const DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Entry Date'))),
-                        const DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Created Date'))),
-                        const DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Page No'))),
-                        DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text(provider.useWeight ? 'Buy Weight' : 'Buy Qty')), numeric: true),
-                        const DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Buy Amount')), numeric: true),
-                        DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text(provider.useWeight ? 'Sell Weight' : 'Sell Qty')), numeric: true),
-                        const DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Sell Amount')), numeric: true),
-                        DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text(provider.useWeight ? 'Rem. Weight' : 'Remaining')), numeric: true),
-                        const DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Balance'))),
-                        const DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Actions'))),
+                        const DataColumn(
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Entry Date'),
+                          ),
+                        ),
+                        const DataColumn(
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Created Date'),
+                          ),
+                        ),
+                        const DataColumn(
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Page No'),
+                          ),
+                        ),
+                        DataColumn(
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              provider.useWeight ? 'Buy Weight' : 'Buy Qty',
+                            ),
+                          ),
+                          numeric: true,
+                        ),
+                        const DataColumn(
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Buy Amount'),
+                          ),
+                          numeric: true,
+                        ),
+                        DataColumn(
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              provider.useWeight ? 'Sell Weight' : 'Sell Qty',
+                            ),
+                          ),
+                          numeric: true,
+                        ),
+                        const DataColumn(
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Sell Amount'),
+                          ),
+                          numeric: true,
+                        ),
+                        DataColumn(
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              provider.useWeight ? 'Rem. Weight' : 'Remaining',
+                            ),
+                          ),
+                          numeric: true,
+                        ),
+                        const DataColumn(
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Balance'),
+                          ),
+                        ),
+                        const DataColumn(
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Actions'),
+                          ),
+                        ),
                       ]
                     : const <DataColumn>[
-                        DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Entry Date'))),
-                        DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Created Date'))),
-                        DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Page No'))),
-                        DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Description'))),
-                        DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Debit')), numeric: true),
-                        DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Credit')), numeric: true),
-                        DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Balance'))),
-                        DataColumn(label: FittedBox(fit: BoxFit.scaleDown, child: Text('Actions'))),
+                        DataColumn(
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Entry Date'),
+                          ),
+                        ),
+                        DataColumn(
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Created Date'),
+                          ),
+                        ),
+                        DataColumn(
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Page No'),
+                          ),
+                        ),
+                        DataColumn(
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Description'),
+                          ),
+                        ),
+                        DataColumn(
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Debit'),
+                          ),
+                          numeric: true,
+                        ),
+                        DataColumn(
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Credit'),
+                          ),
+                          numeric: true,
+                        ),
+                        DataColumn(
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Balance'),
+                          ),
+                        ),
+                        DataColumn(
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Actions'),
+                          ),
+                        ),
                       ],
-                rows: _buildLedgerRows(provider, compact: constraints.maxWidth < 1100),
+                rows: _buildLedgerRows(
+                  provider,
+                  compact: constraints.maxWidth < 1100,
+                ),
               ),
             ),
           ),
@@ -3359,20 +3570,22 @@ class _LedgerViewState extends State<_LedgerView> {
     BuildContext context,
     LedgerProvider provider,
   ) {
-    final children = <Widget>[];
+    final entries = provider.entries.reversed.toList();
+    final balances = <_EntryBalance>[];
     double? runningBalance;
     double? runningRemainingBags;
 
-    final entries = provider.entries.reversed.toList();
-    for (var index = 0; index < entries.length; index++) {
-      final entry = entries[index];
+    for (final entry in entries) {
       final isOpeningBalanceEntry = _isOpeningBalanceEntry(provider, entry);
       final debit = entry.debit;
       final credit = entry.credit;
       final buyBags = entry.buyBags;
       final sellBags = entry.sellBags;
       final hasValue =
-          debit != 0 || credit != 0 || buyBags.trim().isNotEmpty && buyBags.trim() != '0' || sellBags.trim().isNotEmpty && sellBags.trim() != '0';
+          debit != 0 ||
+          credit != 0 ||
+          buyBags.trim().isNotEmpty && buyBags.trim() != '0' ||
+          sellBags.trim().isNotEmpty && sellBags.trim() != '0';
       var balanceLabel = '';
       var remainingBagsLabel = '';
       double currentBalance = 0;
@@ -3386,37 +3599,44 @@ class _LedgerViewState extends State<_LedgerView> {
 
         if (provider.isStockLedger) {
           final currentRemainingBags =
-              (runningRemainingBags ?? 0) + (double.tryParse(buyBags) ?? 0) - (double.tryParse(sellBags) ?? 0);
+              (runningRemainingBags ?? 0) +
+              (double.tryParse(buyBags) ?? 0) -
+              (double.tryParse(sellBags) ?? 0);
           runningRemainingBags = currentRemainingBags;
-          remainingBagsLabel =
-              provider.formatBags(currentRemainingBags);
+          remainingBagsLabel = provider.formatBags(currentRemainingBags);
         }
       }
 
-      children.add(
-        _buildLedgerEntryCard(
-          context,
-          provider,
-          entry: entry,
-          balanceLabel: balanceLabel,
-          balance: currentBalance,
-          remainingBagsLabel: remainingBagsLabel,
-          isOpeningBalanceEntry: isOpeningBalanceEntry,
-        ),
-      );
+      balances.add(_EntryBalance(
+        isOpeningBalanceEntry: isOpeningBalanceEntry,
+        balanceLabel: balanceLabel,
+        balance: currentBalance,
+        remainingBagsLabel: remainingBagsLabel,
+      ));
     }
 
-    List<Widget> displayChildren = children.reversed.toList();
+      final reversedBalances = balances.reversed.toList();
+    final chronEntries = entries.reversed.toList();
 
-    final List<Widget> spacedChildren = <Widget>[];
-    for (var i = 0; i < displayChildren.length; i++) {
-      if (i != 0) spacedChildren.add(const SizedBox(height: 12));
-      spacedChildren.add(displayChildren[i]);
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: spacedChildren,
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: chronEntries.length,
+      itemBuilder: (context, index) {
+        final b = reversedBalances[index];
+        return Padding(
+          padding: EdgeInsets.only(top: index == 0 ? 0 : 12),
+          child: _buildLedgerEntryCard(
+            context,
+            provider,
+            entry: chronEntries[index],
+            balanceLabel: b.balanceLabel,
+            balance: b.balance,
+            remainingBagsLabel: b.remainingBagsLabel,
+            isOpeningBalanceEntry: b.isOpeningBalanceEntry,
+          ),
+        );
+      },
     );
   }
 
@@ -3463,65 +3683,79 @@ class _LedgerViewState extends State<_LedgerView> {
             child: Row(
               spacing: 8,
               children: <Widget>[
-              _buildEntryMetaChip(
-                context,
-                icon: Icons.event_outlined,
-                label: _formatStoredDate(entry.entryDate),
-                accentColor: accentColor,
-                highlight: isOpeningBalanceEntry,
-              ),
-              _buildEntryMetaChip(
-                context,
-                icon: Icons.schedule_outlined,
-                label: _formatStoredDate(entry.createdAt),
-                accentColor: accentColor,
-              ),
-              if (entry.pageNo.trim().isNotEmpty || entry.dailyLogPageNo.trim().isNotEmpty)
                 _buildEntryMetaChip(
                   context,
-                  icon: Icons.menu_book_outlined,
-                  label: () {
-                    final parts = <String>[];
-                    if (entry.pageNo.trim().isNotEmpty) parts.add('Pg ${entry.pageNo}');
-                    if (entry.dailyLogPageNo.trim().isNotEmpty) parts.add('DL Pg ${entry.dailyLogPageNo}');
-                    return parts.join(', ');
-                  }(),
-                  accentColor: colorScheme.tertiary,
-                  highlight: true,
-                ),
-              if (isOpeningBalanceEntry)
-                _buildEntryMetaChip(
-                  context,
-                  icon: Icons.flag_rounded,
-                  label: 'Opening Balance',
+                  icon: Icons.event_outlined,
+                  label: _formatStoredDate(entry.entryDate),
                   accentColor: accentColor,
-                  highlight: true,
+                  highlight: isOpeningBalanceEntry,
                 ),
+                _buildEntryMetaChip(
+                  context,
+                  icon: Icons.schedule_outlined,
+                  label: _formatStoredDate(entry.createdAt),
+                  accentColor: accentColor,
+                ),
+                if (entry.pageNo.trim().isNotEmpty ||
+                    entry.dailyLogPageNo.trim().isNotEmpty)
+                  _buildEntryMetaChip(
+                    context,
+                    icon: Icons.menu_book_outlined,
+                    label: () {
+                      final parts = <String>[];
+                      if (entry.pageNo.trim().isNotEmpty) {
+                        parts.add('Pg ${entry.pageNo}');
+                      }
+                      if (entry.dailyLogPageNo.trim().isNotEmpty) {
+                        parts.add('DL Pg ${entry.dailyLogPageNo}');
+                      }
+                      return parts.join(', ');
+                    }(),
+                    accentColor: colorScheme.tertiary,
+                    highlight: true,
+                  ),
+                if (isOpeningBalanceEntry)
+                  _buildEntryMetaChip(
+                    context,
+                    icon: Icons.flag_rounded,
+                    label: 'Opening Balance',
+                    accentColor: accentColor,
+                    highlight: true,
+                  ),
               ],
             ),
           ),
           const SizedBox(height: 10),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            isOpeningBalanceEntry ? 'Opening Balance' : entry.displayDescription,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              isOpeningBalanceEntry
+                  ? 'Opening Balance'
+                  : entry.displayDescription,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
-        ),
           const SizedBox(height: 10),
           LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) {
               if (provider.isStockLedger) {
                 const spacing = 10.0;
-                final hasBuy = (entry.buyBags.trim().isNotEmpty && entry.buyBags.trim() != '0') || entry.debit != 0;
-                final hasSell = (entry.sellBags.trim().isNotEmpty && entry.sellBags.trim() != '0') || entry.credit != 0;
+                final hasBuy =
+                    (entry.buyBags.trim().isNotEmpty &&
+                        entry.buyBags.trim() != '0') ||
+                    entry.debit != 0;
+                final hasSell =
+                    (entry.sellBags.trim().isNotEmpty &&
+                        entry.sellBags.trim() != '0') ||
+                    entry.credit != 0;
                 final bothSides = hasBuy && hasSell;
                 final columns = bothSides ? 3 : 2;
                 final tileWidth =
-                    (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
+                    (constraints.maxWidth - ((columns - 1) * spacing)) /
+                    columns;
 
                 if (bothSides) {
                   return Column(
@@ -3534,8 +3768,12 @@ class _LedgerViewState extends State<_LedgerView> {
                             width: tileWidth,
                             child: _buildEntryMetricTile(
                               context,
-                              label: provider.useWeight ? 'Buy Weight' : 'Buy Qty',
-                              value: provider.formatBags(double.tryParse(entry.buyBags) ?? 0),
+                              label: provider.useWeight
+                                  ? 'Buy Weight'
+                                  : 'Buy Qty',
+                              value: provider.formatBags(
+                                double.tryParse(entry.buyBags) ?? 0,
+                              ),
                               accentColor: AppColors.credit,
                             ),
                           ),
@@ -3543,8 +3781,12 @@ class _LedgerViewState extends State<_LedgerView> {
                             width: tileWidth,
                             child: _buildEntryMetricTile(
                               context,
-                              label: provider.useWeight ? 'Sell Weight' : 'Sell Qty',
-                              value: provider.formatBags(double.tryParse(entry.sellBags) ?? 0),
+                              label: provider.useWeight
+                                  ? 'Sell Weight'
+                                  : 'Sell Qty',
+                              value: provider.formatBags(
+                                double.tryParse(entry.sellBags) ?? 0,
+                              ),
                               accentColor: AppColors.debit,
                             ),
                           ),
@@ -3552,8 +3794,12 @@ class _LedgerViewState extends State<_LedgerView> {
                             width: tileWidth,
                             child: _buildEntryMetricTile(
                               context,
-                              label: provider.useWeight ? 'Rem. Weight' : 'Remaining',
-                              value: remainingBagsLabel.isEmpty ? '-' : remainingBagsLabel,
+                              label: provider.useWeight
+                                  ? 'Rem. Weight'
+                                  : 'Remaining',
+                              value: remainingBagsLabel.isEmpty
+                                  ? '-'
+                                  : remainingBagsLabel,
                               accentColor: colorScheme.primary,
                             ),
                           ),
@@ -3585,7 +3831,9 @@ class _LedgerViewState extends State<_LedgerView> {
                             child: _buildEntryMetricTile(
                               context,
                               label: 'Balance',
-                              value: balanceLabel.isEmpty ? 'No change' : balanceLabel,
+                              value: balanceLabel.isEmpty
+                                  ? 'No change'
+                                  : balanceLabel,
                               accentColor: AppColors.balanceColor(balance),
                             ),
                           ),
@@ -3606,20 +3854,34 @@ class _LedgerViewState extends State<_LedgerView> {
                           child: _buildEntryMetricTile(
                             context,
                             label: hasBuy
-                                ? (provider.useWeight ? 'Buy Weight' : 'Buy Qty')
-                                : (provider.useWeight ? 'Sell Weight' : 'Sell Qty'),
+                                ? (provider.useWeight
+                                      ? 'Buy Weight'
+                                      : 'Buy Qty')
+                                : (provider.useWeight
+                                      ? 'Sell Weight'
+                                      : 'Sell Qty'),
                             value: hasBuy
-                                ? provider.formatBags(double.tryParse(entry.buyBags) ?? 0)
-                                : provider.formatBags(double.tryParse(entry.sellBags) ?? 0),
-                            accentColor: hasBuy ? AppColors.credit : AppColors.debit,
+                                ? provider.formatBags(
+                                    double.tryParse(entry.buyBags) ?? 0,
+                                  )
+                                : provider.formatBags(
+                                    double.tryParse(entry.sellBags) ?? 0,
+                                  ),
+                            accentColor: hasBuy
+                                ? AppColors.credit
+                                : AppColors.debit,
                           ),
                         ),
                         SizedBox(
                           width: tileWidth,
                           child: _buildEntryMetricTile(
                             context,
-                            label: provider.useWeight ? 'Rem. Weight' : 'Remaining',
-                            value: remainingBagsLabel.isEmpty ? '-' : remainingBagsLabel,
+                            label: provider.useWeight
+                                ? 'Rem. Weight'
+                                : 'Remaining',
+                            value: remainingBagsLabel.isEmpty
+                                ? '-'
+                                : remainingBagsLabel,
                             accentColor: colorScheme.primary,
                           ),
                         ),
@@ -3636,16 +3898,20 @@ class _LedgerViewState extends State<_LedgerView> {
                             value: hasBuy
                                 ? provider.formatAmount(entry.debit)
                                 : provider.formatAmount(entry.credit),
-                            accentColor: hasBuy ? AppColors.credit : AppColors.debit,
+                            accentColor: hasBuy
+                                ? AppColors.credit
+                                : AppColors.debit,
                           ),
                         ),
                         SizedBox(
                           width: tileWidth,
                           child: _buildEntryMetricTile(
                             context,
-                              label: 'Balance',
-                              value: balanceLabel.isEmpty ? 'No change' : balanceLabel,
-                              accentColor: AppColors.balanceColor(balance),
+                            label: 'Balance',
+                            value: balanceLabel.isEmpty
+                                ? 'No change'
+                                : balanceLabel,
+                            accentColor: AppColors.balanceColor(balance),
                           ),
                         ),
                       ],
@@ -3655,8 +3921,7 @@ class _LedgerViewState extends State<_LedgerView> {
               }
 
               const spacing = 12.0;
-              final tileWidth =
-                  (constraints.maxWidth - (2 * spacing)) / 3;
+              final tileWidth = (constraints.maxWidth - (2 * spacing)) / 3;
 
               return Wrap(
                 spacing: spacing,
@@ -3697,12 +3962,11 @@ class _LedgerViewState extends State<_LedgerView> {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: <Widget>[
-              if (isOpeningBalanceEntry)
+              if (isOpeningBalanceEntry &&
+                  context.watch<LinkedSessionProvider>().canEdit)
                 IconButton(
                   tooltip: 'Clear opening balance',
-                  onPressed: context.watch<LinkedSessionProvider>().canEdit
-                      ? () => _clearOpeningBalance(provider)
-                      : null,
+                  onPressed: () => _clearOpeningBalance(provider),
                   icon: const Icon(Icons.delete_outline, size: 18),
                 )
               else ...<Widget>[
@@ -3768,122 +4032,6 @@ class _LedgerViewState extends State<_LedgerView> {
     );
   }
 
-  Widget _buildEntryAmountStrip(
-    BuildContext context,
-    LedgerProvider provider, {
-    required Entry entry,
-    required String balanceLabel,
-    String remainingBagsLabel = '',
-    required Color accentColor,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow.withValues(alpha: 0.86),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Row(
-        children: <Widget>[
-          if (provider.isStockLedger) ...<Widget>[
-            Expanded(
-              child: _buildEntryAmountStripItem(
-                context,
-                label: 'Remaining',
-                value: remainingBagsLabel.isEmpty ? '-' : remainingBagsLabel,
-                accentColor: colorScheme.primary,
-              ),
-            ),
-            _buildEntryAmountDivider(context),
-            Expanded(
-              child: _buildEntryAmountStripItem(
-                context,
-                label: 'Balance',
-                value: balanceLabel.isEmpty ? '0' : balanceLabel,
-                accentColor: accentColor,
-              ),
-            ),
-          ] else ...<Widget>[
-            Expanded(
-              child: _buildEntryAmountStripItem(
-                context,
-                label: 'Debit',
-                value: provider.formatAmount(entry.debit),
-                accentColor: const Color(0xFF0F766E),
-              ),
-            ),
-            _buildEntryAmountDivider(context),
-            Expanded(
-              child: _buildEntryAmountStripItem(
-                context,
-                label: 'Credit',
-                value: provider.formatAmount(entry.credit),
-                accentColor: const Color(0xFFB45309),
-              ),
-            ),
-            _buildEntryAmountDivider(context),
-            Expanded(
-              child: _buildEntryAmountStripItem(
-                context,
-                label: 'Balance',
-                value: balanceLabel.isEmpty ? '0' : balanceLabel,
-                accentColor: accentColor,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEntryAmountDivider(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 34,
-      margin: const EdgeInsets.symmetric(horizontal: 8),
-      color: Theme.of(context).colorScheme.outlineVariant,
-    );
-  }
-
-  Widget _buildEntryAmountStripItem(
-    BuildContext context, {
-    required String label,
-    required String value,
-    required Color accentColor,
-  }) {
-    final theme = Theme.of(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: accentColor,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-        const SizedBox(height: 4),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            value,
-            style: theme.textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildEntryMetricTile(
     BuildContext context, {
     required String label,
@@ -3902,23 +4050,23 @@ class _LedgerViewState extends State<_LedgerView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                label,
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: accentColor,
-                  fontWeight: FontWeight.w700,
-                ),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              label,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: accentColor,
+                fontWeight: FontWeight.w700,
               ),
             ),
-            const SizedBox(height: 6),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                value,
+          ),
+          const SizedBox(height: 6),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w800,
               ),
@@ -3932,59 +4080,66 @@ class _LedgerViewState extends State<_LedgerView> {
   Widget _buildLedgerStats(BuildContext context, LedgerProvider provider) {
     final items = provider.isStockLedger
         ? <({String label, String value, IconData icon, Color accentColor})>[
-          (
-            label: 'Total Buy',
-            value: provider.formatAmount(provider.totalDebit),
-            icon: Icons.shopping_cart_outlined,
-            accentColor: AppColors.credit,
-          ),
-          (
-            label: 'Total Sell',
-            value: provider.formatAmount(provider.totalCredit),
-            icon: Icons.sell_outlined,
-            accentColor: AppColors.debit,
-          ),
-          (
-            label: 'Net Balance',
-            value: provider.formatBalance(
-              provider.isStockLedger ? -provider.finalBalance : provider.finalBalance,
+            (
+              label: 'Total Buy',
+              value: provider.formatAmount(provider.totalDebit),
+              icon: Icons.shopping_cart_outlined,
+              accentColor: AppColors.credit,
             ),
-            icon: Icons.account_balance_wallet_outlined,
-            accentColor: AppColors.balanceColor(
-              provider.isStockLedger ? -provider.finalBalance : provider.finalBalance,
+            (
+              label: 'Total Sell',
+              value: provider.formatAmount(provider.totalCredit),
+              icon: Icons.sell_outlined,
+              accentColor: AppColors.debit,
             ),
-          ),
-        ]
+            (
+              label: 'Net Balance',
+              value: provider.formatBalance(
+                provider.isStockLedger
+                    ? -provider.finalBalance
+                    : provider.finalBalance,
+              ),
+              icon: Icons.account_balance_wallet_outlined,
+              accentColor: AppColors.balanceColor(
+                provider.isStockLedger
+                    ? -provider.finalBalance
+                    : provider.finalBalance,
+              ),
+            ),
+          ]
         : <({String label, String value, IconData icon, Color accentColor})>[
-          (
-            label: 'Total Debit',
-            value: provider.formatAmount(provider.totalDebit),
-            icon: Icons.south_west_rounded,
-            accentColor: AppColors.debit,
-          ),
-          (
-            label: 'Total Credit',
-            value: provider.formatAmount(provider.totalCredit),
-            icon: Icons.north_east_rounded,
-            accentColor: AppColors.credit,
-          ),
-          (
-            label: 'Net Balance',
-            value: provider.formatBalance(
-              provider.isStockLedger ? -provider.finalBalance : provider.finalBalance,
+            (
+              label: 'Total Debit',
+              value: provider.formatAmount(provider.totalDebit),
+              icon: Icons.south_west_rounded,
+              accentColor: AppColors.debit,
             ),
-            icon: Icons.account_balance_wallet_outlined,
-            accentColor: AppColors.balanceColor(
-              provider.isStockLedger ? -provider.finalBalance : provider.finalBalance,
+            (
+              label: 'Total Credit',
+              value: provider.formatAmount(provider.totalCredit),
+              icon: Icons.north_east_rounded,
+              accentColor: AppColors.credit,
             ),
-          ),
-        ];
+            (
+              label: 'Net Balance',
+              value: provider.formatBalance(
+                provider.isStockLedger
+                    ? -provider.finalBalance
+                    : provider.finalBalance,
+              ),
+              icon: Icons.account_balance_wallet_outlined,
+              accentColor: AppColors.balanceColor(
+                provider.isStockLedger
+                    ? -provider.finalBalance
+                    : provider.finalBalance,
+              ),
+            ),
+          ];
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         const spacing = 12.0;
-        final tileWidth =
-            (constraints.maxWidth - (2 * spacing)) / 3;
+        final tileWidth = (constraints.maxWidth - (2 * spacing)) / 3;
 
         return Wrap(
           spacing: spacing,
@@ -4206,7 +4361,10 @@ class _LedgerViewState extends State<_LedgerView> {
       final buyBags = entry.buyBags;
       final sellBags = entry.sellBags;
       final hasValue =
-          debit != 0 || credit != 0 || buyBags.trim().isNotEmpty && buyBags.trim() != '0' || sellBags.trim().isNotEmpty && sellBags.trim() != '0';
+          debit != 0 ||
+          credit != 0 ||
+          buyBags.trim().isNotEmpty && buyBags.trim() != '0' ||
+          sellBags.trim().isNotEmpty && sellBags.trim() != '0';
       String balanceLabel = '';
       String remainingBagsLabel = '';
       final rowStyle = isOpeningBalanceEntry
@@ -4224,7 +4382,9 @@ class _LedgerViewState extends State<_LedgerView> {
 
         if (provider.isStockLedger) {
           final currentRemainingBags =
-              (runningRemainingBags ?? 0) + (double.tryParse(buyBags) ?? 0) - (double.tryParse(sellBags) ?? 0);
+              (runningRemainingBags ?? 0) +
+              (double.tryParse(buyBags) ?? 0) -
+              (double.tryParse(sellBags) ?? 0);
           runningRemainingBags = currentRemainingBags;
           remainingBagsLabel = provider.formatBags(currentRemainingBags);
         }
@@ -4235,7 +4395,7 @@ class _LedgerViewState extends State<_LedgerView> {
         DataCell(Text(_formatStoredDate(entry.createdAt), style: rowStyle)),
         DataCell(
           Text(
-            isOpeningBalanceEntry 
+            isOpeningBalanceEntry
                 ? (provider.isStockLedger ? 'Opening Balance' : '')
                 : [
                     if (entry.pageNo.isNotEmpty) entry.pageNo,
@@ -4305,7 +4465,9 @@ class _LedgerViewState extends State<_LedgerView> {
             SizedBox(
               width: compact ? 120 : 260,
               child: Text(
-                isOpeningBalanceEntry ? 'Opening Balance' : entry.displayDescription,
+                isOpeningBalanceEntry
+                    ? 'Opening Balance'
+                    : entry.displayDescription,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: rowStyle,
@@ -4341,7 +4503,8 @@ class _LedgerViewState extends State<_LedgerView> {
           ),
         ),
         DataCell(
-          isOpeningBalanceEntry
+          isOpeningBalanceEntry &&
+                  context.watch<LinkedSessionProvider>().canEdit
               ? IconButton(
                   tooltip: 'Clear opening balance',
                   onPressed: () => _clearOpeningBalance(provider),
@@ -4396,6 +4559,20 @@ class _EntryDraft {
   final double credit;
   final String buyBags;
   final String sellBags;
+}
+
+class _EntryBalance {
+  const _EntryBalance({
+    required this.isOpeningBalanceEntry,
+    required this.balanceLabel,
+    required this.balance,
+    required this.remainingBagsLabel,
+  });
+
+  final bool isOpeningBalanceEntry;
+  final String balanceLabel;
+  final double balance;
+  final String remainingBagsLabel;
 }
 
 class _CustomerProfileDraft {
@@ -4929,13 +5106,21 @@ class _AddEntryDialogState extends State<_AddEntryDialog> {
     if (provider.useWeight) {
       final buyBagsParsed = number_format_utils.parseWeight(buyBagsStr);
       final sellBagsParsed = number_format_utils.parseWeight(sellBagsStr);
-      buyBags = buyBagsParsed == 0 && buyBagsStr.isEmpty ? '' : buyBagsParsed.toString();
-      sellBags = sellBagsParsed == 0 && sellBagsStr.isEmpty ? '' : sellBagsParsed.toString();
+      buyBags = buyBagsParsed == 0 && buyBagsStr.isEmpty
+          ? ''
+          : buyBagsParsed.toString();
+      sellBags = sellBagsParsed == 0 && sellBagsStr.isEmpty
+          ? ''
+          : sellBagsParsed.toString();
     } else {
       final buyBagsParsed = double.tryParse(buyBagsStr) ?? 0;
       final sellBagsParsed = double.tryParse(sellBagsStr) ?? 0;
-      buyBags = buyBagsParsed == 0 && buyBagsStr.isEmpty ? '' : buyBagsParsed.toString();
-      sellBags = sellBagsParsed == 0 && sellBagsStr.isEmpty ? '' : sellBagsParsed.toString();
+      buyBags = buyBagsParsed == 0 && buyBagsStr.isEmpty
+          ? ''
+          : buyBagsParsed.toString();
+      sellBags = sellBagsParsed == 0 && sellBagsStr.isEmpty
+          ? ''
+          : sellBagsParsed.toString();
     }
 
     final isStockLedger = widget.isStockLedger;
@@ -5006,32 +5191,48 @@ class _AddEntryDialogState extends State<_AddEntryDialog> {
   }
 
   String? _validateBuyBags(String? value) {
-    if (!widget.isStockLedger) return null;
+    if (!widget.isStockLedger) {
+      return null;
+    }
     final amount = _parseAmount(_debitController.text);
-    if (amount > 0 && (value == null || value.trim().isEmpty)) return 'Required';
+    if (amount > 0 && (value == null || value.trim().isEmpty)) {
+      return 'Required';
+    }
     return null;
   }
 
   String? _validateBuyAmount(String? value) {
-    if (!widget.isStockLedger) return null;
+    if (!widget.isStockLedger) {
+      return null;
+    }
     final bags = _buyBagsController.text.trim();
     final amount = _parseAmount(value ?? '');
-    if (bags.isNotEmpty && amount == 0) return 'Amount required';
+    if (bags.isNotEmpty && amount == 0) {
+      return 'Amount required';
+    }
     return _validateAmount(value);
   }
 
   String? _validateSellBags(String? value) {
-    if (!widget.isStockLedger) return null;
+    if (!widget.isStockLedger) {
+      return null;
+    }
     final amount = _parseAmount(_creditController.text);
-    if (amount > 0 && (value == null || value.trim().isEmpty)) return 'Required';
+    if (amount > 0 && (value == null || value.trim().isEmpty)) {
+      return 'Required';
+    }
     return null;
   }
 
   String? _validateSellAmount(String? value) {
-    if (!widget.isStockLedger) return null;
+    if (!widget.isStockLedger) {
+      return null;
+    }
     final bags = _sellBagsController.text.trim();
     final amount = _parseAmount(value ?? '');
-    if (bags.isNotEmpty && amount == 0) return 'Amount required';
+    if (bags.isNotEmpty && amount == 0) {
+      return 'Amount required';
+    }
     return _validateAmount(value);
   }
 
@@ -5151,7 +5352,9 @@ class _AddEntryDialogState extends State<_AddEntryDialog> {
                           Expanded(
                             child: TextFormField(
                               controller: _buyBagsController,
-                              decoration: const InputDecoration(labelText: 'Buy'),
+                              decoration: const InputDecoration(
+                                labelText: 'Buy',
+                              ),
                               validator: _validateBuyBags,
                               scrollPadding: const EdgeInsets.only(bottom: 180),
                             ),
@@ -5172,7 +5375,9 @@ class _AddEntryDialogState extends State<_AddEntryDialog> {
                           Expanded(
                             child: TextFormField(
                               controller: _sellBagsController,
-                              decoration: const InputDecoration(labelText: 'Sell'),
+                              decoration: const InputDecoration(
+                                labelText: 'Sell',
+                              ),
                               validator: _validateSellBags,
                               scrollPadding: const EdgeInsets.only(bottom: 180),
                             ),
@@ -5274,17 +5479,29 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
         : _formatInitialAmount(widget.entry.credit);
     final provider = Provider.of<LedgerProvider>(context, listen: false);
     if (provider.useWeight) {
-      _buyBagsController.text = widget.entry.buyBags.trim().isEmpty || widget.entry.buyBags.trim() == '0'
+      _buyBagsController.text =
+          widget.entry.buyBags.trim().isEmpty ||
+              widget.entry.buyBags.trim() == '0'
           ? ''
-          : number_format_utils.formatWeight(double.tryParse(widget.entry.buyBags) ?? 0);
-      _sellBagsController.text = widget.entry.sellBags.trim().isEmpty || widget.entry.sellBags.trim() == '0'
+          : number_format_utils.formatWeight(
+              double.tryParse(widget.entry.buyBags) ?? 0,
+            );
+      _sellBagsController.text =
+          widget.entry.sellBags.trim().isEmpty ||
+              widget.entry.sellBags.trim() == '0'
           ? ''
-          : number_format_utils.formatWeight(double.tryParse(widget.entry.sellBags) ?? 0);
+          : number_format_utils.formatWeight(
+              double.tryParse(widget.entry.sellBags) ?? 0,
+            );
     } else {
-      _buyBagsController.text = widget.entry.buyBags.trim().isEmpty || widget.entry.buyBags.trim() == '0'
+      _buyBagsController.text =
+          widget.entry.buyBags.trim().isEmpty ||
+              widget.entry.buyBags.trim() == '0'
           ? ''
           : widget.entry.buyBags.trim();
-      _sellBagsController.text = widget.entry.sellBags.trim().isEmpty || widget.entry.sellBags.trim() == '0'
+      _sellBagsController.text =
+          widget.entry.sellBags.trim().isEmpty ||
+              widget.entry.sellBags.trim() == '0'
           ? ''
           : widget.entry.sellBags.trim();
     }
@@ -5330,13 +5547,21 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
     if (provider.useWeight) {
       final buyBagsParsed = number_format_utils.parseWeight(buyBagsStr);
       final sellBagsParsed = number_format_utils.parseWeight(sellBagsStr);
-      buyBags = buyBagsParsed == 0 && buyBagsStr.isEmpty ? '' : buyBagsParsed.toString();
-      sellBags = sellBagsParsed == 0 && sellBagsStr.isEmpty ? '' : sellBagsParsed.toString();
+      buyBags = buyBagsParsed == 0 && buyBagsStr.isEmpty
+          ? ''
+          : buyBagsParsed.toString();
+      sellBags = sellBagsParsed == 0 && sellBagsStr.isEmpty
+          ? ''
+          : sellBagsParsed.toString();
     } else {
       final buyBagsParsed = double.tryParse(buyBagsStr) ?? 0;
       final sellBagsParsed = double.tryParse(sellBagsStr) ?? 0;
-      buyBags = buyBagsParsed == 0 && buyBagsStr.isEmpty ? '' : buyBagsParsed.toString();
-      sellBags = sellBagsParsed == 0 && sellBagsStr.isEmpty ? '' : sellBagsParsed.toString();
+      buyBags = buyBagsParsed == 0 && buyBagsStr.isEmpty
+          ? ''
+          : buyBagsParsed.toString();
+      sellBags = sellBagsParsed == 0 && sellBagsStr.isEmpty
+          ? ''
+          : sellBagsParsed.toString();
     }
 
     final isStockLedger = widget.isStockLedger;
@@ -5395,32 +5620,48 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
   }
 
   String? _validateBuyBags(String? value) {
-    if (!widget.isStockLedger) return null;
+    if (!widget.isStockLedger) {
+      return null;
+    }
     final amount = _parseAmount(_debitController.text);
-    if (amount > 0 && (value == null || value.trim().isEmpty)) return 'Required';
+    if (amount > 0 && (value == null || value.trim().isEmpty)) {
+      return 'Required';
+    }
     return null;
   }
 
   String? _validateBuyAmount(String? value) {
-    if (!widget.isStockLedger) return null;
+    if (!widget.isStockLedger) {
+      return null;
+    }
     final bags = _buyBagsController.text.trim();
     final amount = _parseAmount(value ?? '');
-    if (bags.isNotEmpty && amount == 0) return 'Amount required';
+    if (bags.isNotEmpty && amount == 0) {
+      return 'Amount required';
+    }
     return _validateAmount(value);
   }
 
   String? _validateSellBags(String? value) {
-    if (!widget.isStockLedger) return null;
+    if (!widget.isStockLedger) {
+      return null;
+    }
     final amount = _parseAmount(_creditController.text);
-    if (amount > 0 && (value == null || value.trim().isEmpty)) return 'Required';
+    if (amount > 0 && (value == null || value.trim().isEmpty)) {
+      return 'Required';
+    }
     return null;
   }
 
   String? _validateSellAmount(String? value) {
-    if (!widget.isStockLedger) return null;
+    if (!widget.isStockLedger) {
+      return null;
+    }
     final bags = _sellBagsController.text.trim();
     final amount = _parseAmount(value ?? '');
-    if (bags.isNotEmpty && amount == 0) return 'Amount required';
+    if (bags.isNotEmpty && amount == 0) {
+      return 'Amount required';
+    }
     return _validateAmount(value);
   }
 
@@ -5524,7 +5765,9 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
                           Expanded(
                             child: TextFormField(
                               controller: _buyBagsController,
-                              decoration: const InputDecoration(labelText: 'Buy'),
+                              decoration: const InputDecoration(
+                                labelText: 'Buy',
+                              ),
                               validator: _validateBuyBags,
                               scrollPadding: const EdgeInsets.only(bottom: 180),
                             ),
@@ -5545,7 +5788,9 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
                           Expanded(
                             child: TextFormField(
                               controller: _sellBagsController,
-                              decoration: const InputDecoration(labelText: 'Sell'),
+                              decoration: const InputDecoration(
+                                labelText: 'Sell',
+                              ),
                               validator: _validateSellBags,
                               scrollPadding: const EdgeInsets.only(bottom: 180),
                             ),
@@ -5747,11 +5992,7 @@ class _CustomerIdentityItem extends StatelessWidget {
             color: colorScheme.primary.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(
-            icon,
-            size: 16,
-            color: colorScheme.primary,
-          ),
+          child: Icon(icon, size: 16, color: colorScheme.primary),
         ),
         const SizedBox(width: 10),
         Flexible(

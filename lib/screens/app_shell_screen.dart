@@ -1143,46 +1143,44 @@ class _SidebarContentState extends State<_SidebarContent> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _DrawerSectionLabel('Settings'),
-                  _DrawerListTile(
-                    icon: Icons.business_outlined,
-                    label: 'Company Profile',
-                    onTap: canEdit ? widget.onCompanyProfileRequested : null,
-                  ),
+                  if (canEdit) ...[
+                    _DrawerListTile(
+                      icon: Icons.business_outlined,
+                      label: 'Company Profile',
+                      onTap: widget.onCompanyProfileRequested,
+                    ),
+                    _DrawerListTile(
+                      icon: Icons.edit_note_outlined,
+                      label: 'Notes',
+                      trailing: widget.hasNotes ? '●' : null,
+                      onTap: widget.onNotesRequested,
+                    ),
+                  ],
                   _DrawerListTile(
                     icon: Icons.devices_other_outlined,
                     label: 'Linked Devices',
                     onTap: widget.onLinkedDevicesRequested,
                   ),
-                  _DrawerListTile(
-                    icon: Icons.edit_note_outlined,
-                    label: 'Notes',
-                    trailing: widget.hasNotes ? '●' : null,
-                    onTap: canEdit ? widget.onNotesRequested : null,
-                  ),
                   Divider(
                     height: 1,
                     color: colorScheme.outlineVariant,
                     indent: 16,
                     endIndent: 16,
                   ),
-                  _DrawerSectionLabel('Data'),
-                  _DrawerListTile(
-                    icon: Icons.backup_rounded,
-                    label: 'Backup & Restore',
-                    onTap: canEdit ? widget.onBackupRequested : null,
-                  ),
-                  Divider(
-                    height: 1,
-                    color: colorScheme.outlineVariant,
-                    indent: 16,
-                    endIndent: 16,
-                  ),
-                  _DrawerSectionLabel('Security'),
-                  _DrawerListTile(
-                    icon: Icons.lock_outline_rounded,
-                    label: widget.pinButtonLabel,
-                    onTap: canEdit ? widget.onPinRequested : null,
-                  ),
+                  if (canEdit) ...[
+                    _DrawerSectionLabel('Data'),
+                    _DrawerListTile(
+                      icon: Icons.backup_rounded,
+                      label: 'Backup & Restore',
+                      onTap: widget.onBackupRequested,
+                    ),
+                    _DrawerSectionLabel('Security'),
+                    _DrawerListTile(
+                      icon: Icons.lock_outline_rounded,
+                      label: widget.pinButtonLabel,
+                      onTap: widget.onPinRequested,
+                    ),
+                  ],
                   Divider(
                     height: 1,
                     color: colorScheme.outlineVariant,
@@ -1338,41 +1336,46 @@ class _SidebarContentState extends State<_SidebarContent> {
                     const SizedBox(height: 14),
                     MobileSectionHeader(title: 'Workspace Tools'),
                     const SizedBox(height: 8),
-                    _MobileDrawerAction(
-                      icon: Icons.business_outlined,
-                      label: 'Company Profile',
-                      onTap: canEdit ? widget.onCompanyProfileRequested : null,
-                    ),
+                    if (canEdit) ...[
+                      _MobileDrawerAction(
+                        icon: Icons.business_outlined,
+                        label: 'Company Profile',
+                        onTap: widget.onCompanyProfileRequested,
+                      ),
+                      _MobileDrawerAction(
+                        icon: Icons.edit_note_outlined,
+                        label: 'Notes',
+                        trailing: widget.hasNotes
+                            ? MobileStatusPill(
+                                icon: Icons.check_rounded,
+                                label: 'Saved',
+                                color: colorScheme.secondary,
+                              )
+                            : null,
+                        onTap: widget.onNotesRequested,
+                      ),
+                    ],
                     _MobileDrawerAction(
                       icon: Icons.devices_other_outlined,
                       label: 'Linked Devices',
                       onTap: widget.onLinkedDevicesRequested,
                     ),
-                    _MobileDrawerAction(
-                      icon: Icons.edit_note_outlined,
-                      label: 'Notes',
-                      trailing: widget.hasNotes
-                          ? MobileStatusPill(
-                              icon: Icons.check_rounded,
-                              label: 'Saved',
-                              color: colorScheme.secondary,
-                            )
-                          : null,
-                      onTap: canEdit ? widget.onNotesRequested : null,
-                    ),
+                    if (canEdit) ...[
+                      const SizedBox(height: 12),
+                      MobileSectionHeader(title: 'Data & Security'),
+                      const SizedBox(height: 8),
+                      _MobileDrawerAction(
+                        icon: Icons.backup_rounded,
+                        label: 'Backup & Restore',
+                        onTap: widget.onBackupRequested,
+                      ),
+                      _MobileDrawerAction(
+                        icon: Icons.lock_outline_rounded,
+                        label: widget.pinButtonLabel,
+                        onTap: widget.onPinRequested,
+                      ),
+                    ],
                     const SizedBox(height: 12),
-                    MobileSectionHeader(title: 'Data & Security'),
-                    const SizedBox(height: 8),
-                    _MobileDrawerAction(
-                      icon: Icons.backup_rounded,
-                      label: 'Backup & Restore',
-                      onTap: canEdit ? widget.onBackupRequested : null,
-                    ),
-                    _MobileDrawerAction(
-                      icon: Icons.lock_outline_rounded,
-                      label: widget.pinButtonLabel,
-                      onTap: canEdit ? widget.onPinRequested : null,
-                    ),
                     _MobileDrawerAction(
                       icon: Icons.system_update_alt_outlined,
                       label: 'Check for Update',
@@ -1488,41 +1491,41 @@ class _SidebarContentState extends State<_SidebarContent> {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              IconButton(
-                tooltip: 'Add year',
-                onPressed: (provider.isLoading || !canEdit)
-                    ? null
-                    : widget.onAddYearRequested,
-                style: IconButton.styleFrom(
-                  backgroundColor: colorScheme.surfaceContainerHigh,
-                  foregroundColor: colorScheme.primary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+              if (canEdit) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: 'Add year',
+                  onPressed: provider.isLoading
+                      ? null
+                      : widget.onAddYearRequested,
+                  style: IconButton.styleFrom(
+                    backgroundColor: colorScheme.surfaceContainerHigh,
+                    foregroundColor: colorScheme.primary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    side: BorderSide(color: colorScheme.outlineVariant),
                   ),
-                  side: BorderSide(color: colorScheme.outlineVariant),
+                  icon: const Icon(Icons.add_rounded, size: 20),
                 ),
-                icon: const Icon(Icons.add_rounded, size: 20),
-              ),
-              const SizedBox(width: 4),
-              IconButton(
-                tooltip: 'Delete year',
-                onPressed:
-                    (provider.isLoading ||
-                        provider.years.length <= 1 ||
-                        !canEdit)
-                    ? null
-                    : onDeleteRequested,
-                style: IconButton.styleFrom(
-                  backgroundColor: colorScheme.surfaceContainerHigh,
-                  foregroundColor: colorScheme.error,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: 'Delete year',
+                  onPressed:
+                      provider.isLoading || provider.years.length <= 1
+                      ? null
+                      : onDeleteRequested,
+                  style: IconButton.styleFrom(
+                    backgroundColor: colorScheme.surfaceContainerHigh,
+                    foregroundColor: colorScheme.error,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    side: BorderSide(color: colorScheme.outlineVariant),
                   ),
-                  side: BorderSide(color: colorScheme.outlineVariant),
+                  icon: const Icon(Icons.delete_outline_rounded, size: 20),
                 ),
-                icon: const Icon(Icons.delete_outline_rounded, size: 20),
-              ),
+              ],
             ],
           ),
           if (provider.errorMessage != null)
@@ -2244,29 +2247,33 @@ class _MobileTopBar extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                Text(
-                  'Balance Desk',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.w900,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Balance Desk',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: colorScheme.primary,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  destination.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
+                  const SizedBox(height: 2),
+                  Text(
+                    destination.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           Container(

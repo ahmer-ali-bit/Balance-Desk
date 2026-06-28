@@ -499,7 +499,13 @@ class LinkedSessionProvider extends ChangeNotifier {
     } else {
       startSessionListener();
       if (_workspaceMode == WorkspaceMode.linked && _adminDeviceId != null) {
-        await _downloadLinkedSnapshot(_adminDeviceId!);
+        // If the joining device's local workspace is empty, keep it empty
+        // instead of pulling the admin's snapshot over it.
+        final localEmpty = await WorkspaceSyncService.instance
+            .isLocalWorkspaceEmpty();
+        if (!localEmpty) {
+          await _downloadLinkedSnapshot(_adminDeviceId!);
+        }
       }
     }
     _notify();

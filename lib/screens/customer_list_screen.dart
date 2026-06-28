@@ -307,56 +307,58 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-             MobilePremiumPanel(
-               padding: const EdgeInsets.all(12),
-               child: Column(
-                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                 children: <Widget>[
-                   _buildSearchField(provider),
-                   const SizedBox(height: 10),
-                   Row(
-                     children: <Widget>[
-                       Expanded(
-                         child: OutlinedButton.icon(
-                           onPressed: provider.isLoading
-                               ? null
-                               : provider.loadCustomers,
-                           icon: const Icon(Icons.refresh_rounded),
-                           label: const Text('Refresh'),
-                         ),
-                       ),
-                       const SizedBox(width: 10),
-                       Expanded(
-                         child: FilledButton.icon(
-                           onPressed: canEdit ? _showAddCustomerDialog : null,
-                           icon: const Icon(Icons.person_add_alt_1_rounded),
-                           label: const Text('Add'),
-                         ),
-                       ),
-                     ],
-                   ),
-                 ],
-               ),
-             ),
-             const SizedBox(height: 16),
-             MobileSectionHeader(
-               title: 'Directory',
-               count: '${provider.customers.length}',
-             ),
-             const SizedBox(height: 10),
-             if (state != null)
-               MobilePremiumPanel(child: state)
-             else
-               _buildPremiumMobileCustomerCards(
-                 context: context,
-                 customers: customers,
-                 canEdit: canEdit,
-               ),
-           ],
-         ),
-       ),
-     );
-   }
+            MobilePremiumPanel(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  _buildSearchField(provider),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: provider.isLoading
+                              ? null
+                              : provider.loadCustomers,
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: const Text('Refresh'),
+                        ),
+                      ),
+                      if (canEdit) ...[
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: _showAddCustomerDialog,
+                            icon: const Icon(Icons.person_add_alt_1_rounded),
+                            label: const Text('Add'),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            MobileSectionHeader(
+              title: 'Directory',
+              count: '${provider.customers.length}',
+            ),
+            const SizedBox(height: 10),
+            if (state != null)
+              MobilePremiumPanel(child: state)
+            else
+              _buildPremiumMobileCustomerCards(
+                context: context,
+                customers: customers,
+                canEdit: canEdit,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildPremiumMobileCustomerCards({
     required BuildContext context,
@@ -366,12 +368,16 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Column(
-      children: <Widget>[
-        for (var index = 0; index < customers.length; index++) ...<Widget>[
-          if (index != 0) const SizedBox(height: 10),
-          MobilePremiumPanel(
-            onTap: () => _openLedger(customers[index]),
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: customers.length,
+      itemBuilder: (context, index) {
+        final customer = customers[index];
+        return Padding(
+          padding: EdgeInsets.only(top: index == 0 ? 0 : 10),
+          child: MobilePremiumPanel(
+            onTap: () => _openLedger(customer),
             padding: const EdgeInsets.all(12),
             child: Row(
               children: <Widget>[
@@ -387,9 +393,9 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                   ),
                   child: Center(
                     child: Text(
-                      customers[index].name.trim().isEmpty
+                      customer.name.trim().isEmpty
                           ? '?'
-                          : customers[index].name.trim()[0].toUpperCase(),
+                          : customer.name.trim()[0].toUpperCase(),
                       style: theme.textTheme.titleMedium?.copyWith(
                         color: colorScheme.primary,
                         fontWeight: FontWeight.w900,
@@ -406,7 +412,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          customers[index].name,
+                          customer.name,
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w900,
                           ),
@@ -419,10 +425,10 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                         children: <Widget>[
                           MobileStatusPill(
                             icon: Icons.tag_rounded,
-                            label: '${customers[index].id ?? '-'}',
+                            label: '${customer.id ?? '-'}',
                             color: colorScheme.tertiary,
                           ),
-                          if (customers[index].isStockLedger)
+                          if (customer.isStockLedger)
                             MobileStatusPill(
                               icon: Icons.inventory_2_outlined,
                               label: 'Stock',
@@ -436,20 +442,20 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                 const SizedBox(width: 8),
                 IconButton(
                   tooltip: 'Open ledger',
-                  onPressed: () => _openLedger(customers[index]),
+                  onPressed: () => _openLedger(customer),
                   icon: const Icon(Icons.arrow_forward_rounded),
                 ),
                 if (canEdit)
                   IconButton(
                     tooltip: 'Delete customer',
-                    onPressed: () => _confirmDelete(customers[index]),
+                    onPressed: () => _confirmDelete(customer),
                     icon: const Icon(Icons.delete_outline_rounded),
                   ),
               ],
             ),
           ),
-        ],
-      ],
+        );
+      },
     );
   }
 
@@ -507,11 +513,12 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
           icon: const Icon(Icons.refresh_rounded),
           label: const Text('Refresh'),
         ),
-        FilledButton.icon(
-          onPressed: _canEdit(context) ? _showAddCustomerDialog : null,
-          icon: const Icon(Icons.person_add_alt_1_rounded),
-          label: const Text('Add Customer'),
-        ),
+        if (_canEdit(context))
+          FilledButton.icon(
+            onPressed: _showAddCustomerDialog,
+            icon: const Icon(Icons.person_add_alt_1_rounded),
+            label: const Text('Add Customer'),
+          ),
       ],
     );
 
@@ -683,10 +690,43 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                                     ),
                                     SizedBox(width: isCompactTable ? 10 : 12),
                                     Expanded(
-                                      child: Text(
-                                        customer.name,
-                                        style: customerNameStyle,
-                                        overflow: TextOverflow.ellipsis,
+                                      child: Row(
+                                        children: <Widget>[
+                                          Flexible(
+                                            child: Text(
+                                              customer.name,
+                                              style: customerNameStyle,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          if (customer.isStockLedger) ...[
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 6,
+                                                vertical: 2,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.secondaryContainer,
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                'Stock',
+                                                style: Theme.of(
+                                                  context,
+                                                ).textTheme.labelSmall?.copyWith(
+                                                  color: Theme.of(
+                                                    context,
+                                                  ).colorScheme.secondary,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
                                       ),
                                     ),
                                   ],

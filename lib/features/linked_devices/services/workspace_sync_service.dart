@@ -78,6 +78,36 @@ class WorkspaceSyncService {
     }
   }
 
+  /// Returns true when every workspace table on this device has zero rows.
+  /// Used to avoid overwriting an empty joiner workspace with the admin's
+  /// snapshot during a fresh join.
+  Future<bool> isLocalWorkspaceEmpty() async {
+    try {
+      final db = await DatabaseHelper.instance.database;
+      final tables = const [
+        'customers',
+        'entries',
+        'summary_snapshots',
+        'app_settings',
+        'ledger_years',
+      ];
+      for (final table in tables) {
+        final result = await db.rawQuery('SELECT COUNT(*) AS c FROM $table');
+        final count = result.first['c'];
+        final n = count is int
+            ? count
+            : int.tryParse(count?.toString() ?? '') ?? 0;
+        if (n > 0) return false;
+      }
+      return true;
+    } catch (e) {
+      debugPrint('[WorkspaceSync] isLocalWorkspaceEmpty error: $e');
+      // Fail safe: if we can't tell, assume non-empty so the existing
+      // sync behaviour is preserved.
+      return false;
+    }
+  }
+
   Future<String?> localFingerprint() async {
     try {
       final payload = await _buildSnapshotPayload(

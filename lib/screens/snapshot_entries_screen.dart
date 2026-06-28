@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -57,6 +58,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   static const int _snapshotPageSize = 800;
   final Set<String> _expandedSnapshots = <String>{};
   String _searchQuery = '';
+  Timer? _obDebounceTimer;
 
   SummarySnapshot? get _latestSnapshot =>
       _snapshots.isEmpty ? null : _snapshots.last;
@@ -113,6 +115,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     _entryTableVerticalController.dispose();
     _debitOpeningBalanceController.dispose();
     _creditOpeningBalanceController.dispose();
+    _obDebounceTimer?.cancel();
     super.dispose();
   }
 
@@ -171,6 +174,13 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  void _debounceOpeningBalanceUpdate() {
+    _obDebounceTimer?.cancel();
+    _obDebounceTimer = Timer(const Duration(milliseconds: 80), () {
+      if (mounted) setState(() {});
+    });
   }
 
   Future<void> _recalculateSnapshots() async {
@@ -1006,8 +1016,16 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                         _buildCompactDailyLogControls(
                           context,
                           headerActions: headerActions,
-                        ),
-                      const SizedBox(height: 8),
+                        )
+                      else
+                        headerActions,
+                    ],
+                    if (isDesktop)
+                      headerActions,
+                    if (isCompact) ...<Widget>[
+                      const SizedBox(height: 10),
+                    ] else ...<Widget>[
+                      const SizedBox(height: 12),
                       if (isDesktop && latestSnapshot != null) ...<Widget>[
                         _buildDesktopSnapshotSummarySection(
                           context,
@@ -1070,38 +1088,41 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: _buildDailyToggleHeader(
-                    context,
-                    icon: Icons.bookmark_added_outlined,
-                    title: 'Last Saved Snapshot',
-                    value: snapshotLabel,
-                    expanded: _showDailyLatestSnapshot,
-                    onTap: () {
-                      setState(() {
-                        _showDailyLatestSnapshot = !_showDailyLatestSnapshot;
-                      });
-                    },
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Expanded(
+                    child: _buildDailyToggleHeader(
+                      context,
+                      icon: Icons.bookmark_added_outlined,
+                      title: 'Last Saved',
+                      value: snapshotLabel,
+                      expanded: _showDailyLatestSnapshot,
+                      onTap: () {
+                        setState(() {
+                          _showDailyLatestSnapshot = !_showDailyLatestSnapshot;
+                        });
+                      },
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildDailyToggleHeader(
-                    context,
-                    icon: Icons.account_balance_wallet_outlined,
-                    title: 'Opening Balance',
-                    value: openingLabel,
-                    expanded: _showDailyOpeningBalance,
-                    onTap: () {
-                      setState(() {
-                        _showDailyOpeningBalance = !_showDailyOpeningBalance;
-                      });
-                    },
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildDailyToggleHeader(
+                      context,
+                      icon: Icons.account_balance_wallet_outlined,
+                      title: 'Opening Balance',
+                      value: openingLabel,
+                      expanded: _showDailyOpeningBalance,
+                      onTap: () {
+                        setState(() {
+                          _showDailyOpeningBalance = !_showDailyOpeningBalance;
+                        });
+                      },
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
             Column(
               children: <Widget>[
@@ -1112,7 +1133,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                       ? Padding(
                           padding: const EdgeInsets.only(top: 10),
                           child: _buildCompactSnapshotSummaryCard(
-                            context, latestSnapshot,
+                            context,
+                            latestSnapshot,
                           ),
                         )
                       : const SizedBox.shrink(),
@@ -1152,13 +1174,38 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     BuildContext context, {
     required bool canEdit,
   }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final canSave =
-        !_isLoading &&
-        !_isSavingSnapshot &&
-        _hasCurrentPeriodEntries &&
-        canEdit;
+        !_isLoading && !_isSavingSnapshot && _hasCurrentPeriodEntries;
     final canUseHistory =
         !_isLoading && !_isSavingSnapshot && _snapshots.isNotEmpty;
+
+    Widget shrink(String text) => FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text(text),
+    );
+
+    Widget premiumOutlinedButton({
+      required Widget icon,
+      required Widget label,
+      required VoidCallback? onPressed,
+    }) {
+      return OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: icon,
+        label: label,
+        style: OutlinedButton.styleFrom(
+          backgroundColor: colorScheme.surfaceContainerHigh,
+          foregroundColor: colorScheme.onSurface,
+          side: BorderSide(color: colorScheme.outlineVariant),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        ),
+      );
+    }
 
     return MobilePremiumPanel(
       padding: const EdgeInsets.all(12),
@@ -1168,29 +1215,31 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           Row(
             children: <Widget>[
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _isLoading || _isSavingSnapshot ? null : _loadTimeline,
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('Refresh'),
+                child: premiumOutlinedButton(
+                  onPressed: _isLoading || _isSavingSnapshot
+                      ? null
+                      : _loadTimeline,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: shrink('Refresh'),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _isLoading || _isSavingSnapshot ? null : _exportSnapshot,
-                  icon: const Icon(Icons.file_download_outlined),
-                  label: const Text('Export'),
+                child: premiumOutlinedButton(
+                  onPressed: _isLoading || _isSavingSnapshot
+                      ? null
+                      : _exportSnapshot,
+                  icon: const Icon(Icons.file_download_outlined, size: 18),
+                  label: shrink('Export'),
                 ),
               ),
               if (_snapshots.isNotEmpty) ...[
                 const SizedBox(width: 8),
                 Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: canUseHistory && canEdit
-                        ? _recalculateSnapshots
-                        : null,
-                    icon: const Icon(Icons.calculate_outlined),
-                    label: const Text('Recalc'),
+                  child: premiumOutlinedButton(
+                    onPressed: canUseHistory ? _recalculateSnapshots : null,
+                    icon: const Icon(Icons.calculate_outlined, size: 18),
+                    label: shrink('Recalc'),
                   ),
                 ),
               ],
@@ -1201,41 +1250,78 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
             Row(
               children: <Widget>[
                 Expanded(
-                  child: TextButton.icon(
-                    onPressed: canUseHistory && canEdit ? _clearAllSnapshots : null,
-                    icon: const Icon(Icons.delete_sweep_outlined),
-                    label: const Text('Clear'),
+                  child: premiumOutlinedButton(
+                    onPressed: canUseHistory ? _clearAllSnapshots : null,
+                    icon: Icon(
+                      Icons.delete_sweep_outlined,
+                      size: 18,
+                      color: colorScheme.error,
+                    ),
+                    label: Text(
+                      'Clear',
+                      style: TextStyle(color: colorScheme.error),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: canSave ? _saveSnapshot : null,
-                    icon: _isSavingSnapshot
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.bookmark_add_outlined),
-                    label: Text(_isSavingSnapshot ? 'Saving' : 'Save'),
+                if (canEdit) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: canSave ? _saveSnapshot : null,
+                      icon: _isSavingSnapshot
+                          ? SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: colorScheme.onPrimary,
+                              ),
+                            )
+                          : const Icon(Icons.bookmark_add_outlined, size: 18),
+                      label: shrink(_isSavingSnapshot ? 'Saving' : 'Save'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: colorScheme.primary,
+                        foregroundColor: colorScheme.onPrimary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 14,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ],
             )
-          else
+          else if (canEdit)
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
                 onPressed: canSave ? _saveSnapshot : null,
                 icon: _isSavingSnapshot
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: colorScheme.onPrimary,
+                        ),
                       )
-                    : const Icon(Icons.bookmark_add_outlined),
-                label: Text(_isSavingSnapshot ? 'Saving' : 'Save'),
+                    : const Icon(Icons.bookmark_add_outlined, size: 18),
+                label: shrink(_isSavingSnapshot ? 'Saving' : 'Save'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: colorScheme.primary,
+                  foregroundColor: colorScheme.onPrimary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 14,
+                  ),
+                ),
               ),
             ),
         ],
@@ -1247,7 +1333,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     return TextField(
       decoration: InputDecoration(
         hintText: 'Search by DL Page No...',
-        prefixIcon: const Icon(Icons.search),
+        prefixIcon: Icon(Icons.search),
         filled: true,
         fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
         border: OutlineInputBorder(
@@ -1341,7 +1427,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         ),
         if (_snapshots.isNotEmpty)
           OutlinedButton.icon(
-            onPressed: _isLoading || _isSavingSnapshot || !canEdit
+            onPressed: _isLoading || _isSavingSnapshot
                 ? null
                 : _recalculateSnapshots,
             icon: const Icon(Icons.calculate_outlined),
@@ -1354,29 +1440,27 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         ),
         if (_snapshots.isNotEmpty)
           TextButton.icon(
-            onPressed: _isLoading || _isSavingSnapshot || !canEdit
+            onPressed: _isLoading || _isSavingSnapshot
                 ? null
                 : _clearAllSnapshots,
             icon: const Icon(Icons.delete_sweep_outlined),
             label: Text(isDesktop ? 'Clear Snapshots' : 'Clear'),
           ),
-        FilledButton.icon(
-          onPressed:
-              _isLoading ||
-                  _isSavingSnapshot ||
-                  !_hasCurrentPeriodEntries ||
-                  !canEdit
-              ? null
-              : _saveSnapshot,
-          icon: _isSavingSnapshot
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2.2),
-                )
-              : const Icon(Icons.bookmark_add_outlined),
-          label: Text(_isSavingSnapshot ? 'Saving...' : 'Save Snapshot'),
-        ),
+        if (canEdit)
+          FilledButton.icon(
+            onPressed:
+                _isLoading || _isSavingSnapshot || !_hasCurrentPeriodEntries
+                ? null
+                : _saveSnapshot,
+            icon: _isSavingSnapshot
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2.2),
+                  )
+                : const Icon(Icons.bookmark_add_outlined),
+            label: Text(_isSavingSnapshot ? 'Saving...' : 'Save Snapshot'),
+          ),
       ],
     );
 
@@ -1769,7 +1853,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           child: Row(
             children: <Widget>[
               Container(
@@ -1881,7 +1965,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       onChanged: (readOnly || !canEdit)
           ? null
           : (_) {
-              setState(() {});
+              _debounceOpeningBalanceUpdate();
             },
       decoration: InputDecoration(
         labelText: label,
@@ -1929,107 +2013,126 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   }
 
   Widget _buildPremiumMobileTimeline(BuildContext context) {
-    final items = <Widget>[];
-    var entryIndex = _entries.length - 1;
+    final canEdit = context.watch<LinkedSessionProvider>().canEdit;
+    final nodes = <_TimelineNode>[];
 
-    final currentEntries = <Widget>[];
-    while (entryIndex >= 0 &&
-        (_snapshots.isEmpty ||
-            _compareMoments(
-                  _entries[entryIndex].entry.createdAt,
-                  _snapshots.last.savedAt,
-                ) >
-                0)) {
-      currentEntries.add(
-        _buildPremiumMobileTimelineEntry(context, _entries[entryIndex]),
-      );
-      entryIndex--;
-    }
-    if (_searchQuery.isEmpty) {
-      items.addAll(currentEntries);
-    }
-
-    for (var i = _snapshots.length - 1; i >= 0; i--) {
-      final snapshot = _snapshots[i];
-      final previousSnapshot = i > 0 ? _snapshots[i - 1] : null;
-      final isExpanded = _expandedSnapshots.contains(snapshot.savedAt);
-      final snapshotEntries = <Widget>[];
-
-      while (entryIndex >= 0 &&
-          (previousSnapshot == null ||
-              _compareMoments(
-                    _entries[entryIndex].entry.createdAt,
-                    previousSnapshot.savedAt,
-                  ) >
-                  0)) {
-        if (isExpanded) {
-          snapshotEntries.add(
-            _buildPremiumMobileTimelineEntry(context, _entries[entryIndex]),
-          );
+    if (_snapshots.isEmpty) {
+      var entryIdx = _entries.length - 1;
+      if (_searchQuery.isEmpty) {
+        for (; entryIdx >= 0; entryIdx--) {
+          nodes.add(_TimelineNode.entry(entryIdx));
         }
+      }
+      if (_hasOpeningBalance) {
+        nodes.add(const _TimelineNode.balanceCard(-1, isOpeningBalance: true));
+      }
+    } else {
+      var entryIndex = _entries.length - 1;
+
+      // Current entries after the newest snapshot (newest-first)
+      final currentIndices = <int>[];
+      while (entryIndex >= 0 &&
+          _compareMoments(
+                _entries[entryIndex].entry.createdAt,
+                _snapshots.last.savedAt,
+              ) >
+              0) {
+        currentIndices.add(entryIndex);
         entryIndex--;
       }
+      if (_searchQuery.isEmpty) {
+        for (var i = 0; i < currentIndices.length; i++) {
+          nodes.add(_TimelineNode.entry(currentIndices[i]));
+        }
+      }
 
-      final matchesSearch =
-          _searchQuery.isEmpty ||
-          snapshot.dailyLogPageNo.toLowerCase().contains(
-            _searchQuery.toLowerCase(),
-          );
+      // Snapshots from newest to oldest
+      for (var i = _snapshots.length - 1; i >= 0; i--) {
+        final snapshot = _snapshots[i];
+        final previousSnapshot = i > 0 ? _snapshots[i - 1] : null;
 
-      if (matchesSearch) {
-        items.add(
-          _buildPremiumMobileSnapshotCard(
-            context,
-            snapshot,
-            isExpanded: isExpanded,
-          ),
-        );
-        if (isExpanded) {
-          items.addAll(snapshotEntries);
+        final snapshotIndices = <int>[];
+        while (entryIndex >= 0 &&
+            (previousSnapshot == null ||
+                _compareMoments(
+                      _entries[entryIndex].entry.createdAt,
+                      previousSnapshot.savedAt,
+                    ) >
+                    0)) {
+          snapshotIndices.add(entryIndex);
+          entryIndex--;
         }
 
-        if (previousSnapshot != null) {
-          final carryForward = _balanceToOpening(previousSnapshot.finalBalance);
-          if (carryForward.hasValue) {
-            items.add(
-              _buildPremiumMobileBalanceCard(
-                context,
-                carryForward,
-                title: 'Balance B/F',
-              ),
+        final matchesSearch =
+            _searchQuery.isEmpty ||
+            snapshot.dailyLogPageNo.toLowerCase().contains(
+              _searchQuery.toLowerCase(),
             );
+
+        if (matchesSearch) {
+          final isExpanded = _expandedSnapshots.contains(snapshot.savedAt);
+          if (isExpanded) {
+            for (var j = 0; j < snapshotIndices.length; j++) {
+              nodes.add(_TimelineNode.entry(snapshotIndices[j]));
+            }
           }
-        } else if (_hasOpeningBalance) {
-          items.add(
-            _buildPremiumMobileBalanceCard(context, _effectiveOpeningBalance),
-          );
+          nodes.add(_TimelineNode.snapshotCard(i));
+
+          if (previousSnapshot != null) {
+            final carryForward = _balanceToOpening(previousSnapshot.finalBalance);
+            if (carryForward.hasValue) {
+              nodes.add(_TimelineNode.balanceCard(i - 1));
+            }
+          } else if (_hasOpeningBalance) {
+            nodes.add(const _TimelineNode.balanceCard(-1, isOpeningBalance: true));
+          }
         }
       }
     }
 
-    if (_snapshots.isEmpty && _hasOpeningBalance && _searchQuery.isEmpty) {
-      items.add(
-        _buildPremiumMobileBalanceCard(context, _effectiveOpeningBalance),
-      );
-    }
-
-    return Column(
-      children: <Widget>[
-        for (var index = 0; index < items.length; index++) ...<Widget>[
-          if (index != 0) const SizedBox(height: 10),
-          items[index],
-        ],
-      ],
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: nodes.length,
+      itemBuilder: (context, index) {
+        final node = nodes[index];
+        final child = switch (node.type) {
+          _TimelineNodeType.entry =>
+            _buildPremiumMobileTimelineEntry(context, _entries[node.entryIndex!], canEdit: canEdit),
+          _TimelineNodeType.snapshotCard => _buildPremiumMobileSnapshotCard(
+              context,
+              _snapshots[node.snapshotIndex!],
+              isExpanded: _expandedSnapshots.contains(
+                _snapshots[node.snapshotIndex!].savedAt,
+              ),
+              canEdit: canEdit,
+            ),
+          _TimelineNodeType.balanceCard =>
+            node.isOpeningBalance
+                ? _buildPremiumMobileBalanceCard(context, _effectiveOpeningBalance)
+                : _buildPremiumMobileBalanceCard(
+                    context,
+                    _balanceToOpening(
+                      _snapshots[node.snapshotIndex!].finalBalance,
+                    ),
+                    title: 'Balance B/F',
+                  ),
+        };
+        return Padding(
+          padding: EdgeInsets.only(top: index == 0 ? 0 : 10),
+          child: child,
+        );
+      },
     );
   }
 
   Widget _buildPremiumMobileTimelineEntry(
     BuildContext context,
-    _SnapshotEntry item,
-  ) {
+    _SnapshotEntry item, {
+    required bool canEdit,
+  }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final canEdit = context.watch<LinkedSessionProvider>().canEdit;
 
     return MobilePremiumPanel(
       onTap: () => _navigateToCustomerLedger(item),
@@ -2121,11 +2224,11 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     BuildContext context,
     SummarySnapshot snapshot, {
     required bool isExpanded,
+    required bool canEdit,
   }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final balanceColor = AppColors.balanceColor(snapshot.finalBalance);
-    final canEdit = context.watch<LinkedSessionProvider>().canEdit;
 
     return MobilePremiumPanel(
       accentColor: balanceColor,
@@ -2471,94 +2574,97 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: colorScheme.primary.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(
-                        isExpanded
-                            ? Icons.keyboard_arrow_up_rounded
-                            : Icons.keyboard_arrow_down_rounded,
-                        size: 20,
-                        color: colorScheme.primary,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Snapshot Total',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    if (snapshot.dailyLogPageNo.isNotEmpty) ...[
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
+                        width: 32,
+                        height: 32,
                         decoration: BoxDecoration(
-                          color: colorScheme.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
+                          color: colorScheme.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10),
                         ),
+                        child: Icon(
+                          isExpanded
+                              ? Icons.keyboard_arrow_up_rounded
+                              : Icons.keyboard_arrow_down_rounded,
+                          size: 20,
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
                         child: Text(
-                          'DL Pg ${snapshot.dailyLogPageNo}',
-                          style: theme.textTheme.labelSmall?.copyWith(
+                          'Snapshot Total',
+                          style: theme.textTheme.titleSmall?.copyWith(
                             fontWeight: FontWeight.w600,
-                            color: colorScheme.primary,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 6),
-                    ],
-                    if (context.watch<LinkedSessionProvider>().canEdit) ...[
-                      IconButton(
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                          minWidth: 32,
-                          minHeight: 32,
-                        ),
-                        tooltip: snapshot.dailyLogPageNo.isEmpty
-                            ? 'Add DL Page No'
-                            : 'Edit DL Page No',
-                        onPressed: _isLoading || _isSavingSnapshot
-                            ? null
-                            : () => _editSnapshotPageNo(snapshot),
-                        icon: Icon(
-                          snapshot.dailyLogPageNo.isEmpty
-                              ? Icons.post_add_rounded
-                              : Icons.edit_note_rounded,
-                          size: 18,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(width: 2),
-                      IconButton(
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                          minWidth: 32,
-                          minHeight: 32,
-                        ),
-                        tooltip: 'Delete snapshot',
-                        onPressed: _isLoading || _isSavingSnapshot
-                            ? null
-                            : () => _deleteSnapshot(snapshot),
-                        icon: Icon(
-                          Icons.delete_outline_rounded,
-                          size: 18,
-                          color: colorScheme.onSurfaceVariant.withValues(
-                            alpha: 0.5,
+                      if (snapshot.dailyLogPageNo.isNotEmpty) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            'DL Pg ${snapshot.dailyLogPageNo}',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: colorScheme.primary,
+                            ),
                           ),
                         ),
-                      ),
+                        const SizedBox(width: 6),
+                      ],
+                      if (context.watch<LinkedSessionProvider>().canEdit) ...[
+                        IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 32,
+                            minHeight: 32,
+                          ),
+                          tooltip: snapshot.dailyLogPageNo.isEmpty
+                              ? 'Add DL Page No'
+                              : 'Edit DL Page No',
+                          onPressed: _isLoading || _isSavingSnapshot
+                              ? null
+                              : () => _editSnapshotPageNo(snapshot),
+                          icon: Icon(
+                            snapshot.dailyLogPageNo.isEmpty
+                                ? Icons.post_add_rounded
+                                : Icons.edit_note_rounded,
+                            size: 18,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 32,
+                            minHeight: 32,
+                          ),
+                          tooltip: 'Delete snapshot',
+                          onPressed: _isLoading || _isSavingSnapshot
+                              ? null
+                              : () => _deleteSnapshot(snapshot),
+                          icon: Icon(
+                            Icons.delete_outline_rounded,
+                            size: 18,
+                            color: colorScheme.onSurfaceVariant.withValues(
+                              alpha: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -2980,26 +3086,26 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
               ),
             ),
             const SizedBox(height: 4),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  value,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: color,
-                    fontWeight: FontWeight.w800,
-                  ),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value,
-              style: theme.textTheme.labelLarge?.copyWith(
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            value,
+            style: theme.textTheme.labelLarge?.copyWith(
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -3585,6 +3691,35 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     final bagsPart = cleanParts.join(" | ");
     return bagsPart.isEmpty ? desc : "$desc ($bagsPart)";
   }
+}
+
+enum _TimelineNodeType { entry, snapshotCard, balanceCard }
+
+class _TimelineNode {
+  const _TimelineNode(this.type, {this.entryIndex, this.snapshotIndex, this.isOpeningBalance = false});
+
+  const factory _TimelineNode.entry(int entryIndex) =
+      _TimelineNode._entry;
+
+  const factory _TimelineNode.snapshotCard(int snapshotIndex) =
+      _TimelineNode._snapshotCard;
+
+  const factory _TimelineNode.balanceCard(int snapshotIndex, {bool isOpeningBalance}) =
+      _TimelineNode._balanceCard;
+
+  const _TimelineNode._entry(int entryIndex)
+      : this(_TimelineNodeType.entry, entryIndex: entryIndex);
+
+  const _TimelineNode._snapshotCard(int snapshotIndex)
+      : this(_TimelineNodeType.snapshotCard, snapshotIndex: snapshotIndex);
+
+  const _TimelineNode._balanceCard(int snapshotIndex, {bool isOpeningBalance = false})
+      : this(_TimelineNodeType.balanceCard, snapshotIndex: snapshotIndex, isOpeningBalance: isOpeningBalance);
+
+  final _TimelineNodeType type;
+  final int? entryIndex;
+  final int? snapshotIndex;
+  final bool isOpeningBalance;
 }
 
 class _SnapshotEntry {

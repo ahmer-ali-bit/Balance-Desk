@@ -656,13 +656,16 @@ class _SummaryScreenState extends State<SummaryScreen> {
     BuildContext context,
     List<_CustomerSummary> customers,
   ) {
-    return Column(
-      children: <Widget>[
-        for (var index = 0; index < customers.length; index++) ...<Widget>[
-          if (index != 0) const SizedBox(height: 10),
-          _buildPremiumMobileSummaryCard(context, customers[index]),
-        ],
-      ],
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: customers.length,
+      itemBuilder: (context, index) {
+        return Padding(
+          padding: EdgeInsets.only(top: index == 0 ? 0 : 10),
+          child: _buildPremiumMobileSummaryCard(context, customers[index]),
+        );
+      },
     );
   }
 

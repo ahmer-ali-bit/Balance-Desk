@@ -1,4 +1,4 @@
-import '../database/app_database.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'dart:convert';
 import 'dart:math';
@@ -6,22 +6,21 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 
 class AppPinService {
-  AppPinService({AppDatabase? database})
-    : _database = database ?? AppDatabase.instance;
-
-  final AppDatabase _database;
-
-  static const String _pinKey = 'appPin';
   static const String _pinHashKey = 'appPinHash';
   static const String _pinSaltKey = 'appPinSalt';
+  static const String _pinKey = 'appPin';
   static const String _setupDismissedKey = 'appPinSetupDismissed';
 
+  Future<SharedPreferences> get _prefs =>
+      SharedPreferences.getInstance();
+
   Future<bool> hasPin() async {
-    final hash = await _database.getAppSetting(_pinHashKey);
+    final prefs = await _prefs;
+    final hash = prefs.getString(_pinHashKey);
     if (hash != null && hash.trim().isNotEmpty) {
       return true;
     }
-    final legacyPin = await _database.getAppSetting(_pinKey);
+    final legacyPin = prefs.getString(_pinKey);
     return (legacyPin?.trim().isNotEmpty ?? false);
   }
 
@@ -29,38 +28,40 @@ class AppPinService {
     if (await hasPin()) {
       return false;
     }
-
     return !await isSetupPromptDismissed();
   }
 
   Future<bool> isSetupPromptDismissed() async {
-    final value = await _database.getAppSetting(_setupDismissedKey);
-    return value == 'true';
+    final prefs = await _prefs;
+    return prefs.getString(_setupDismissedKey) == 'true';
   }
 
   Future<void> dismissSetupPrompt() async {
-    await _database.setAppSetting(key: _setupDismissedKey, value: 'true');
+    final prefs = await _prefs;
+    await prefs.setString(_setupDismissedKey, 'true');
   }
 
   Future<void> savePin(String pin) async {
     final normalizedPin = pin.trim();
     final salt = _generateSalt();
     final hash = _hashPin(normalizedPin, salt);
-    await _database.setAppSetting(key: _pinHashKey, value: hash);
-    await _database.setAppSetting(key: _pinSaltKey, value: salt);
-    await _database.setAppSetting(key: _pinKey, value: '');
-    await _database.setAppSetting(key: _setupDismissedKey, value: 'true');
+    final prefs = await _prefs;
+    await prefs.setString(_pinHashKey, hash);
+    await prefs.setString(_pinSaltKey, salt);
+    await prefs.setString(_pinKey, '');
+    await prefs.setString(_setupDismissedKey, 'true');
   }
 
   Future<bool> verifyPin(String pin) async {
     final normalizedPin = pin.trim();
-    final hash = await _database.getAppSetting(_pinHashKey);
-    final salt = await _database.getAppSetting(_pinSaltKey);
+    final prefs = await _prefs;
+    final hash = prefs.getString(_pinHashKey);
+    final salt = prefs.getString(_pinSaltKey);
     if ((hash ?? '').isNotEmpty && (salt ?? '').isNotEmpty) {
       return _hashPin(normalizedPin, salt!) == hash;
     }
 
-    final legacyPin = await _database.getAppSetting(_pinKey);
+    final legacyPin = prefs.getString(_pinKey);
     final matches =
         (legacyPin?.trim().isNotEmpty ?? false) && legacyPin == normalizedPin;
     if (matches) {
@@ -77,7 +78,6 @@ class AppPinService {
     if (!matches) {
       return false;
     }
-
     await savePin(newPin);
     return true;
   }
@@ -87,11 +87,11 @@ class AppPinService {
     if (!matches) {
       return false;
     }
-
-    await _database.setAppSetting(key: _pinKey, value: '');
-    await _database.setAppSetting(key: _pinHashKey, value: '');
-    await _database.setAppSetting(key: _pinSaltKey, value: '');
-    await _database.setAppSetting(key: _setupDismissedKey, value: 'true');
+    final prefs = await _prefs;
+    await prefs.setString(_pinKey, '');
+    await prefs.setString(_pinHashKey, '');
+    await prefs.setString(_pinSaltKey, '');
+    await prefs.setString(_setupDismissedKey, 'true');
     return true;
   }
 

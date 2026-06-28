@@ -428,6 +428,37 @@ class _SplashScreenState extends State<SplashScreen>
                           fontWeight: FontWeight.w800,
                         ),
                       ),
+                      const Spacer(),
+                      Text(
+                        'DEVELOPED BY AHMER ABID',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          letterSpacing: 2.5,
+                          fontWeight: FontWeight.w900,
+                          color: colorScheme.primary,
+                          fontSize: 11,
+                          shadows: [
+                            Shadow(
+                              color: colorScheme.primary.withValues(alpha: 0.35),
+                              offset: const Offset(0, 1),
+                              blurRadius: 4,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'DESIGNED FOR PRECISION',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          letterSpacing: 3.0,
+                          fontWeight: FontWeight.w600,
+                          color: colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.4,
+                          ),
+                          fontSize: 8,
+                        ),
+                      ),
                     ],
                   ),
                 ),
