@@ -30,12 +30,6 @@ class BiometricAuthService {
     }
 
     try {
-      final canCheck = await _localAuth.canCheckBiometrics;
-      final isDeviceSupported = await _localAuth.isDeviceSupported();
-      if (!canCheck || !isDeviceSupported) {
-        return false;
-      }
-
       final availableBiometrics = await _localAuth.getAvailableBiometrics();
       return availableBiometrics.isNotEmpty;
     } catch (error) {
