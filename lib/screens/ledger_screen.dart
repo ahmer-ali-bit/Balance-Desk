@@ -2322,7 +2322,9 @@ class _LedgerViewState extends State<_LedgerView> {
               children: <Widget>[
                 LayoutBuilder(
                   builder: (BuildContext context, BoxConstraints constraints) {
-                    final canEdit = context.read<LinkedSessionProvider>().canEdit;
+                    final canEdit = context
+                        .read<LinkedSessionProvider>()
+                        .canEdit;
                     final editButton = canEdit
                         ? IconButton.filledTonal(
                             tooltip: 'Edit customer details',
@@ -2423,7 +2425,7 @@ class _LedgerViewState extends State<_LedgerView> {
                           children: [
                             Expanded(child: titleBlock),
                             if (editButton != null) const SizedBox(width: 16),
-                            if (editButton != null) editButton,
+                            ?editButton,
                           ],
                         ),
                         const SizedBox(height: 16),
@@ -2734,7 +2736,7 @@ class _LedgerViewState extends State<_LedgerView> {
               ),
             ),
             if (editButton != null) const SizedBox(width: 16),
-            if (editButton != null) editButton,
+            ?editButton,
           ],
         ),
         const SizedBox(height: 20),
@@ -3139,7 +3141,10 @@ class _LedgerViewState extends State<_LedgerView> {
                                         ).colorScheme.onSurfaceVariant,
                                 ),
                                 value: provider.isStockLedger,
-                                onChanged: context.read<LinkedSessionProvider>().canEdit
+                                onChanged:
+                                    context
+                                        .read<LinkedSessionProvider>()
+                                        .canEdit
                                     ? (bool value) {
                                         provider.toggleStockLedger();
                                       }
@@ -3153,7 +3158,7 @@ class _LedgerViewState extends State<_LedgerView> {
                                                 .colorScheme
                                                 .onSurfaceVariant
                                                 .withValues(alpha: 0.4),
-                                      ),
+                                    ),
                                 contentPadding: EdgeInsets.zero,
                               ),
                               if (provider.isStockLedger) ...[
@@ -3184,9 +3189,12 @@ class _LedgerViewState extends State<_LedgerView> {
                                           ).colorScheme.onSurfaceVariant,
                                   ),
                                   value: provider.useWeight,
-                                  onChanged: context.read<LinkedSessionProvider>().canEdit
+                                  onChanged:
+                                      context
+                                          .read<LinkedSessionProvider>()
+                                          .canEdit
                                       ? (bool value) =>
-                                          provider.toggleStockWeight()
+                                            provider.toggleStockWeight()
                                       : null,
                                   trackColor:
                                       WidgetStateProperty.resolveWith<Color?>(
@@ -3199,7 +3207,7 @@ class _LedgerViewState extends State<_LedgerView> {
                                                   .colorScheme
                                                   .onSurfaceVariant
                                                   .withValues(alpha: 0.4),
-                                        ),
+                                      ),
                                   contentPadding: EdgeInsets.zero,
                                 ),
                               ],
@@ -3619,15 +3627,17 @@ class _LedgerViewState extends State<_LedgerView> {
         }
       }
 
-      balances.add(_EntryBalance(
-        isOpeningBalanceEntry: isOpeningBalanceEntry,
-        balanceLabel: balanceLabel,
-        balance: currentBalance,
-        remainingBagsLabel: remainingBagsLabel,
-      ));
+      balances.add(
+        _EntryBalance(
+          isOpeningBalanceEntry: isOpeningBalanceEntry,
+          balanceLabel: balanceLabel,
+          balance: currentBalance,
+          remainingBagsLabel: remainingBagsLabel,
+        ),
+      );
     }
 
-      final reversedBalances = balances.reversed.toList();
+    final reversedBalances = balances.reversed.toList();
     final chronEntries = entries.reversed.toList();
 
     return ListView.builder(
