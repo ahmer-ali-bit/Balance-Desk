@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -44,6 +45,7 @@ class WorkspaceSyncService {
       }
       _initialized = true;
     } catch (e) {
+      _initFuture = null;
       debugPrint('Firebase Lazy Init Error (Sync): $e');
     }
   }
@@ -68,7 +70,10 @@ class WorkspaceSyncService {
         );
         if (!success) throw Exception('REST snapshot upload failed');
       } else {
-        await _db.collection(_snapshotsCol).doc(deviceId).set(payload);
+        await _db.collection(_snapshotsCol).doc(deviceId).set(payload).timeout(
+          const Duration(seconds: 30),
+          onTimeout: () => throw TimeoutException('Firestore write timed out'),
+        );
       }
       debugPrint('[WorkspaceSync] Snapshot uploaded for $deviceId');
       return now;

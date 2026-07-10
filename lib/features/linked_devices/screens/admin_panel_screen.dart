@@ -81,7 +81,11 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             'admin_${deviceId}_${DateTime.now().millisecondsSinceEpoch}';
         await prefs.setString('linked_session_id', adminSessionId);
         await prefs.setBool('linked_i_am_admin', true);
-        sp.saveSession(sessionId: adminSessionId, iAmAdmin: true);
+        sp.saveSession(
+          sessionId: adminSessionId,
+          iAmAdmin: true,
+          adminDeviceId: deviceId,
+        );
       }
 
       final token = result['inviteToken'] as String?;
@@ -126,9 +130,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
     if (confirmed == true && _myDeviceId != null) {
       try {
-        await LinkedDevicesService.instance.removeLinkedDevice(
-          _myDeviceId!,
-          session.linkedDeviceId,
+        await LinkedDevicesService.instance.disconnectSession(
           session.sessionId,
         );
       } catch (e) {

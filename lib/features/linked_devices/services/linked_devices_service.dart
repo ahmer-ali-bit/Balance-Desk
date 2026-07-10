@@ -42,6 +42,14 @@ class LinkedDevicesService {
           defaultTargetPlatform == TargetPlatform.linux ||
           defaultTargetPlatform == TargetPlatform.macOS);
 
+  static bool get _isWindowsOrLinux =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.linux);
+
+  static bool get _canUseSdk =>
+      !_isWindowsOrLinux;
+
   static Future<void> _doInit() async {
     try {
       if (Firebase.apps.isEmpty) {
@@ -51,6 +59,7 @@ class LinkedDevicesService {
       }
       _initialized = true;
     } catch (e) {
+      _initFuture = null;
       debugPrint('Firebase Lazy Init Error: $e');
     }
   }
@@ -66,21 +75,22 @@ class LinkedDevicesService {
     String deviceId,
     String deviceName,
   ) async {
-    await _expireOpenInvitesForAdmin(deviceId);
-
     final token = _generateToken();
     final expiry = DateTime.now().add(const Duration(minutes: 10));
-    final data = {
-      'adminDeviceId': deviceId,
-      'adminDeviceName': deviceName,
-      'token': token,
-      'expiresAt': expiry.toIso8601String(),
-      'createdAt': DateTime.now().toIso8601String(),
-      'used': false,
-      'revoked': false,
-    };
 
     try {
+      await _expireOpenInvitesForAdmin(deviceId);
+
+      final data = {
+        'adminDeviceId': deviceId,
+        'adminDeviceName': deviceName,
+        'token': token,
+        'expiresAt': expiry.toIso8601String(),
+        'createdAt': DateTime.now().toIso8601String(),
+        'used': false,
+        'revoked': false,
+      };
+
       if (_isDesktop) {
         final success = await FirestoreRESTClient.setDocument(
           _invitesCol,
@@ -116,7 +126,10 @@ class LinkedDevicesService {
           inviteToken,
         );
       } else {
-        final snap = await _db.collection(_invitesCol).doc(inviteToken).get();
+        final snap = await _db.collection(_invitesCol).doc(inviteToken).get().timeout(
+          const Duration(seconds: 15),
+          onTimeout: () => throw TimeoutException('Firestore read timed out'),
+        );
         inviteData = snap.data();
       }
 
@@ -168,12 +181,18 @@ class LinkedDevicesService {
           'usedByDeviceId': joiningDeviceId,
         });
       } else {
-        await _db.collection(_sessionsCol).doc(sessionId).set(sessionData);
+        await _db.collection(_sessionsCol).doc(sessionId).set(sessionData).timeout(
+          const Duration(seconds: 15),
+          onTimeout: () => throw TimeoutException('Firestore write timed out'),
+        );
         await _db.collection(_invitesCol).doc(inviteToken).update({
           'used': true,
           'usedAt': DateTime.now().toIso8601String(),
           'usedByDeviceId': joiningDeviceId,
-        });
+        }).timeout(
+          const Duration(seconds: 15),
+          onTimeout: () => throw TimeoutException('Firestore write timed out'),
+        );
       }
 
       return {
@@ -192,42 +211,42 @@ class LinkedDevicesService {
   // ADMIN: Stream of all active sessions for this admin
   // ────────────────────────────────────────────────────────
   Stream<List<LinkedSession>> activeSessionsStream(String adminDeviceId) {
-    if (_isDesktop) {
-      final controller = StreamController<List<LinkedSession>>();
-      Timer? timer;
-
-      void fetchData() async {
-        final results = await FirestoreRESTClient.getCollection(
-          _sessionsCol,
-          whereField: 'adminDeviceId',
-          isEqualTo: adminDeviceId,
-        );
-        if (!controller.isClosed) {
-          controller.add(
-            results
-                .where((m) => m['status'] == 'active')
-                .map((m) => LinkedSession.fromMap(m))
-                .toList(),
+    if (_canUseSdk) {
+      return _db
+          .collection(_sessionsCol)
+          .where('adminDeviceId', isEqualTo: adminDeviceId)
+          .where('status', isEqualTo: 'active')
+          .snapshots()
+          .map(
+            (snap) =>
+                snap.docs.map((d) => LinkedSession.fromMap(d.data())).toList(),
           );
-        }
-      }
-
-      timer = Timer.periodic(const Duration(seconds: 4), (_) => fetchData());
-      fetchData();
-
-      controller.onCancel = () => timer?.cancel();
-      return controller.stream;
     }
 
-    return _db
-        .collection(_sessionsCol)
-        .where('adminDeviceId', isEqualTo: adminDeviceId)
-        .where('status', isEqualTo: 'active')
-        .snapshots()
-        .map(
-          (snap) =>
-              snap.docs.map((d) => LinkedSession.fromMap(d.data())).toList(),
+    final controller = StreamController<List<LinkedSession>>();
+    Timer? timer;
+
+    void fetchData() async {
+      final results = await FirestoreRESTClient.getCollection(
+        _sessionsCol,
+        whereField: 'adminDeviceId',
+        isEqualTo: adminDeviceId,
+      );
+      if (!controller.isClosed) {
+        controller.add(
+          results
+              .where((m) => m['status'] == 'active')
+              .map((m) => LinkedSession.fromMap(m))
+              .toList(),
         );
+      }
+    }
+
+    timer = Timer.periodic(const Duration(seconds: 2), (_) => fetchData());
+    fetchData();
+
+    controller.onCancel = () => timer?.cancel();
+    return controller.stream;
   }
 
   /// One-time fetch of active linked device IDs for an admin (bi-directional sync).
@@ -290,36 +309,36 @@ class LinkedDevicesService {
   // ────────────────────────────────────────────────────────
   // GUEST: Real-time stream for a specific session
   // ────────────────────────────────────────────────────────
-  /// Returns session data as a stream. On mobile returns [DocumentSnapshot],
-  /// on desktop returns [Map] with `exists` and `data` keys.
+  /// Returns session data as a stream. On mobile/macOS returns [DocumentSnapshot],
+  /// on Windows/Linux returns [Map] with `exists` and `data` keys.
   Stream<dynamic> sessionStream(String sessionId) {
-    if (_isDesktop) {
-      final controller = StreamController<dynamic>();
-      Timer? timer;
-
-      void fetchData() async {
-        final data = await FirestoreRESTClient.getDocument(
-          _sessionsCol,
-          sessionId,
-        );
-        if (!controller.isClosed) {
-          controller.add({
-            'exists': data != null,
-            'data': data,
-            'status': data?['status'] ?? 'disconnected',
-            'permission': data?['permission'] ?? 'read',
-          });
-        }
-      }
-
-      timer = Timer.periodic(const Duration(seconds: 4), (_) => fetchData());
-      fetchData();
-
-      controller.onCancel = () => timer?.cancel();
-      return controller.stream;
+    if (_canUseSdk) {
+      return _db.collection(_sessionsCol).doc(sessionId).snapshots();
     }
 
-    return _db.collection(_sessionsCol).doc(sessionId).snapshots();
+    final controller = StreamController<dynamic>();
+    Timer? timer;
+
+    void fetchData() async {
+      final data = await FirestoreRESTClient.getDocument(
+        _sessionsCol,
+        sessionId,
+      );
+      if (!controller.isClosed) {
+        controller.add({
+          'exists': data != null,
+          'data': data,
+          'status': data?['status'] ?? 'disconnected',
+          'permission': data?['permission'] ?? 'read',
+        });
+      }
+    }
+
+    timer = Timer.periodic(const Duration(seconds: 2), (_) => fetchData());
+    fetchData();
+
+    controller.onCancel = () => timer?.cancel();
+    return controller.stream;
   }
 
   Future<LinkedSession?> getSession(String sessionId) async {
@@ -367,14 +386,7 @@ class LinkedDevicesService {
     }
   }
 
-  /// ✅ Alias for backward compatibility with Admin Panel
-  Future<void> removeLinkedDevice(
-    String adminId,
-    String linkedId,
-    String sessionId,
-  ) async {
-    await disconnectSession(sessionId);
-  }
+
 
   Future<String> generateEditableCode(
     String sessionId,
@@ -521,7 +533,11 @@ class LinkedDevicesService {
           .collection(_invitesCol)
           .where('adminDeviceId', isEqualTo: adminDeviceId)
           .where('used', isEqualTo: false)
-          .get();
+          .get()
+          .timeout(
+            const Duration(seconds: 15),
+            onTimeout: () => throw TimeoutException('Firestore read timed out'),
+          );
       for (final doc in snap.docs) {
         await doc.reference.update({
           'used': true,

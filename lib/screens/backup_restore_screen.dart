@@ -417,27 +417,18 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                             child: FilledButton.icon(
                               onPressed: _createBackup,
                               icon: const Icon(Icons.backup_rounded),
-                              label: const Text('Quick'),
+                              label: const Text('Create Backup'),
                             ),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: _saveBackupToFolder,
-                              icon: const Icon(Icons.folder_open_rounded),
-                              label: const Text('Save'),
+                              onPressed: _pickAndRestore,
+                              icon: const Icon(Icons.restore_page_rounded),
+                              label: const Text('Pick & Restore'),
                             ),
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: _pickAndRestore,
-                          icon: const Icon(Icons.restore_page_rounded),
-                          label: const Text('Pick & Restore'),
-                        ),
                       ),
                     ],
                   ),

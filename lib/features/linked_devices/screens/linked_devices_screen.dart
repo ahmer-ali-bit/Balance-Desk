@@ -758,6 +758,7 @@ class _CreateWorkspaceScreenState extends State<_CreateWorkspaceScreen> {
   bool _isLoading = false;
   bool _isIniting = true;
   bool _isDisposed = false;
+  Timer? _loadingTimer;
 
   @override
   void initState() {
@@ -805,6 +806,7 @@ class _CreateWorkspaceScreenState extends State<_CreateWorkspaceScreen> {
 
   @override
   void dispose() {
+    _loadingTimer?.cancel();
     _isDisposed = true;
     super.dispose();
   }
@@ -1480,6 +1482,7 @@ class _CreateWorkspaceScreenState extends State<_CreateWorkspaceScreen> {
         ],
       ),
     );
+    controller.dispose();
 
     if (newName != null && newName.isNotEmpty && _myDeviceId != null) {
       try {
@@ -1523,9 +1526,7 @@ class _CreateWorkspaceScreenState extends State<_CreateWorkspaceScreen> {
       ),
     );
     if (confirmed == true && _myDeviceId != null) {
-      await LinkedDevicesService.instance.removeLinkedDevice(
-        _myDeviceId!,
-        session.linkedDeviceId,
+      await LinkedDevicesService.instance.disconnectSession(
         session.sessionId,
       );
     }
@@ -1557,6 +1558,18 @@ class _CreateWorkspaceScreenState extends State<_CreateWorkspaceScreen> {
     if (!mounted) return;
     setState(() => _isLoading = true);
 
+    _loadingTimer?.cancel();
+    _loadingTimer = Timer(const Duration(seconds: 12), () {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Request timed out. Firebase quota may be exceeded.'),
+          ),
+        );
+      }
+    });
+
     try {
       final deviceId = await LinkedDevicesUtils.getPersistentDeviceId();
       final deviceName = await LinkedDevicesUtils.getPersistentDeviceName();
@@ -1564,6 +1577,8 @@ class _CreateWorkspaceScreenState extends State<_CreateWorkspaceScreen> {
         deviceId,
         deviceName,
       );
+
+      _loadingTimer?.cancel();
 
       if (_isDisposed) return;
 
@@ -1591,7 +1606,11 @@ class _CreateWorkspaceScreenState extends State<_CreateWorkspaceScreen> {
             'admin_${deviceId}_${DateTime.now().millisecondsSinceEpoch}';
         await prefs.setString('linked_session_id', adminSessionId);
         await prefs.setBool('linked_i_am_admin', true);
-        await sp.saveSession(sessionId: adminSessionId, iAmAdmin: true);
+        await sp.saveSession(
+          sessionId: adminSessionId,
+          iAmAdmin: true,
+          adminDeviceId: deviceId,
+        );
       }
 
       final token = result['inviteToken'] as String?;
@@ -1615,6 +1634,7 @@ class _CreateWorkspaceScreenState extends State<_CreateWorkspaceScreen> {
       }
       await prefs2.setString(_adminDeviceIdKey, deviceId);
     } catch (e) {
+      _loadingTimer?.cancel();
       debugPrint('_CreateWorkspaceScreen error: $e');
       if (mounted) {
         setState(() => _isLoading = false);

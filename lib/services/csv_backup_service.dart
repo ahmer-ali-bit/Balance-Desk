@@ -42,13 +42,31 @@ class CsvBackupService {
   final CompanyProfileService _companyProfileService;
 
   Future<String?> createBackupFile() async {
-    final savePath = await _pickBackupSavePath();
-    if (savePath == null || savePath.isEmpty) {
-      return null;
+    final bytes = await _buildBackupBytes();
+    final fileName = _buildBackupFileName();
+
+    try {
+      final path = await FilePicker.saveFile(
+        dialogTitle: 'Save Backup File',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: const <String>[_backupExtension],
+        bytes: bytes,
+      );
+      if (path != null && path.isNotEmpty) {
+        return path;
+      }
+    } catch (e) {
+      debugPrint('FilePicker.saveFile failed: $e');
     }
 
-    await backupToFile(savePath);
-    return savePath;
+    final fallbackPath = await _resolveAndroidFallbackPath(fileName);
+    final file = File(fallbackPath);
+    if (!await file.parent.exists()) {
+      await file.parent.create(recursive: true);
+    }
+    await file.writeAsBytes(bytes, flush: true);
+    return fallbackPath;
   }
 
   Future<void> backupToFile(String filePath) async {
@@ -62,6 +80,15 @@ class CsvBackupService {
       await file.parent.create(recursive: true);
     }
 
+    final bytes = await _buildBackupBytes();
+    try {
+      await file.writeAsBytes(bytes, flush: true);
+    } on FileSystemException catch (error) {
+      throw CsvBackupException('Unable to save backup: ${error.message}');
+    }
+  }
+
+  Future<Uint8List> _buildBackupBytes() async {
     final customers = await _database.getAllCustomersWithYear();
     final entries = await _database.getAllEntries();
     final snapshots = await _database.getAllSummarySnapshots();
@@ -129,11 +156,7 @@ class CsvBackupService {
     };
 
     final encoder = const JsonEncoder.withIndent('  ');
-    try {
-      await file.writeAsString(encoder.convert(payload), flush: true);
-    } on FileSystemException catch (error) {
-      throw CsvBackupException('Unable to save backup: ${error.message}');
-    }
+    return Uint8List.fromList(utf8.encode(encoder.convert(payload)));
   }
 
   Future<String?> restoreBackupFile() async {
@@ -397,38 +420,6 @@ class CsvBackupService {
         .map<int?>((Object? item) => int.tryParse('${item ?? ''}'))
         .whereType<int>()
         .toList(growable: false);
-  }
-
-  Future<String?> _pickBackupSavePath() async {
-    final fileName = _buildBackupFileName();
-    if (Platform.isMacOS) {
-      try {
-        final selectedDirectory = await FilePicker.getDirectoryPath(
-          dialogTitle: 'Select Folder to Save Backup',
-        );
-        if (selectedDirectory == null || selectedDirectory.isEmpty) {
-          return null;
-        }
-        return path.join(selectedDirectory, fileName);
-      } catch (e) {
-        debugPrint('Failed to get directory path on macOS: $e');
-      }
-    }
-
-    try {
-      final path = await FilePicker.saveFile(
-        dialogTitle: 'Save Backup File',
-        fileName: fileName,
-        type: FileType.custom,
-        allowedExtensions: const <String>[_backupExtension],
-      );
-      if (path == null || path.isEmpty) {
-        return null;
-      }
-      return _normalizeBackupPath(path);
-    } catch (_) {
-      return _resolveAndroidFallbackPath(fileName);
-    }
   }
 
   Future<String?> _pickBackupFilePath() async {

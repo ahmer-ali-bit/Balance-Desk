@@ -86,20 +86,20 @@ class FirestoreRESTClient {
     String? isEqualTo,
   }) async {
     try {
+      if (whereField != null && isEqualTo != null) {
+        return runQuery(collection,
+            whereField: whereField, isEqualTo: isEqualTo);
+      }
+
       final url = Uri.parse('$_baseUrl/$collection?key=$_apiKey');
       final response = await http.get(url);
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final documents = (data['documents'] as List?) ?? [];
-        final results = documents
+        return documents
             .map((d) => _simplifyDocument(d))
             .whereType<Map<String, dynamic>>()
             .toList();
-
-        if (whereField != null && isEqualTo != null) {
-          return results.where((doc) => doc[whereField] == isEqualTo).toList();
-        }
-        return results;
       }
       debugPrint(
         'REST getCollection failed [${response.statusCode}]: ${response.body}',
@@ -107,6 +107,44 @@ class FirestoreRESTClient {
       return [];
     } catch (e) {
       debugPrint('REST getCollection error: $e');
+      return [];
+    }
+  }
+
+  /// ✅ Server-side query using Firestore REST runQuery
+  static Future<List<Map<String, dynamic>>> runQuery(
+    String collection, {
+    required String whereField,
+    required String isEqualTo,
+  }) async {
+    try {
+      final url = Uri.parse('$_baseUrl:runQuery?key=$_apiKey');
+      final query = {
+        'structuredQuery': {
+          'from': [{'collectionId': collection}],
+          'where': {
+            'fieldFilter': {
+              'field': {'fieldPath': whereField},
+              'op': 'EQUAL',
+              'value': _toFieldValue(isEqualTo),
+            }
+          },
+        }
+      };
+      final response = await http.post(url, body: json.encode(query));
+      if (response.statusCode == 200) {
+        final results = json.decode(response.body) as List;
+        return results
+            .map((r) => _simplifyDocument(r['document']))
+            .whereType<Map<String, dynamic>>()
+            .toList();
+      }
+      debugPrint(
+        'REST runQuery failed [${response.statusCode}]: ${response.body}',
+      );
+      return [];
+    } catch (e) {
+      debugPrint('REST runQuery error: $e');
       return [];
     }
   }
@@ -158,5 +196,15 @@ class FirestoreRESTClient {
       }
       return MapEntry(key, {'stringValue': value.toString()});
     });
+  }
+
+  static Map<String, dynamic> _toFieldValue(String value) {
+    if (value == 'true') return {'booleanValue': true};
+    if (value == 'false') return {'booleanValue': false};
+    final intVal = int.tryParse(value);
+    if (intVal != null) return {'integerValue': value};
+    final doubleVal = double.tryParse(value);
+    if (doubleVal != null) return {'doubleValue': double.parse(value)};
+    return {'stringValue': value};
   }
 }

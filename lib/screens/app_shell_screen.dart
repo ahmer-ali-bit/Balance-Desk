@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../database/app_database.dart';
@@ -184,7 +185,32 @@ class _AppShellScreenState extends State<AppShellScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final destination = _destinations[_selectedIndex];
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldExit = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Exit App'),
+            content: const Text('Are you sure you want to quit?'),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Quit', style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          ),
+        );
+        if (shouldExit == true) {
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
       resizeToAvoidBottomInset: true,
       backgroundColor: colorScheme.surface,
       extendBody: true,
@@ -218,6 +244,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
         selectedIndex: _selectedIndex,
         destinations: _destinations,
         onSelected: _selectIndex,
+      ),
       ),
     );
   }

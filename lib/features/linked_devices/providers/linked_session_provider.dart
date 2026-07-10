@@ -496,6 +496,7 @@ class LinkedSessionProvider extends ChangeNotifier {
     _workspaceMode = nextMode;
     if (_iAmAdmin) {
       _startAdminAutoSync();
+      startSessionListener();
     } else {
       startSessionListener();
       if (_workspaceMode == WorkspaceMode.linked && _adminDeviceId != null) {
