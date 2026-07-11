@@ -393,13 +393,14 @@ class LinkedSessionProvider extends ChangeNotifier {
   Future<bool> _downloadLinkedSnapshot(String deviceId) async {
     _isSyncing = true;
     try {
-      final downloaded = _iAmAdmin
-          ? await WorkspaceSyncService.instance.downloadAndImportSnapshot(
-              deviceId,
-            )
-          : await WorkspaceSyncService.instance.mergeSnapshotFromDevice(
-              deviceId,
-            );
+      if (!_iAmAdmin) {
+        final fp = await WorkspaceSyncService.instance.localFingerprint();
+        if (fp != null && fp != _lastLinkedFingerprint) {
+          return false;
+        }
+      }
+      final downloaded = await WorkspaceSyncService.instance
+          .downloadAndImportSnapshot(deviceId);
       if (downloaded) {
         AppDatabase.instance.notifyDataChanged();
         _lastLinkedFingerprint = await WorkspaceSyncService.instance

@@ -283,22 +283,11 @@ class WorkspaceSyncService {
             sanitized['customerId'] = customerIdMap[oldCustomerId];
           }
 
-          final matchId = await _findEntryId(txn, sanitized);
-          if (matchId != null) {
-            final updateable = Map<String, dynamic>.from(sanitized)
-              ..remove('id')
-              ..remove('customerId');
-            if (updateable.isNotEmpty) {
-              final setClause = updateable.keys
-                  .map((k) => '$k = ?')
-                  .join(', ');
-              final setValues = updateable.values.toList();
-              await txn.rawUpdate(
-                'UPDATE entries SET $setClause WHERE id = ?',
-                [...setValues, matchId],
-              );
-            }
-            continue;
+          if (await _entryExists(txn, sanitized)) continue;
+
+          final entryId = _asInt(sanitized['id']);
+          if (entryId != null && await _rowIdExists(txn, 'entries', entryId)) {
+            sanitized.remove('id');
           }
 
           await txn.insert(
@@ -468,25 +457,46 @@ class WorkspaceSyncService {
     return _asInt(rows.first['id']);
   }
 
-  Future<int?> _findEntryId(
+  Future<bool> _entryExists(
     sqlite.Transaction txn,
     Map<String, dynamic> entry,
   ) async {
-    final customerId = _asInt(entry['customerId']);
-    final createdAt = entry['createdAt']?.toString() ?? '';
-    if (customerId == null || createdAt.isEmpty) return null;
-
     final rows = await txn.query(
       'entries',
       columns: ['id'],
-      where: 'customerId = ? AND createdAt = ?',
-      whereArgs: [customerId, createdAt],
+      where:
+          'customerId = ? AND entryDate = ? AND createdAt = ? AND description = ? AND debit = ? AND credit = ? AND buyBags = ? AND sellBags = ? AND pageNo = ? AND dailyLogPageNo = ?',
+      whereArgs: [
+        _asInt(entry['customerId']),
+        entry['entryDate']?.toString() ?? '',
+        entry['createdAt']?.toString() ?? '',
+        entry['description']?.toString() ?? '',
+        _asDouble(entry['debit']),
+        _asDouble(entry['credit']),
+        _asDouble(entry['buyBags']),
+        _asDouble(entry['sellBags']),
+        entry['pageNo']?.toString() ?? '',
+        entry['dailyLogPageNo']?.toString() ?? '',
+      ],
       limit: 1,
     );
-    if (rows.isEmpty) return null;
-    return _asInt(rows.first['id']);
+    return rows.isNotEmpty;
   }
 
+  Future<bool> _rowIdExists(
+    sqlite.Transaction txn,
+    String table,
+    int id,
+  ) async {
+    final rows = await txn.query(
+      table,
+      columns: ['id'],
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
+  }
 
   int? _asInt(Object? value) {
     if (value is int) return value;
