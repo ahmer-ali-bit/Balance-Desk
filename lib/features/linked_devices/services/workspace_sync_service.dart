@@ -253,6 +253,7 @@ class WorkspaceSyncService {
       final customers = _decodeList(data['customers']);
       final entries = _decodeList(data['entries']);
       final years = _decodeList(data['ledgerYears']);
+      final snapshots = _decodeList(data['summarySnapshots']);
       final db = await DatabaseHelper.instance.database;
 
       await db.transaction((txn) async {
@@ -293,6 +294,14 @@ class WorkspaceSyncService {
             'entries',
             sanitized,
             conflictAlgorithm: sqlite.ConflictAlgorithm.ignore,
+          );
+        }
+
+        for (final row in snapshots) {
+          await txn.insert(
+            'summary_snapshots',
+            _sanitize(row),
+            conflictAlgorithm: sqlite.ConflictAlgorithm.replace,
           );
         }
       });
