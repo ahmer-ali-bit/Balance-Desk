@@ -1006,6 +1006,41 @@ class _CreateWorkspaceScreenState extends State<_CreateWorkspaceScreen> {
                       ),
                     );
                   }
+                  if (snapshot.hasError) {
+                    return Container(
+                      padding: const EdgeInsets.all(40),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainer,
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.cloud_off_rounded,
+                            color: cs.error.withValues(alpha: 0.5),
+                            size: 48,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Connection error',
+                            style: TextStyle(
+                              color: cs.error,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${snapshot.error}',
+                            style: TextStyle(
+                              color: cs.onSurfaceVariant,
+                              fontSize: 12,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    );
+                  }
                   final sessions = snapshot.data ?? [];
                   if (sessions.isEmpty) {
                     return Container(
@@ -1202,6 +1237,29 @@ class _CreateWorkspaceScreenState extends State<_CreateWorkspaceScreen> {
                         child: SizedBox(
                           height: 120,
                           child: Center(child: CircularProgressIndicator()),
+                        ),
+                      );
+                    }
+                    if (snapshot.hasError) {
+                      return MobilePremiumPanel(
+                        child: SizedBox(
+                          height: 120,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.cloud_off_rounded,
+                                  color: cs.error, size: 28),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Connection error',
+                                style: TextStyle(
+                                  color: cs.error,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       );
                     }

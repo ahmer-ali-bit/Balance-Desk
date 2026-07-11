@@ -238,11 +238,13 @@ class LinkedDevicesService {
       _db.then((db) {
         db.collection(_sessionsCol)
             .where('adminDeviceId', isEqualTo: adminDeviceId)
-            .where('status', isEqualTo: 'active')
             .snapshots()
             .map(
-              (snap) =>
-                  snap.docs.map((d) => LinkedSession.fromMap(d.data())).toList(),
+              (snap) => snap.docs
+                  .map((d) => d.data())
+                  .where((m) => m['status'] == 'active')
+                  .map((m) => LinkedSession.fromMap(m))
+                  .toList(),
             )
             .listen(
               controller.add,
@@ -293,7 +295,6 @@ class LinkedDevicesService {
         final snap = await (await _db)
             .collection(_sessionsCol)
             .where('adminDeviceId', isEqualTo: adminDeviceId)
-            .where('status', isEqualTo: 'active')
             .get();
         results = snap.docs.map((d) => d.data()).toList();
       }
@@ -322,7 +323,6 @@ class LinkedDevicesService {
         final snap = await (await _db)
             .collection(_sessionsCol)
             .where('adminDeviceId', isEqualTo: adminDeviceId)
-            .where('status', isEqualTo: 'active')
             .get();
         results = snap.docs.map((d) => d.data()).toList();
       }
