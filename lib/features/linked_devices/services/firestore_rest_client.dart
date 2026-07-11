@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
@@ -7,6 +8,25 @@ class FirestoreRESTClient {
   static const String _apiKey = 'AIzaSyAai0vmWJtHS-otwGgVev3m7cegXBbUd7Q';
   static const String _baseUrl =
       'https://firestore.googleapis.com/v1/projects/$_projectId/databases/(default)/documents';
+
+  static const int _maxRetries = 3;
+
+  /// Retry helper for transient write failures (NOT quota — retrying on 429 only burns more writes)
+  static Future<T> _retryTransient<T>(Future<T> Function() fn) async {
+    for (int attempt = 0; attempt < _maxRetries; attempt++) {
+      try {
+        return await fn();
+      } on _QuotaException {
+        rethrow; // never retry on quota — daily limit won't reset mid-request
+      } catch (_) {
+        if (attempt + 1 >= _maxRetries) rethrow;
+        final delay = Duration(seconds: 1 << attempt); // 1s, 2s, 4s
+        debugPrint('Transient write failure, retrying in ${delay.inSeconds}s…');
+        await Future.delayed(delay);
+      }
+    }
+    throw Exception('Max retries exhausted');
+  }
 
   /// ✅ Get a single document
   static Future<Map<String, dynamic>?> getDocument(
@@ -20,9 +40,7 @@ class FirestoreRESTClient {
         final data = json.decode(response.body);
         return _simplifyDocument(data);
       }
-      debugPrint(
-        'REST getDocument failed [${response.statusCode}]: ${response.body}',
-      );
+      _logStatus(response.statusCode, response.body, 'getDocument');
       return null;
     } catch (e) {
       debugPrint('REST getDocument error: $e');
@@ -30,8 +48,16 @@ class FirestoreRESTClient {
     }
   }
 
-  /// ✅ Set (Create/Replace) a document
+  /// ✅ Set (Create/Replace) a document (retry on transient failure, NOT on quota)
   static Future<bool> setDocument(
+    String collection,
+    String docId,
+    Map<String, dynamic> data,
+  ) async {
+    return _retryTransient(() => _setDocumentOnce(collection, docId, data));
+  }
+
+  static Future<bool> _setDocumentOnce(
     String collection,
     String docId,
     Map<String, dynamic> data,
@@ -41,19 +67,28 @@ class FirestoreRESTClient {
       final body = json.encode({'fields': _toFirestoreFields(data)});
       final response = await http.patch(url, body: body);
       if (response.statusCode == 200) return true;
-
+      _throwIfQuota(response.statusCode);
       debugPrint(
         'REST setDocument failed [${response.statusCode}]: ${response.body}',
       );
       return false;
     } catch (e) {
+      if (e is _QuotaException) rethrow;
       debugPrint('REST setDocument error: $e');
       return false;
     }
   }
 
-  /// ✅ Update specific fields in a document
+  /// ✅ Update specific fields in a document (retry on transient failure, NOT on quota)
   static Future<bool> updateDocument(
+    String collection,
+    String docId,
+    Map<String, dynamic> data,
+  ) async {
+    return _retryTransient(() => _updateDocumentOnce(collection, docId, data));
+  }
+
+  static Future<bool> _updateDocumentOnce(
     String collection,
     String docId,
     Map<String, dynamic> data,
@@ -68,12 +103,13 @@ class FirestoreRESTClient {
       final body = json.encode({'fields': _toFirestoreFields(data)});
       final response = await http.patch(url, body: body);
       if (response.statusCode == 200) return true;
-
+      _throwIfQuota(response.statusCode);
       debugPrint(
         'REST updateDocument failed [${response.statusCode}]: ${response.body}',
       );
       return false;
     } catch (e) {
+      if (e is _QuotaException) rethrow;
       debugPrint('REST updateDocument error: $e');
       return false;
     }
@@ -135,7 +171,8 @@ class FirestoreRESTClient {
       if (response.statusCode == 200) {
         final results = json.decode(response.body) as List;
         return results
-            .map((r) => _simplifyDocument(r['document']))
+            .where((r) => r['document'] != null)
+            .map((r) => _simplifyDocument(r['document'] as Map<String, dynamic>))
             .whereType<Map<String, dynamic>>()
             .toList();
       }
@@ -207,4 +244,22 @@ class FirestoreRESTClient {
     if (doubleVal != null) return {'doubleValue': double.parse(value)};
     return {'stringValue': value};
   }
+
+  static void _throwIfQuota(int statusCode) {
+    if (statusCode == 429) throw const _QuotaException();
+  }
+
+  static void _logStatus(int statusCode, String body, String method) {
+    if (statusCode == 429) {
+      debugPrint('REST $method quota exceeded (429)');
+    } else {
+      debugPrint('REST $method failed [$statusCode]: $body');
+    }
+  }
+}
+
+class _QuotaException implements Exception {
+  const _QuotaException();
+  @override
+  String toString() => 'Firestore quota exceeded';
 }

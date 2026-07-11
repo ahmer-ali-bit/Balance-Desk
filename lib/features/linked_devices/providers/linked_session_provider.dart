@@ -191,7 +191,7 @@ class LinkedSessionProvider extends ChangeNotifier {
   void _startAdminAutoSync() {
     if (!_iAmAdmin || !_isLinked) return;
     _adminUploadTimer?.cancel();
-    _adminUploadTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+    _adminUploadTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
       if (_isDisposed || !_iAmAdmin || _isSyncing) return;
 
       final deviceId = await LinkedDevicesUtils.getPersistentDeviceId();
@@ -248,7 +248,7 @@ class LinkedSessionProvider extends ChangeNotifier {
   // ── Guest sync: pull admin changes + push own changes when editable ──
   void _startGuestSync() {
     _guestSyncTimer?.cancel();
-    _guestSyncTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+    _guestSyncTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
       if (_isDisposed || _iAmAdmin || _adminDeviceId == null) return;
 
       if (_workspaceMode == WorkspaceMode.local) {

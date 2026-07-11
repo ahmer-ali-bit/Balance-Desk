@@ -13,8 +13,8 @@ class LinkedDevicesService {
 
   bool get _isDesktop => _isRunningOnDesktop;
 
-  FirebaseFirestore get _db {
-    if (!_isDesktop) _ensureInitialized();
+  Future<FirebaseFirestore> get _db async {
+    if (_canUseSdk) await _ensureInitialized();
     return FirebaseFirestore.instance;
   }
 
@@ -34,6 +34,28 @@ class LinkedDevicesService {
   static Future<void> ensureFirebase() async {
     if (_isRunningOnDesktop) return;
     await _ensureInitialized();
+  }
+
+  static Future<T> _retrySdk<T>(Future<T> Function() fn) async {
+    for (int attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await fn();
+      } on FirebaseException catch (e) {
+        if (e.code == 'resource-exhausted') rethrow; // quota — don't retry
+        if (attempt < 2) {
+          await Future.delayed(Duration(seconds: 1 << attempt));
+          continue;
+        }
+        rethrow;
+      } on TimeoutException {
+        if (attempt < 2) {
+          await Future.delayed(Duration(seconds: 1 << attempt));
+          continue;
+        }
+        rethrow;
+      }
+    }
+    throw TimeoutException('Firestore write timed out after retries');
   }
 
   static bool get _isRunningOnDesktop =>
@@ -99,7 +121,7 @@ class LinkedDevicesService {
         );
         if (!success) throw Exception('REST set failed');
       } else {
-        await _db.collection(_invitesCol).doc(token).set(data);
+        await _retrySdk(() async => (await _db).collection(_invitesCol).doc(token).set(data));
       }
 
       return {'success': true, 'inviteToken': token, 'expiresAt': expiry};
@@ -126,7 +148,7 @@ class LinkedDevicesService {
           inviteToken,
         );
       } else {
-        final snap = await _db.collection(_invitesCol).doc(inviteToken).get().timeout(
+        final snap = await (await _db).collection(_invitesCol).doc(inviteToken).get().timeout(
           const Duration(seconds: 15),
           onTimeout: () => throw TimeoutException('Firestore read timed out'),
         );
@@ -181,18 +203,18 @@ class LinkedDevicesService {
           'usedByDeviceId': joiningDeviceId,
         });
       } else {
-        await _db.collection(_sessionsCol).doc(sessionId).set(sessionData).timeout(
+        await _retrySdk(() async => (await _db).collection(_sessionsCol).doc(sessionId).set(sessionData).timeout(
           const Duration(seconds: 15),
           onTimeout: () => throw TimeoutException('Firestore write timed out'),
-        );
-        await _db.collection(_invitesCol).doc(inviteToken).update({
+        ));
+        await _retrySdk(() async => (await _db).collection(_invitesCol).doc(inviteToken).update({
           'used': true,
           'usedAt': DateTime.now().toIso8601String(),
           'usedByDeviceId': joiningDeviceId,
         }).timeout(
           const Duration(seconds: 15),
           onTimeout: () => throw TimeoutException('Firestore write timed out'),
-        );
+        ));
       }
 
       return {
@@ -212,15 +234,23 @@ class LinkedDevicesService {
   // ────────────────────────────────────────────────────────
   Stream<List<LinkedSession>> activeSessionsStream(String adminDeviceId) {
     if (_canUseSdk) {
-      return _db
-          .collection(_sessionsCol)
-          .where('adminDeviceId', isEqualTo: adminDeviceId)
-          .where('status', isEqualTo: 'active')
-          .snapshots()
-          .map(
-            (snap) =>
-                snap.docs.map((d) => LinkedSession.fromMap(d.data())).toList(),
-          );
+      final controller = StreamController<List<LinkedSession>>.broadcast();
+      _db.then((db) {
+        db.collection(_sessionsCol)
+            .where('adminDeviceId', isEqualTo: adminDeviceId)
+            .where('status', isEqualTo: 'active')
+            .snapshots()
+            .map(
+              (snap) =>
+                  snap.docs.map((d) => LinkedSession.fromMap(d.data())).toList(),
+            )
+            .listen(
+              controller.add,
+              onError: controller.addError,
+              onDone: controller.close,
+            );
+      });
+      return controller.stream;
     }
 
     final controller = StreamController<List<LinkedSession>>();
@@ -260,7 +290,7 @@ class LinkedDevicesService {
           isEqualTo: adminDeviceId,
         );
       } else {
-        final snap = await _db
+        final snap = await (await _db)
             .collection(_sessionsCol)
             .where('adminDeviceId', isEqualTo: adminDeviceId)
             .where('status', isEqualTo: 'active')
@@ -289,7 +319,7 @@ class LinkedDevicesService {
           isEqualTo: adminDeviceId,
         );
       } else {
-        final snap = await _db
+        final snap = await (await _db)
             .collection(_sessionsCol)
             .where('adminDeviceId', isEqualTo: adminDeviceId)
             .where('status', isEqualTo: 'active')
@@ -313,7 +343,15 @@ class LinkedDevicesService {
   /// on Windows/Linux returns [Map] with `exists` and `data` keys.
   Stream<dynamic> sessionStream(String sessionId) {
     if (_canUseSdk) {
-      return _db.collection(_sessionsCol).doc(sessionId).snapshots();
+      final controller = StreamController<dynamic>.broadcast();
+      _db.then((db) {
+        db.collection(_sessionsCol).doc(sessionId).snapshots().listen(
+          controller.add,
+          onError: controller.addError,
+          onDone: controller.close,
+        );
+      });
+      return controller.stream;
     }
 
     final controller = StreamController<dynamic>();
@@ -347,7 +385,7 @@ class LinkedDevicesService {
       if (_isDesktop) {
         data = await FirestoreRESTClient.getDocument(_sessionsCol, sessionId);
       } else {
-        final snap = await _db.collection(_sessionsCol).doc(sessionId).get();
+        final snap = await (await _db).collection(_sessionsCol).doc(sessionId).get();
         data = snap.data();
       }
       if (data == null || data['status'] != 'active') return null;
@@ -370,7 +408,7 @@ class LinkedDevicesService {
     if (_isDesktop) {
       await FirestoreRESTClient.updateDocument(_sessionsCol, sessionId, data);
     } else {
-      await _db.collection(_sessionsCol).doc(sessionId).update(data);
+      await _retrySdk(() async => (await _db).collection(_sessionsCol).doc(sessionId).update(data));
     }
   }
 
@@ -382,7 +420,7 @@ class LinkedDevicesService {
     if (_isDesktop) {
       await FirestoreRESTClient.updateDocument(_sessionsCol, sessionId, data);
     } else {
-      await _db.collection(_sessionsCol).doc(sessionId).update(data);
+      await _retrySdk(() async => (await _db).collection(_sessionsCol).doc(sessionId).update(data));
     }
   }
 
@@ -403,7 +441,7 @@ class LinkedDevicesService {
     if (_isDesktop) {
       await FirestoreRESTClient.updateDocument(_sessionsCol, sessionId, data);
     } else {
-      await _db.collection(_sessionsCol).doc(sessionId).update(data);
+      await _retrySdk(() async => (await _db).collection(_sessionsCol).doc(sessionId).update(data));
     }
     return code;
   }
@@ -417,7 +455,7 @@ class LinkedDevicesService {
     if (_isDesktop) {
       await FirestoreRESTClient.updateDocument(_sessionsCol, sessionId, data);
     } else {
-      await _db.collection(_sessionsCol).doc(sessionId).update(data);
+      await _retrySdk(() async => (await _db).collection(_sessionsCol).doc(sessionId).update(data));
     }
   }
 
@@ -434,7 +472,7 @@ class LinkedDevicesService {
           fields,
         );
       } else {
-        await _db.collection(_sessionsCol).doc(sessionId).update(fields);
+        await _retrySdk(() async => (await _db).collection(_sessionsCol).doc(sessionId).update(fields));
       }
     } catch (e) {
       debugPrint('updateSessionField error: $e');
@@ -450,7 +488,7 @@ class LinkedDevicesService {
       if (_isDesktop) {
         data = await FirestoreRESTClient.getDocument(_sessionsCol, sessionId);
       } else {
-        final doc = await _db.collection(_sessionsCol).doc(sessionId).get();
+        final doc = await (await _db).collection(_sessionsCol).doc(sessionId).get();
         data = doc.data();
       }
 
@@ -487,7 +525,7 @@ class LinkedDevicesService {
           updateData,
         );
       } else {
-        await _db.collection(_sessionsCol).doc(sessionId).update(updateData);
+        await _retrySdk(() async => (await _db).collection(_sessionsCol).doc(sessionId).update(updateData));
       }
       return {'success': true};
     } catch (e) {
@@ -529,7 +567,7 @@ class LinkedDevicesService {
         return;
       }
 
-      final snap = await _db
+      final snap = await (await _db)
           .collection(_invitesCol)
           .where('adminDeviceId', isEqualTo: adminDeviceId)
           .where('used', isEqualTo: false)
@@ -539,12 +577,12 @@ class LinkedDevicesService {
             onTimeout: () => throw TimeoutException('Firestore read timed out'),
           );
       for (final doc in snap.docs) {
-        await doc.reference.update({
+        await _retrySdk(() => doc.reference.update({
           'used': true,
           'revoked': true,
           'expiresAt': now,
           'revokedAt': now,
-        });
+        }));
       }
     } catch (e) {
       debugPrint('expireOpenInvitesForAdmin error: $e');

@@ -20,8 +20,13 @@ class WorkspaceSyncService {
           defaultTargetPlatform == TargetPlatform.linux ||
           defaultTargetPlatform == TargetPlatform.macOS);
 
-  FirebaseFirestore get _db {
-    if (!_isDesktop) _ensureInitialized();
+  bool get _canUseSdk =>
+      !kIsWeb &&
+      defaultTargetPlatform != TargetPlatform.windows &&
+      defaultTargetPlatform != TargetPlatform.linux;
+
+  Future<FirebaseFirestore> get _db async {
+    if (_canUseSdk) await _ensureInitialized();
     return FirebaseFirestore.instance;
   }
 
@@ -52,6 +57,28 @@ class WorkspaceSyncService {
 
   static const String _snapshotsCol = 'workspace_snapshots';
 
+  static Future<T> _retrySdk<T>(Future<T> Function() fn) async {
+    for (int attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await fn();
+      } on FirebaseException catch (e) {
+        if (e.code == 'resource-exhausted') rethrow;
+        if (attempt < 2) {
+          await Future.delayed(Duration(seconds: 1 << attempt));
+          continue;
+        }
+        rethrow;
+      } on TimeoutException {
+        if (attempt < 2) {
+          await Future.delayed(Duration(seconds: 1 << attempt));
+          continue;
+        }
+        rethrow;
+      }
+    }
+    throw TimeoutException('Firestore write timed out after retries');
+  }
+
   // ── Upload the current local DB as a Firestore snapshot ──
   /// Returns the ISO-8601 timestamp of the upload, or null on failure.
   Future<String?> uploadFullSnapshot(String deviceId) async {
@@ -70,10 +97,10 @@ class WorkspaceSyncService {
         );
         if (!success) throw Exception('REST snapshot upload failed');
       } else {
-        await _db.collection(_snapshotsCol).doc(deviceId).set(payload).timeout(
+        await _retrySdk(() async => (await _db).collection(_snapshotsCol).doc(deviceId).set(payload).timeout(
           const Duration(seconds: 30),
           onTimeout: () => throw TimeoutException('Firestore write timed out'),
-        );
+        ));
       }
       debugPrint('[WorkspaceSync] Snapshot uploaded for $deviceId');
       return now;
@@ -136,7 +163,7 @@ class WorkspaceSyncService {
           adminDeviceId,
         );
       } else {
-        final doc = await _db
+        final doc = await (await _db)
             .collection(_snapshotsCol)
             .doc(adminDeviceId)
             .get();
@@ -289,7 +316,7 @@ class WorkspaceSyncService {
         );
         exists = data != null;
       } else {
-        final doc = await _db.collection(_snapshotsCol).doc(myDeviceId).get();
+        final doc = await (await _db).collection(_snapshotsCol).doc(myDeviceId).get();
         exists = doc.exists;
       }
 
@@ -349,7 +376,7 @@ class WorkspaceSyncService {
       return FirestoreRESTClient.getDocument(_snapshotsCol, deviceId);
     }
 
-    final doc = await _db.collection(_snapshotsCol).doc(deviceId).get();
+    final doc = await (await _db).collection(_snapshotsCol).doc(deviceId).get();
     return doc.data();
   }
 
