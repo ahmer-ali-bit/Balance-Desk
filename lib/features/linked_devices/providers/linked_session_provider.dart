@@ -393,11 +393,11 @@ class LinkedSessionProvider extends ChangeNotifier {
   Future<bool> _downloadLinkedSnapshot(String deviceId) async {
     _isSyncing = true;
     try {
-      final downloaded = (!_iAmAdmin && _permission == SessionPermission.write)
-          ? await WorkspaceSyncService.instance.mergeSnapshotFromDevice(
+      final downloaded = _iAmAdmin
+          ? await WorkspaceSyncService.instance.downloadAndImportSnapshot(
               deviceId,
             )
-          : await WorkspaceSyncService.instance.downloadAndImportSnapshot(
+          : await WorkspaceSyncService.instance.mergeSnapshotFromDevice(
               deviceId,
             );
       if (downloaded) {
