@@ -204,8 +204,7 @@ class LinkedSessionProvider extends ChangeNotifier {
         for (final session in sessions) {
           final guestSnapshotAt = session.lastGuestSnapshotAt;
           final alreadyApplied = session.lastAdminAppliedGuestSnapshotAt;
-          if (session.permission != SessionPermission.write ||
-              guestSnapshotAt == null ||
+          if (guestSnapshotAt == null ||
               guestSnapshotAt == alreadyApplied) {
             continue;
           }
