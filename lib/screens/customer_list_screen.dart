@@ -10,7 +10,6 @@ import '../widgets/customer_search_field.dart';
 import '../widgets/mobile_premium.dart';
 import '../widgets/scale_down_width.dart';
 import 'ledger_screen.dart';
-import '../features/linked_devices/providers/linked_session_provider.dart';
 
 class CustomerListScreen extends StatefulWidget {
   const CustomerListScreen({super.key});
@@ -284,8 +283,8 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
   bool _canEdit(BuildContext context, {bool listen = true}) {
     try {
       return listen
-          ? context.watch<LinkedSessionProvider>().canEdit
-          : context.read<LinkedSessionProvider>().canEdit;
+          ? true
+          : true;
     } catch (_) {
       return true;
     }

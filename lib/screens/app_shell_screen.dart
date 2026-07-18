@@ -24,8 +24,6 @@ import 'customer_list_screen.dart';
 import 'snapshot_entries_screen.dart';
 import 'summary_screen.dart';
 import 'backup_restore_screen.dart';
-import '../features/linked_devices/screens/linked_devices_screen.dart';
-import '../features/linked_devices/providers/linked_session_provider.dart';
 
 class AppShellScreen extends StatefulWidget {
   const AppShellScreen({super.key});
@@ -331,10 +329,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
         closeDrawerOnAction: closeDrawerOnAction,
         action: _openNotesEditor,
       ),
-      onLinkedDevicesRequested: () => _runDrawerAction(
-        closeDrawerOnAction: closeDrawerOnAction,
-        action: _openLinkedDevices,
-      ),
       onCheckUpdateRequested: () => _runDrawerAction(
         closeDrawerOnAction: closeDrawerOnAction,
         action: _openManualUpdateDialog,
@@ -522,12 +516,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
     }
 
     await _disablePin();
-  }
-
-  Future<void> _openLinkedDevices() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => const LinkedDevicesScreen()),
-    );
   }
 
   Future<void> _setPin() async {
@@ -1032,7 +1020,6 @@ class _SidebarContent extends StatefulWidget {
     required this.onPinRequested,
     required this.onCompanyProfileRequested,
     required this.onNotesRequested,
-    required this.onLinkedDevicesRequested,
     required this.onCheckUpdateRequested,
     required this.onWorkspaceSwitched,
     required this.pinButtonLabel,
@@ -1054,7 +1041,6 @@ class _SidebarContent extends StatefulWidget {
   final Future<void> Function() onPinRequested;
   final Future<void> Function() onCompanyProfileRequested;
   final Future<void> Function() onNotesRequested;
-  final Future<void> Function() onLinkedDevicesRequested;
   final Future<void> Function() onCheckUpdateRequested;
   final VoidCallback onWorkspaceSwitched;
   final String pinButtonLabel;
@@ -1081,7 +1067,7 @@ class _SidebarContentState extends State<_SidebarContent> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final canEdit = context.watch<LinkedSessionProvider>().canEdit;
+    final canEdit = true;
 
     if (!PlatformHelper.isDesktop) {
       return _buildMobileDrawer(context, canEdit: canEdit);
@@ -1126,7 +1112,7 @@ class _SidebarContentState extends State<_SidebarContent> {
                     ),
                   ),
                   const Spacer(),
-                  // const SyncStatusIndicator(), // Temporarily hidden
+
                 ],
               ),
               const SizedBox(height: 20),
@@ -1188,11 +1174,6 @@ class _SidebarContentState extends State<_SidebarContent> {
                       onTap: widget.onNotesRequested,
                     ),
                   ],
-                  _DrawerListTile(
-                    icon: Icons.devices_other_outlined,
-                    label: 'Linked Devices',
-                    onTap: widget.onLinkedDevicesRequested,
-                  ),
                   Divider(
                     height: 1,
                     color: colorScheme.outlineVariant,
@@ -1387,11 +1368,6 @@ class _SidebarContentState extends State<_SidebarContent> {
                         onTap: widget.onNotesRequested,
                       ),
                     ],
-                    _MobileDrawerAction(
-                      icon: Icons.devices_other_outlined,
-                      label: 'Linked Devices',
-                      onTap: widget.onLinkedDevicesRequested,
-                    ),
                     if (canEdit) ...[
                       const SizedBox(height: 12),
                       MobileSectionHeader(title: 'Data & Security'),
@@ -1443,7 +1419,7 @@ class _SidebarContentState extends State<_SidebarContent> {
     final years = provider.years.isEmpty
         ? <int>[provider.activeYear]
         : provider.years;
-    final canEdit = context.read<LinkedSessionProvider>().canEdit;
+    final canEdit = true;
 
     return Padding(
       padding: const EdgeInsets.all(12),

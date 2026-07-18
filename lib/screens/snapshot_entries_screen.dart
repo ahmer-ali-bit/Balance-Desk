@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../database/app_database.dart';
-import '../features/linked_devices/providers/linked_session_provider.dart';
 import '../models/customer.dart';
 import '../models/entry.dart';
 import '../models/snapshot_opening_balance.dart';
@@ -956,7 +955,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         actions: <Type, Action<Intent>>{
           ActivateIntent: CallbackAction<Intent>(
             onInvoke: (_) {
-              final canEdit = context.read<LinkedSessionProvider>().canEdit;
+              final canEdit = true;
               if (!_isLoading &&
                   !_isSavingSnapshot &&
                   _hasCurrentPeriodEntries &&
@@ -977,7 +976,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           autofocus: true,
           child: LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) {
-              final canEdit = context.watch<LinkedSessionProvider>().canEdit;
+              final canEdit = true;
               final isCompact =
                   !PlatformHelper.isDesktop && constraints.maxWidth < 760;
               final isDesktop = PlatformHelper.isDesktop;
@@ -1956,7 +1955,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     required IconData icon,
     required bool readOnly,
   }) {
-    final canEdit = context.watch<LinkedSessionProvider>().canEdit;
+    final canEdit = true;
     return TextField(
       controller: controller,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -2013,7 +2012,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   }
 
   Widget _buildPremiumMobileTimeline(BuildContext context) {
-    final canEdit = context.watch<LinkedSessionProvider>().canEdit;
+    final canEdit = true;
     final nodes = <_TimelineNode>[];
 
     if (_snapshots.isEmpty) {
@@ -2622,7 +2621,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                         ),
                         const SizedBox(width: 6),
                       ],
-                      if (context.watch<LinkedSessionProvider>().canEdit) ...[
+                      if (true) ...[
                         IconButton(
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(
@@ -2948,7 +2947,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                   ),
                   const SizedBox(width: 6),
                 ],
-                if (context.watch<LinkedSessionProvider>().canEdit)
+                if (true)
                   IconButton(
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(
@@ -3295,7 +3294,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         const DataCell(Text('')),
         DataCell(Text(item.entry.pageNo.isEmpty ? '-' : item.entry.pageNo)),
         DataCell(
-          context.watch<LinkedSessionProvider>().canEdit
+          true
               ? IconButton(
                   tooltip: 'Delete or Remove Entry',
                   icon: const Icon(Icons.remove_circle_outline),
@@ -3395,7 +3394,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (context.watch<LinkedSessionProvider>().canEdit)
+              if (true)
                 IconButton(
                   tooltip: snapshot.dailyLogPageNo.isEmpty
                       ? 'Add DL Page No'
@@ -3411,7 +3410,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                   ),
                   visualDensity: VisualDensity.compact,
                 ),
-              if (context.watch<LinkedSessionProvider>().canEdit)
+              if (true)
                 IconButton(
                   tooltip: 'Delete snapshot',
                   onPressed: _isLoading || _isSavingSnapshot
@@ -3526,7 +3525,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   }
 
   Future<void> _deleteSnapshot(SummarySnapshot snapshot) async {
-    if (!context.read<LinkedSessionProvider>().canEdit) return;
+    if (!true) return;
 
     final snapshotId = snapshot.id;
     if (snapshotId == null) {
@@ -3574,7 +3573,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   }
 
   Future<void> _clearAllSnapshots() async {
-    if (!context.read<LinkedSessionProvider>().canEdit) return;
+    if (!true) return;
 
     if (_snapshots.isEmpty) {
       return;

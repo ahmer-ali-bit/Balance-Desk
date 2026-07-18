@@ -22,7 +22,6 @@ import '../widgets/amount_input_field.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/decimal_text_input_formatter.dart';
 import '../widgets/scale_down_width.dart';
-import '../features/linked_devices/providers/linked_session_provider.dart';
 
 enum _ExportChoice { pdf, excel }
 
@@ -101,7 +100,7 @@ class _LedgerViewState extends State<_LedgerView> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _didAutoOpenAddEntry || !widget.autoOpenAddEntry) return;
       _didAutoOpenAddEntry = true;
-      final canEdit = context.read<LinkedSessionProvider>().canEdit;
+      final canEdit = true;
       if (canEdit) {
         _showAddEntryDialog();
       }
@@ -445,7 +444,7 @@ class _LedgerViewState extends State<_LedgerView> {
                   ),
                 ),
                 const Divider(),
-                if (context.read<LinkedSessionProvider>().canEdit) ...[
+                if (true) ...[
                   ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 24),
                     leading: Container(
@@ -1142,7 +1141,7 @@ class _LedgerViewState extends State<_LedgerView> {
         await _printPdf();
         break;
       case _LedgerAppBarAction.editCustomer:
-        if (context.read<LinkedSessionProvider>().canEdit) {
+        if (true) {
           await _showEditCustomerDialog(provider);
         }
         break;
@@ -1190,7 +1189,7 @@ class _LedgerViewState extends State<_LedgerView> {
                     label: 'Print',
                   ),
                 ),
-                if (context.read<LinkedSessionProvider>().canEdit)
+                if (true)
                   PopupMenuItem<_LedgerAppBarAction>(
                     value: _LedgerAppBarAction.editCustomer,
                     child: _buildAppBarMenuItem(
@@ -1249,7 +1248,7 @@ class _LedgerViewState extends State<_LedgerView> {
                   icon: const Icon(Icons.tune_rounded),
                   label: const Text('Menu'),
                 ),
-                if (context.watch<LinkedSessionProvider>().canEdit) ...[
+                if (true) ...[
                   const SizedBox(width: 10),
                   FilledButton.icon(
                     onPressed: _showAddEntryDialog,
@@ -1484,7 +1483,7 @@ class _LedgerViewState extends State<_LedgerView> {
   }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final canEdit = context.read<LinkedSessionProvider>().canEdit;
+    final canEdit = true;
     final readOnly = !canEdit;
     final hasInvalidAmount =
         _parseOpeningBalanceValue(_openingDebitController.text) == null ||
@@ -1609,7 +1608,7 @@ class _LedgerViewState extends State<_LedgerView> {
                         ),
                         icon: const Icon(Icons.restart_alt_rounded, size: 18),
                       ),
-                      if (context.read<LinkedSessionProvider>().canEdit) ...[
+                      if (true) ...[
                         IconButton(
                           tooltip: 'Clear opening balance',
                           onPressed: !provider.hasOpeningBalance
@@ -1710,7 +1709,7 @@ class _LedgerViewState extends State<_LedgerView> {
                         readOnly ||
                             provider.isLoading ||
                             !_readOpeningBalance(provider).hasValue ||
-                            !context.read<LinkedSessionProvider>().canEdit
+                            !true
                         ? null
                         : () => _clearOpeningBalance(provider),
                     style: TextButton.styleFrom(
@@ -1733,7 +1732,7 @@ class _LedgerViewState extends State<_LedgerView> {
                             provider.isLoading ||
                             hasInvalidAmount ||
                             !hasChanges ||
-                            !context.read<LinkedSessionProvider>().canEdit
+                            !true
                         ? null
                         : _saveOpeningBalance,
                     style: FilledButton.styleFrom(
@@ -2003,7 +2002,7 @@ class _LedgerViewState extends State<_LedgerView> {
                   ],
                 ),
               ),
-              if (context.read<LinkedSessionProvider>().canEdit)
+              if (true)
                 IconButton.filledTonal(
                   tooltip: 'Edit customer details',
                   onPressed: () => _showEditCustomerDialog(provider),
@@ -2322,9 +2321,7 @@ class _LedgerViewState extends State<_LedgerView> {
               children: <Widget>[
                 LayoutBuilder(
                   builder: (BuildContext context, BoxConstraints constraints) {
-                    final canEdit = context
-                        .read<LinkedSessionProvider>()
-                        .canEdit;
+                    const canEdit = true;
                     final editButton = canEdit
                         ? IconButton.filledTonal(
                             tooltip: 'Edit customer details',
@@ -2677,7 +2674,7 @@ class _LedgerViewState extends State<_LedgerView> {
       );
     }
 
-    final canEdit = context.read<LinkedSessionProvider>().canEdit;
+    final canEdit = true;
     final editButton = canEdit
         ? IconButton.filledTonal(
             tooltip: 'Edit customer details',
@@ -3142,9 +3139,7 @@ class _LedgerViewState extends State<_LedgerView> {
                                 ),
                                 value: provider.isStockLedger,
                                 onChanged:
-                                    context
-                                        .read<LinkedSessionProvider>()
-                                        .canEdit
+                                    true
                                     ? (bool value) {
                                         provider.toggleStockLedger();
                                       }
@@ -3190,12 +3185,10 @@ class _LedgerViewState extends State<_LedgerView> {
                                   ),
                                   value: provider.useWeight,
                                   onChanged:
-                                      context
-                                          .read<LinkedSessionProvider>()
-                                          .canEdit
-                                      ? (bool value) =>
-                                            provider.toggleStockWeight()
-                                      : null,
+                                      true
+                                       ? (bool value) =>
+                                             provider.toggleStockWeight()
+                                       : null,
                                   trackColor:
                                       WidgetStateProperty.resolveWith<Color?>(
                                         (states) =>
@@ -3262,7 +3255,7 @@ class _LedgerViewState extends State<_LedgerView> {
                 ),
               ),
               floatingActionButton:
-                  hasFab && context.watch<LinkedSessionProvider>().canEdit
+                  hasFab && true
                   ? FloatingActionButton.extended(
                       onPressed: _showAddEntryDialog,
                       icon: const Icon(Icons.add_rounded),
@@ -3302,9 +3295,7 @@ class _LedgerViewState extends State<_LedgerView> {
                     actions: <Type, Action<Intent>>{
                       _LedgerIntent: CallbackAction<_LedgerIntent>(
                         onInvoke: (_LedgerIntent intent) {
-                          final canEdit = context
-                              .read<LinkedSessionProvider>()
-                              .canEdit;
+                          const canEdit = true;
                           if (intent.action == _LedgerShortcut.addEntry &&
                               canEdit) {
                             _showAddEntryDialog();
@@ -3985,7 +3976,7 @@ class _LedgerViewState extends State<_LedgerView> {
             mainAxisAlignment: MainAxisAlignment.end,
             children: <Widget>[
               if (isOpeningBalanceEntry &&
-                  context.watch<LinkedSessionProvider>().canEdit)
+                  true)
                 IconButton(
                   tooltip: 'Clear opening balance',
                   onPressed: () => _clearOpeningBalance(provider),
@@ -4526,7 +4517,7 @@ class _LedgerViewState extends State<_LedgerView> {
         ),
         DataCell(
           isOpeningBalanceEntry &&
-                  context.watch<LinkedSessionProvider>().canEdit
+                  true
               ? IconButton(
                   tooltip: 'Clear opening balance',
                   onPressed: () => _clearOpeningBalance(provider),

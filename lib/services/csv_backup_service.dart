@@ -27,15 +27,6 @@ class CsvBackupService {
     'appPinSetupDismissed',
     'autoBackupPath',
     'companyLogoPath',
-    'linked.workspaceId',
-    'linked.role',
-    'linked.ownerUid',
-    'linked.membershipStatus',
-    'linked.lastAppliedRevision',
-    'linked.deviceName',
-    'linked.localWorkspaceBackup',
-    'linked.sharedWorkspaceBackup',
-    'linked.workspaceView',
   };
 
   final AppDatabase _database;
