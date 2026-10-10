@@ -9,7 +9,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  app_links: ^6.4.1
   crypto: ^3.0.3
   cupertino_icons: ^1.0.8
   file_picker: ^11.0.2

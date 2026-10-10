@@ -13,8 +13,6 @@ class PlatformHelper {
   static bool get isDesktop =>
       Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
-  static bool get supportsQrScanner => isMobile;
-
   static String get platformLabel {
     if (isAndroid) {
       return 'Android';

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'app_root.dart';
 import 'database/app_database.dart';
-import 'services/app_deep_link_service.dart';
 import 'services/workspace_service.dart';
 import 'screens/app_pin_gate_screen.dart';
 import 'screens/splash_screen.dart';
@@ -16,7 +15,6 @@ Future<void> main() async {
   // Initialize workspace service first so the database knows which file to open
   await WorkspaceService.instance.initialize();
   await AppDatabase.instance.initialize();
-  await AppDeepLinkService.instance.initialize();
   runApp(const ShopDesktopApp());
 }
 
