@@ -43,3 +43,14 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase — real credentials must NEVER be committed.
+# Copy the matching *.example file, fill it in, and keep the real one local.
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+macos/Runner/GoogleService-Info.plist
+firebase.local.ps1
+firebase.local.cmd
+.firebase.env
+firebase-debug.log
+firestore-debug.log

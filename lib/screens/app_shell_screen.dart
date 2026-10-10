@@ -10,6 +10,7 @@ import '../database/app_database.dart';
 import '../models/workspace.dart';
 import '../providers/customer_provider.dart';
 import '../providers/ledger_year_provider.dart';
+import '../providers/linked_devices_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/app_pin_service.dart';
 import '../services/biometric_auth_service.dart';
@@ -24,6 +25,7 @@ import 'customer_list_screen.dart';
 import 'snapshot_entries_screen.dart';
 import 'summary_screen.dart';
 import 'backup_restore_screen.dart';
+import 'linked_devices_screen.dart';
 
 class AppShellScreen extends StatefulWidget {
   const AppShellScreen({super.key});
@@ -332,6 +334,10 @@ class _AppShellScreenState extends State<AppShellScreen> {
       onCheckUpdateRequested: () => _runDrawerAction(
         closeDrawerOnAction: closeDrawerOnAction,
         action: _openManualUpdateDialog,
+      ),
+      onLinkedDevicesRequested: () => _runDrawerAction(
+        closeDrawerOnAction: closeDrawerOnAction,
+        action: _openLinkedDevicesScreen,
       ),
       onWorkspaceSwitched: () {
         _closeDrawerIfNeeded(closeDrawerOnAction);
@@ -790,6 +796,14 @@ class _AppShellScreenState extends State<AppShellScreen> {
     );
   }
 
+  Future<void> _openLinkedDevicesScreen() async {
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const LinkedDevicesScreen()),
+    );
+  }
+
   Future<void> _openCompanyProfileEditor({bool isInitial = false}) async {
     final nameController = TextEditingController(text: _companyProfile.name);
     String? pickedLogoPath = _companyProfile.logoPath;
@@ -1022,6 +1036,7 @@ class _SidebarContent extends StatefulWidget {
     required this.onNotesRequested,
     required this.onCheckUpdateRequested,
     required this.onWorkspaceSwitched,
+    this.onLinkedDevicesRequested,
     required this.pinButtonLabel,
     required this.companyName,
     required this.companyLogoPath,
@@ -1043,6 +1058,10 @@ class _SidebarContent extends StatefulWidget {
   final Future<void> Function() onNotesRequested;
   final Future<void> Function() onCheckUpdateRequested;
   final VoidCallback onWorkspaceSwitched;
+
+  /// Linked Devices entry point. Optional so layouts that do not expose it
+  /// (desktop sidebar) keep working unchanged.
+  final Future<void> Function()? onLinkedDevicesRequested;
   final String pinButtonLabel;
   final String companyName;
   final String? companyLogoPath;
@@ -1382,6 +1401,25 @@ class _SidebarContentState extends State<_SidebarContent> {
                         label: widget.pinButtonLabel,
                         onTap: widget.onPinRequested,
                       ),
+                      if (widget.onLinkedDevicesRequested != null)
+                        _MobileDrawerAction(
+                          icon: Icons.devices_other_outlined,
+                          label: 'Linked Devices',
+                          trailing: MobileStatusPill(
+                            icon: Icons.sync,
+                            label: context
+                                        .watch<LinkedDevicesProvider>()
+                                        .isLinked
+                                ? 'Linked'
+                                : 'Off',
+                            color: context
+                                    .watch<LinkedDevicesProvider>()
+                                    .isLinked
+                                ? colorScheme.secondary
+                                : colorScheme.outline,
+                          ),
+                          onTap: widget.onLinkedDevicesRequested!,
+                        ),
                     ],
                     const SizedBox(height: 12),
                     _MobileDrawerAction(

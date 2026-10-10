@@ -21,7 +21,33 @@ jobs:
 
       - run: flutter pub get
 
-      - run: flutter build windows --release
+      # Firebase configuration comes from repository secrets so no credential
+      # is ever committed. When the secrets are absent the build still runs —
+      # the app simply starts with Linked Devices disabled.
+      - name: Build Windows (release)
+        shell: pwsh
+        env:
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}
+          FIREBASE_APP_ID_WINDOWS: ${{ secrets.FIREBASE_APP_ID_WINDOWS }}
+          FIREBASE_STORAGE_BUCKET: ${{ secrets.FIREBASE_STORAGE_BUCKET }}
+        run: |
+          $defines = @()
+          if ($env:FIREBASE_API_KEY) {
+            $defines += "--dart-define=FIREBASE_API_KEY=$env:FIREBASE_API_KEY"
+            $defines += "--dart-define=FIREBASE_PROJECT_ID=$env:FIREBASE_PROJECT_ID"
+            $defines += "--dart-define=FIREBASE_MESSAGING_SENDER_ID=$env:FIREBASE_MESSAGING_SENDER_ID"
+            $defines += "--dart-define=FIREBASE_APP_ID_WINDOWS=$env:FIREBASE_APP_ID_WINDOWS"
+            if ($env:FIREBASE_STORAGE_BUCKET) {
+              $defines += "--dart-define=FIREBASE_STORAGE_BUCKET=$env:FIREBASE_STORAGE_BUCKET"
+            }
+            Write-Host 'Firebase configuration detected - Linked Devices enabled.'
+          } else {
+            Write-Host 'No Firebase secrets configured - building without Linked Devices.'
+          }
+
+          flutter build windows --release @defines
 
       - run: flutter pub run msix:create --install-certificate false
 

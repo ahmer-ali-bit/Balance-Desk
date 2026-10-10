@@ -18,6 +18,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/snapshot_opening_balance.dart';
 import '../services/workspace_service.dart';
+import 'sync_tables.dart';
 
 class DatabaseHelper {
   DatabaseHelper._();
@@ -251,6 +252,10 @@ class DatabaseHelper {
         dailyLogPageNo TEXT NOT NULL DEFAULT ''
       )
     ''');
+
+    // Linked Devices replication tables + capture triggers. These observe the
+    // business tables; they never change how any value is calculated.
+    await ensureSyncSchema(db);
   }
 
   Future<void> _ensureYearInfrastructure(Database db) async {

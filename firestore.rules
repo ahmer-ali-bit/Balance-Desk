@@ -1,31 +1,272 @@
 rules_version = '2';
 
+// Balance Desk — Linked Devices
+//
+// Trust model
+// -----------
+// * Every device signs in with Firebase Anonymous Auth and gets a `uid`.
+//   In this app one installation == one member, so the membership document is
+//   also the device record:
+//     /workspaces/{workspaceId}/members/{uid}
+//       { uid, deviceId, displayName, platform, role, inviteToken,
+//         joinedAt, lastSeenAt }
+//   role is one of: "owner" | "editor" | "viewer".
+//
+// * Membership is keyed by `uid` on purpose: security rules cannot query a
+//   collection, but they *can* `get()`/`exists()` a document whose id is
+//   known. Keying by uid lets every rule answer "is this caller a member, and
+//   with what role?" without a Cloud Function.
+//
+// * Pairing happens through unguessable 128-bit invite tokens (32 hex chars).
+//   Invite documents are readable by a signed-in client that already knows the
+//   token — that is what an invite link/QR is — but they are not listable,
+//   they expire, and they can only be redeemed a bounded number of times.
+//   Invites carry no ledger data, only the role a joiner will receive.
+//
+// * Ledger mutations travel as an append-only journal
+//   (/workspaces/{id}/ops/{opId}). Ops are immutable; only the owner prunes.
+//
+// Everything not explicitly allowed below is denied.
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // 1. Linked Invites (Used for QR/Token sharing)
-    match /linked_invites/{inviteToken} {
-      allow read, write: if true;
+
+    // ---------- helpers ----------
+
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    // 2. Linked Sessions (Used for active device links)
-    match /linked_sessions/{sessionId} {
-      allow read, write: if true;
+    function workspacePath(workspaceId) {
+      return /databases/$(database)/documents/workspaces/$(workspaceId);
     }
 
-    // 3. Workspace Snapshots (Used for cross-device sync)
-    match /workspace_snapshots/{deviceId} {
-      allow read, write: if true;
+    function memberPath(workspaceId, uid) {
+      return /databases/$(database)/documents/workspaces/$(workspaceId)/members/$(uid);
     }
 
-    // Keep legacy collections for backward compatibility
-    match /devices_v2/{deviceId} { allow read, write: if true; }
-    match /linkedSessions_v2/{sessionId} { allow read, write: if true; }
-    match /inviteLinks_v2/{linkToken} { allow read, write: if true; }
-    
-    // Default Deny
-    match /{path=**} {
-       allow read, write: if false; 
+    function isMember(workspaceId) {
+      return isSignedIn() && exists(memberPath(workspaceId, request.auth.uid));
+    }
+
+    function memberRole(workspaceId) {
+      return get(memberPath(workspaceId, request.auth.uid)).data.role;
+    }
+
+    // Editors and owners may write ledger data; viewers are read-only.
+    function canWriteLedger(workspaceId) {
+      return isMember(workspaceId) && memberRole(workspaceId) in ['owner', 'editor'];
+    }
+
+    function isOwner(workspaceId) {
+      return isMember(workspaceId) && memberRole(workspaceId) == 'owner';
+    }
+
+    function workspaceOwnerUid(workspaceId) {
+      return get(workspacePath(workspaceId)).data.ownerUid;
+    }
+
+    function invitePath(workspaceId, token) {
+      return /databases/$(database)/documents/workspaces/$(workspaceId)/invites/$(token);
+    }
+
+    function inviteData(workspaceId, token) {
+      return get(invitePath(workspaceId, token)).data;
+    }
+
+    function inviteIsLive(workspaceId, token) {
+      return inviteData(workspaceId, token).revoked == false
+        && inviteData(workspaceId, token).expiresAt > request.time
+        && inviteData(workspaceId, token).uses < inviteData(workspaceId, token).maxUses;
+    }
+
+    // A signed-in client may read exactly one invite, and only by presenting
+    // the matching, unexpired, unrevoked token.
+    function canReadInvite(workspaceId, token) {
+      return isSignedIn() && token.size() >= 32 && inviteIsLive(workspaceId, token);
+    }
+
+    // ---------- workspace metadata ----------
+
+    match /workspaces/{workspaceId} {
+      // The creating device becomes the owner.
+      allow create: if isSignedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.revision is int
+        && request.resource.data.revision >= 0
+        && request.resource.data.createdAt == request.time;
+
+      allow read: if isMember(workspaceId);
+
+      allow update: if isOwner(workspaceId)
+        && request.resource.data.diff(resource.data)
+             .affectedKeys()
+             .hasOnly(['name', 'revision', 'updatedAt'])
+        && request.resource.data.ownerUid == resource.data.ownerUid;
+
+      // Never hard-deleted from a client, so one device cannot wipe the
+      // shared history. Prune from the console or a scheduled function.
+      allow delete: if false;
+    }
+
+    // ---------- membership / device roster ----------
+
+    match /workspaces/{workspaceId}/members/{uid} {
+
+      function selfRecord() {
+        return request.resource.data.uid == request.auth.uid
+          && uid == request.auth.uid
+          && request.resource.data.deviceId is string
+          && request.resource.data.deviceId.size() > 0
+          && request.resource.data.displayName is string
+          && request.resource.data.displayName.size() > 0
+          && request.resource.data.displayName.size() <= 80
+          && request.resource.data.platform is string
+          && request.resource.data.joinedAt == request.time
+          && request.resource.data.lastSeenAt == request.time;
+      }
+
+      // Path 1 — bootstrap: the account that created the workspace document
+      // claims the owner seat. Nobody else can, because the workspace's
+      // ownerUid is pinned to its creator above.
+      function isBootstrapOwner() {
+        return selfRecord()
+          && request.resource.data.role == 'owner'
+          && workspaceOwnerUid(workspaceId) == request.auth.uid;
+      }
+
+      // Path 2 — join with a live invite; the role is whatever the invite
+      // granted, never whatever the caller asks for.
+      function isInvitedJoiner() {
+        return selfRecord()
+          && request.resource.data.inviteToken is string
+          && request.resource.data.inviteToken.size() >= 32
+          && inviteIsLive(workspaceId, request.resource.data.inviteToken)
+          && request.resource.data.role ==
+               inviteData(workspaceId, request.resource.data.inviteToken).role
+          && request.resource.data.role in ['viewer', 'editor'];
+      }
+
+      allow create: if isSignedIn() && (isBootstrapOwner() || isInvitedJoiner());
+
+      allow read: if isMember(workspaceId);
+      allow list: if isMember(workspaceId);
+
+      // The owner may change roles and kick devices — except their own seat.
+      // Any member may refresh its own heartbeat and display name, and cannot
+      // touch its own role through this branch.
+      allow update: if (
+          isOwner(workspaceId)
+          && request.resource.data.diff(resource.data)
+               .affectedKeys()
+               .hasOnly(['role', 'displayName', 'platform', 'lastSeenAt'])
+          && request.resource.data.role in ['owner', 'editor', 'viewer']
+          && (
+            uid != workspaceOwnerUid(workspaceId)
+            || request.resource.data.role == 'owner'
+          )
+        )
+        || (
+          isMember(workspaceId)
+          && uid == request.auth.uid
+          && request.resource.data.diff(resource.data)
+               .affectedKeys()
+               .hasOnly(['lastSeenAt', 'displayName', 'platform'])
+        );
+
+      allow delete: if isOwner(workspaceId)
+        || (isSignedIn() && uid == request.auth.uid);
+    }
+
+    // ---------- invites (QR / paste-a-code pairing) ----------
+
+    match /workspaces/{workspaceId}/invites/{token} {
+      allow get: if canReadInvite(workspaceId, token);
+      allow list: if false;
+
+      allow create: if isOwner(workspaceId)
+        && token == request.resource.data.token
+        && request.resource.data.token.size() >= 32
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.role in ['viewer', 'editor']
+        && request.resource.data.expiresAt > request.time
+        // 24 hours, expressed in microseconds.
+        && request.resource.data.expiresAt <= request.time + duration.value(86400000000)
+        && request.resource.data.maxUses is int
+        && request.resource.data.maxUses > 0
+        && request.resource.data.maxUses <= 25
+        && request.resource.data.uses == 0
+        && request.resource.data.joinedUids is list
+        && request.resource.data.joinedUids.size() == 0
+        && request.resource.data.revoked == false
+        && request.resource.data.createdAt == request.time;
+
+      // Two write paths:
+      //  1. a joiner consumes exactly one use (and only that);
+      //  2. the owner revokes an invite.
+      allow update: if (
+          isSignedIn()
+          && inviteIsLive(workspaceId, token)
+          && !(request.auth.uid in resource.data.joinedUids)
+          && request.resource.data.diff(resource.data)
+               .affectedKeys()
+               .hasOnly(['uses', 'joinedUids'])
+          && request.resource.data.uses == resource.data.uses + 1
+          && request.resource.data.uses <= resource.data.maxUses
+          && request.resource.data.joinedUids.size()
+               == resource.data.joinedUids.size() + 1
+          && request.resource.data.joinedUids.hasAll(resource.data.joinedUids)
+          && request.auth.uid in request.resource.data.joinedUids
+        )
+        || (
+          isOwner(workspaceId)
+          && request.resource.data.diff(resource.data)
+               .affectedKeys()
+               .hasOnly(['revoked', 'expiresAt'])
+          && request.resource.data.revoked == true
+        );
+
+      allow delete: if isOwner(workspaceId);
+    }
+
+    // ---------- append-only ledger delta journal ----------
+
+    match /workspaces/{workspaceId}/ops/{opId} {
+      allow create: if canWriteLedger(workspaceId)
+        && opId == request.resource.data.opId
+        && opId.size() >= 26
+        && request.resource.data.originDeviceId is string
+        && request.resource.data.originDeviceId.size() > 0
+        && request.resource.data.table in [
+             'customers', 'entries', 'summary_snapshots',
+             'ledger_years', 'app_settings'
+           ]
+        && request.resource.data.rowId is string
+        && request.resource.data.rowId.size() > 0
+        && request.resource.data.action in ['upsert', 'delete']
+        && request.resource.data.updatedAt is int
+        && request.resource.data.updatedAt > 0
+        && request.resource.data.payload is map
+        && request.resource.data.createdAt == request.time;
+
+      // Viewers replay the journal too, so their local copy stays current.
+      allow read: if isMember(workspaceId);
+      allow list: if isMember(workspaceId);
+
+      // Ops are immutable — replay correctness depends on it.
+      allow update: if false;
+
+      // Only the owner may prune old ops (compaction).
+      allow delete: if isOwner(workspaceId);
+    }
+
+    // ---------- default deny ----------
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

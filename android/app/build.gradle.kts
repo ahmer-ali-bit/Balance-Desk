@@ -1,9 +1,22 @@
 plugins {
     id("com.android.application")
-    id("com.google.gms.google-services")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// `android/app/google-services.json` is git-ignored (it carries real
+// credentials). Apply the google-services plugin only when the file is
+// present so a fresh clone still builds; the Dart side reads its Firebase
+// configuration from --dart-define values (see lib/services/firebase/).
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+} else {
+    logger.warn(
+        "google-services.json not found - skipping the google-services plugin. " +
+            "Copy android/app/google-services.json.example to " +
+            "android/app/google-services.json if you need Linked Devices on Android."
+    )
 }
 
 android {
