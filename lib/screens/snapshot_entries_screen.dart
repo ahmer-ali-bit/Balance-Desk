@@ -15,6 +15,7 @@ import '../services/pdf_service.dart';
 import '../utils/app_colors.dart';
 import '../utils/number_format_utils.dart';
 import '../utils/platform_helper.dart';
+import '../widgets/harbor_navigation.dart';
 import '../widgets/mobile_premium.dart';
 import 'ledger_screen.dart';
 
@@ -570,6 +571,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     if (!mounted || customer == null) return;
 
     final customerProvider = context.read<CustomerProvider>();
+    final shellNavigation = HarborNavigationScope.maybeOf(context);
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => MultiProvider(
@@ -578,7 +580,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
               value: customerProvider,
             ),
           ],
-          child: LedgerScreen(customer: customer, autoOpenAddEntry: false),
+          child: LedgerScreen(customer: customer, autoOpenAddEntry: false, onNavigate: shellNavigation),
         ),
       ),
     );

@@ -6,43 +6,43 @@ class BalanceDeskTheme {
   // A shared light palette keeps the ledger readable on desktop and mobile.
   static const ColorScheme _desktopColorScheme = ColorScheme(
     brightness: Brightness.light,
-    primary: Color(0xFF12294D),
+    primary: Color(0xFF0E5960),
     onPrimary: Colors.white,
-    primaryContainer: Color(0xFFDCE8F6),
-    onPrimaryContainer: Color(0xFF102744),
-    secondary: Color(0xFF087B80),
+    primaryContainer: Color(0xFFDDF4F1),
+    onPrimaryContainer: Color(0xFF12383B),
+    secondary: Color(0xFF188287),
     onSecondary: Colors.white,
-    secondaryContainer: Color(0xFFD3EEEE),
-    onSecondaryContainer: Color(0xFF064E51),
-    tertiary: Color(0xFF4C6688),
+    secondaryContainer: Color(0xFFD8F1EE),
+    onSecondaryContainer: Color(0xFF0B5153),
+    tertiary: Color(0xFF3B7B80),
     onTertiary: Colors.white,
-    tertiaryContainer: Color(0xFFE4ECF8),
-    onTertiaryContainer: Color(0xFF243E60),
+    tertiaryContainer: Color(0xFFE2F2F2),
+    onTertiaryContainer: Color(0xFF285A60),
     error: Color(0xFFB3261E),
     onError: Colors.white,
     errorContainer: Color(0xFFFFDAD6),
     onErrorContainer: Color(0xFF410002),
     surface: Color(0xFFFFFFFF),
-    onSurface: Color(0xFF15253A),
-    onSurfaceVariant: Color(0xFF536476),
-    outline: Color(0xFF9DAEBF),
-    outlineVariant: Color(0xFFD8E0E8),
+    onSurface: Color(0xFF17383B),
+    onSurfaceVariant: Color(0xFF57767A),
+    outline: Color(0xFF9DBBBB),
+    outlineVariant: Color(0xFFD4E5E5),
     surfaceContainerLowest: Color(0xFFFFFFFF),
-    surfaceContainerLow: Color(0xFFF8FAFC),
-    surfaceContainer: Color(0xFFF3F6F9),
-    surfaceContainerHigh: Color(0xFFEAF0F5),
-    surfaceContainerHighest: Color(0xFFE1E9F0),
-    inverseSurface: Color(0xFF24374B),
-    onInverseSurface: Color(0xFFF4F8FC),
-    inversePrimary: Color(0xFFAFC7EC),
+    surfaceContainerLow: Color(0xFFF7FBFB),
+    surfaceContainer: Color(0xFFF0F7F7),
+    surfaceContainerHigh: Color(0xFFE4F2F1),
+    surfaceContainerHighest: Color(0xFFD9ECEA),
+    inverseSurface: Color(0xFF174447),
+    onInverseSurface: Color(0xFFF4FAF9),
+    inversePrimary: Color(0xFF9BD7D1),
     scrim: Colors.black,
     shadow: Colors.black,
   );
-  static const Color _desktopScaffoldBackgroundColor = Color(0xFFF5F7FA);
-  static const Color _desktopCanvasColor = Color(0xFFF5F7FA);
+  static const Color _desktopScaffoldBackgroundColor = Color(0xFFEAF4F4);
+  static const Color _desktopCanvasColor = Color(0xFFEAF4F4);
   static const Color _desktopAppBarBackgroundColor = Color(0xFFFFFFFF);
   static const Color _desktopDrawerBackgroundColor = Color(0xFFFFFFFF);
-  static const Color _desktopInputFillColor = Color(0xFFF4F7FA);
+  static const Color _desktopInputFillColor = Color(0xFFF1F7F7);
   static const ColorScheme _mobileColorScheme = _desktopColorScheme;
 
   static ThemeData lightTheme() => _buildMobileTheme();

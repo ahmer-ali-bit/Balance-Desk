@@ -22,6 +22,7 @@ import '../widgets/amount_input_field.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/decimal_text_input_formatter.dart';
 import '../widgets/scale_down_width.dart';
+import '../widgets/harbor_navigation.dart';
 import 'customer_list_screen.dart' show showCreateCustomerDialog;
 
 enum _ExportChoice { pdf, excel }
@@ -47,10 +48,12 @@ class LedgerScreen extends StatefulWidget {
     super.key,
     required this.customer,
     this.autoOpenAddEntry = true,
+    this.onNavigate,
   });
 
   final Customer customer;
   final bool autoOpenAddEntry;
+  final ValueChanged<int>? onNavigate;
 
   @override
   State<LedgerScreen> createState() => _LedgerScreenState();
@@ -59,7 +62,6 @@ class LedgerScreen extends StatefulWidget {
 class _LedgerScreenState extends State<LedgerScreen> {
   late Customer _selectedCustomer;
   late bool _autoOpenAddEntry;
-  String _customerQuery = '';
 
   @override
   void initState() {
@@ -83,7 +85,72 @@ class _LedgerScreenState extends State<LedgerScreen> {
     _selectCustomer(customer);
   }
 
-  Widget _buildCustomerSidebar(BuildContext context) {
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final hasSidebar = PlatformHelper.isDesktop && constraints.maxWidth >= 1000;
+        final ledger = ChangeNotifierProvider<LedgerProvider>(
+          key: ValueKey<int?>(_selectedCustomer.id),
+          create: (_) => LedgerProvider(customer: _selectedCustomer)..loadEntries(),
+          child: _LedgerView(
+            customer: _selectedCustomer,
+            autoOpenAddEntry: _autoOpenAddEntry,
+            onNavigate: widget.onNavigate,
+            showShellNavigation: !hasSidebar,
+          ),
+        );
+        if (!hasSidebar) return ledger;
+        return Scaffold(
+          body: SafeArea(
+            child: Column(children: <Widget>[
+              Expanded(child: Row(children: <Widget>[
+                _CustomerSidebar(
+                  selectedCustomer: _selectedCustomer,
+                  onSelectCustomer: _selectCustomer,
+                  onAddCustomer: _addCustomer,
+                ),
+                Expanded(child: ledger),
+              ])),
+              if (widget.onNavigate != null)
+                HarborNavigationBar(
+                  selectedIndex: 0,
+                  onSelected: (index) => _leaveLedger(context, widget.onNavigate!, index),
+                ),
+            ]),
+          ),
+        );
+      },
+    );
+  }
+
+}
+
+void _leaveLedger(BuildContext context, ValueChanged<int> navigate, int index) {
+  Navigator.of(context).pop();
+  WidgetsBinding.instance.addPostFrameCallback((_) => navigate(index));
+}
+
+class _CustomerSidebar extends StatefulWidget {
+  const _CustomerSidebar({
+    required this.selectedCustomer,
+    required this.onSelectCustomer,
+    required this.onAddCustomer,
+  });
+  final Customer selectedCustomer;
+  final ValueChanged<Customer> onSelectCustomer;
+  final VoidCallback onAddCustomer;
+
+  @override
+  State<_CustomerSidebar> createState() => _CustomerSidebarState();
+}
+
+class _CustomerSidebarState extends State<_CustomerSidebar> {
+  String _customerQuery = '';
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     return Consumer<CustomerProvider>(
@@ -114,7 +181,7 @@ class _LedgerScreenState extends State<LedgerScreen> {
                       Text('${provider.customers.length}', style: theme.textTheme.labelMedium),
                       IconButton(
                         tooltip: 'Add customer',
-                        onPressed: _addCustomer,
+                        onPressed: widget.onAddCustomer,
                         icon: const Icon(Icons.person_add_alt_rounded),
                       ),
                     ]),
@@ -138,7 +205,7 @@ class _LedgerScreenState extends State<LedgerScreen> {
                         itemCount: customers.length,
                         itemBuilder: (context, index) {
                           final customer = customers[index];
-                          final selected = customer.id == _selectedCustomer.id;
+                          final selected = customer.id == widget.selectedCustomer.id;
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 6),
                             child: Material(
@@ -146,7 +213,7 @@ class _LedgerScreenState extends State<LedgerScreen> {
                               borderRadius: BorderRadius.circular(10),
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(10),
-                                onTap: () => _selectCustomer(customer),
+                                onTap: () => widget.onSelectCustomer(customer),
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                   child: Row(children: <Widget>[
@@ -176,39 +243,20 @@ class _LedgerScreenState extends State<LedgerScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final ledger = ChangeNotifierProvider<LedgerProvider>(
-      key: ValueKey<int?>(_selectedCustomer.id),
-      create: (_) => LedgerProvider(customer: _selectedCustomer)..loadEntries(),
-      child: _LedgerView(
-        customer: _selectedCustomer,
-        autoOpenAddEntry: _autoOpenAddEntry,
-      ),
-    );
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (!PlatformHelper.isDesktop || constraints.maxWidth < 1000) {
-          return ledger;
-        }
-        return Scaffold(
-          body: SafeArea(
-            child: Row(children: <Widget>[
-              _buildCustomerSidebar(context),
-              Expanded(child: ledger),
-            ]),
-          ),
-        );
-      },
-    );
-  }
 }
 
 class _LedgerView extends StatefulWidget {
-  const _LedgerView({required this.customer, required this.autoOpenAddEntry});
+  const _LedgerView({
+    required this.customer,
+    required this.autoOpenAddEntry,
+    required this.onNavigate,
+    required this.showShellNavigation,
+  });
 
   final Customer customer;
   final bool autoOpenAddEntry;
+  final ValueChanged<int>? onNavigate;
+  final bool showShellNavigation;
 
   @override
   State<_LedgerView> createState() => _LedgerViewState();
@@ -240,6 +288,10 @@ class _LedgerViewState extends State<_LedgerView> {
   static const int _entryPageSize = 150;
   int _visibleEntryLimit = _entryPageSize;
   int _totalEntryCount = 0;
+  List<Entry>? _cachedBalanceEntries;
+  bool? _cachedStockMode;
+  bool? _cachedWeightMode;
+  List<_HarborEntryBalance> _cachedHarborBalances = const [];
 
   @override
   void initState() {
@@ -2742,8 +2794,10 @@ class _LedgerViewState extends State<_LedgerView> {
 
   Widget _buildDesktopLedgerHeader(
     BuildContext context,
-    LedgerProvider provider,
-  ) {
+    LedgerProvider provider, {
+    bool identityOnly = false,
+    bool metricsOnly = false,
+  }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final customer = provider.customer;
@@ -2866,6 +2920,34 @@ class _LedgerViewState extends State<_LedgerView> {
             ),
             icon: const Icon(Icons.edit_outlined),
           );
+
+    if (metricsOnly) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          for (final item in metricItems) ...<Widget>[
+            buildTile(item, true),
+            const SizedBox(height: 8),
+          ],
+        ],
+      );
+    }
+    if (identityOnly) {
+      return Row(children: <Widget>[
+        Expanded(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(provider.customerName, style: theme.textTheme.headlineSmall,
+                maxLines: 2, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 6),
+            _buildCustomerIdBadge(context, customer.id),
+            const SizedBox(height: 6),
+            _buildCustomerIdentityBar(context, customer, isCompact: true),
+          ],
+        )),
+        editButton,
+      ]);
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3217,6 +3299,250 @@ class _LedgerViewState extends State<_LedgerView> {
     );
   }
 
+  /// Presentation-only running values, cached for the immutable provider view.
+  /// Fold order and arithmetic are the same as the existing ledger rows.
+  List<_HarborEntryBalance> _harborBalances(LedgerProvider provider) {
+    final entries = provider.entries;
+    if (identical(_cachedBalanceEntries, entries) &&
+        _cachedStockMode == provider.isStockLedger &&
+        _cachedWeightMode == provider.useWeight) {
+      return _cachedHarborBalances;
+    }
+    final balances = List<_HarborEntryBalance>.filled(
+      entries.length,
+      const _HarborEntryBalance(false, false, 0, null),
+    );
+    double? runningBalance;
+    double? runningRemainingBags;
+    for (var index = entries.length - 1; index >= 0; index--) {
+      final entry = entries[index];
+      final hasValue = entry.debit != 0 ||
+          entry.credit != 0 ||
+          entry.buyBags.trim().isNotEmpty && entry.buyBags.trim() != '0' ||
+          entry.sellBags.trim().isNotEmpty && entry.sellBags.trim() != '0';
+      var balance = 0.0;
+      double? remaining;
+      if (hasValue) {
+        balance = provider.isStockLedger
+            ? (runningBalance ?? 0) + entry.credit - entry.debit
+            : (runningBalance ?? 0) + entry.debit - entry.credit;
+        runningBalance = balance;
+        if (provider.isStockLedger) {
+          remaining = (runningRemainingBags ?? 0) +
+              (double.tryParse(entry.buyBags) ?? 0) -
+              (double.tryParse(entry.sellBags) ?? 0);
+          runningRemainingBags = remaining;
+        }
+      }
+      balances[index] = _HarborEntryBalance(
+        _isOpeningBalanceEntry(provider, entry), hasValue, balance, remaining,
+      );
+    }
+    _cachedBalanceEntries = entries;
+    _cachedStockMode = provider.isStockLedger;
+    _cachedWeightMode = provider.useWeight;
+    _cachedHarborBalances = balances;
+    return balances;
+  }
+
+  Widget _buildHarborWorkspace(
+    BuildContext context,
+    LedgerProvider provider, {
+    required bool isDesktop,
+    required bool isCompact,
+    required bool showRail,
+    required double bottomPadding,
+  }) {
+    final entries = provider.entries;
+    _totalEntryCount = entries.length;
+    final balances = _harborBalances(provider);
+    final visibleCount = math.min(entries.length, _visibleEntryLimit);
+    final colors = Theme.of(context).colorScheme;
+    final scroll = CustomScrollView(
+      key: const ValueKey<String>('harbor-ledger-scroll'),
+      controller: _tableVerticalController,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      slivers: <Widget>[
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(isCompact ? 16 : 20, 12, isCompact ? 16 : 20, 0),
+          sliver: SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                if (isCompact)
+                  _buildMobileLedgerOverview(context, provider)
+                else if (isDesktop)
+                  _buildDesktopLedgerHeader(context, provider, identityOnly: showRail)
+                else
+                  _buildCustomerInfoCard(context, provider),
+                const SizedBox(height: 12),
+                if (isDesktop) ...<Widget>[
+                  _buildFilterBar(context: context, provider: provider, compactForDesktop: true),
+                  const SizedBox(height: 12),
+                ],
+                _buildEntriesSectionHeader(context, provider, isCompact: isCompact),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        ),
+        if (entries.isEmpty)
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            sliver: SliverToBoxAdapter(
+              child: provider.isLoading
+                  ? const SizedBox(height: 240, child: Center(child: CircularProgressIndicator()))
+                  : AppEmptyState(
+                      icon: Icons.receipt_long_outlined,
+                      title: 'No ledger entries yet',
+                      message: 'Add the first debit or credit entry for this customer.',
+                      actionLabel: 'Add Entry',
+                      onAction: _showAddEntryDialog,
+                    ),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: EdgeInsets.symmetric(horizontal: isCompact ? 16 : 20),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate((context, index) {
+                final entry = entries[index];
+                final values = balances[index];
+                final balanceLabel = values.hasValue ? provider.formatBalance(values.balance) : '';
+                final remainingLabel = values.remaining == null ? '' : provider.formatBags(values.remaining!);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: isDesktop
+                      ? _buildHarborDesktopEntry(context, provider, entry, values, balanceLabel, remainingLabel)
+                      : _buildLedgerEntryCard(
+                          context,
+                          provider,
+                          entry: entry,
+                          isOpeningBalanceEntry: values.isOpeningBalanceEntry,
+                          balanceLabel: balanceLabel,
+                          balance: values.balance,
+                          remainingBagsLabel: remainingLabel,
+                        ),
+                );
+              }, childCount: visibleCount),
+            ),
+          ),
+        if (visibleCount < entries.length)
+          SliverToBoxAdapter(child: _buildEntryLoadMoreFooter(context)),
+        SliverToBoxAdapter(child: SizedBox(height: bottomPadding)),
+      ],
+    );
+    if (!showRail) return scroll;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Expanded(child: scroll),
+        Container(
+          width: 252,
+          decoration: BoxDecoration(
+            color: colors.surface,
+            border: Border(left: BorderSide(color: colors.outlineVariant)),
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Text('Ledger overview', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 12),
+                _buildDesktopLedgerHeader(context, provider, metricsOnly: true),
+                const SizedBox(height: 4),
+                FilledButton.icon(onPressed: _showAddEntryDialog,
+                  icon: const Icon(Icons.add_rounded), label: const Text('Add Entry')),
+                OutlinedButton.icon(onPressed: entries.isNotEmpty ? _exportWithOptions : null,
+                  icon: const Icon(Icons.download_outlined), label: const Text('Export')),
+                OutlinedButton.icon(onPressed: entries.isNotEmpty ? _printPdf : null,
+                  icon: const Icon(Icons.print_outlined), label: const Text('Print')),
+                OutlinedButton.icon(onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+                  icon: const Icon(Icons.tune_rounded), label: const Text('Menu')),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHarborDesktopEntry(
+    BuildContext context,
+    LedgerProvider provider,
+    Entry entry,
+    _HarborEntryBalance values,
+    String balanceLabel,
+    String remainingLabel,
+  ) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    Widget metric(String label, String value, Color color) => ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 90),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+        Text(label, style: theme.textTheme.labelSmall?.copyWith(color: colors.onSurfaceVariant)),
+        Text(value, style: theme.textTheme.labelLarge?.copyWith(color: color, fontWeight: FontWeight.w700)),
+      ]),
+    );
+    return LayoutBuilder(builder: (context, constraints) {
+      if (constraints.maxWidth < 550) {
+        return _buildLedgerEntryCard(
+          context, provider, entry: entry,
+          isOpeningBalanceEntry: values.isOpeningBalanceEntry,
+          balanceLabel: balanceLabel, balance: values.balance,
+          remainingBagsLabel: remainingLabel,
+        );
+      }
+      return Material(
+        color: colors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(color: colors.outlineVariant),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+            Container(
+              width: 38, height: 38,
+              decoration: BoxDecoration(color: colors.primaryContainer, borderRadius: BorderRadius.circular(10)),
+              child: Icon(Icons.receipt_long_outlined, color: colors.primary, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+              Text(entry.displayDescription, style: theme.textTheme.titleSmall),
+              const SizedBox(height: 3),
+              Text('${_formatStoredDate(entry.entryDate)}  •  ${_formatStoredDate(entry.createdAt)}',
+                  style: theme.textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant)),
+              Text('Page: ${entry.pageNo.trim().isEmpty ? '-' : entry.pageNo}  •  DL Page: ${entry.dailyLogPageNo.trim().isEmpty ? '-' : entry.dailyLogPageNo}',
+                  style: theme.textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant)),
+              const SizedBox(height: 10),
+              Wrap(spacing: 18, runSpacing: 8, children: <Widget>[
+                if (provider.isStockLedger) ...<Widget>[
+                  metric(provider.useWeight ? 'Buy Kgs' : 'Buy Bags', provider.formatBags(double.tryParse(entry.buyBags) ?? 0), AppColors.credit),
+                  metric('Buy Amount', provider.formatAmount(entry.debit), AppColors.credit),
+                  metric(provider.useWeight ? 'Sell Kgs' : 'Sell Bags', provider.formatBags(double.tryParse(entry.sellBags) ?? 0), AppColors.debit),
+                  metric('Sell Amount', provider.formatAmount(entry.credit), AppColors.debit),
+                  metric(provider.useWeight ? 'Remaining Kgs' : 'Remaining Bags', remainingLabel, colors.onSurface),
+                ] else ...<Widget>[
+                  metric('Debit', provider.formatAmount(entry.debit), AppColors.debit),
+                  metric('Credit', provider.formatAmount(entry.credit), AppColors.credit),
+                ],
+                metric('Balance', balanceLabel, AppColors.balanceColor(values.balance)),
+              ]),
+            ])),
+            if (values.isOpeningBalanceEntry)
+              IconButton(tooltip: 'Clear opening balance', onPressed: () => _clearOpeningBalance(provider),
+                  icon: const Icon(Icons.delete_outline_rounded))
+            else
+              IconButton(tooltip: 'Entry Options', onPressed: () => _showEntryMenu(context, provider, entry),
+                  icon: const Icon(Icons.more_vert_rounded)),
+          ]),
+        ),
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<LedgerProvider>(
@@ -3235,7 +3561,9 @@ class _LedgerViewState extends State<_LedgerView> {
                 24.0 +
                 MediaQuery.viewInsetsOf(context).bottom +
                 (hasFab ? 84.0 : 0.0);
-            final pageContent = Column(
+            final useHarbor = isCompact || (isDesktop && constraints.maxWidth >= 720);
+            final showRail = isDesktop && constraints.maxWidth >= 1000;
+            final pageContent = useHarbor ? null : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 if (isCompact)
@@ -3446,8 +3774,21 @@ class _LedgerViewState extends State<_LedgerView> {
                       label: const Text('Add Entry'),
                     )
                   : null,
+              bottomNavigationBar: isDesktop && widget.showShellNavigation && widget.onNavigate != null
+                  ? HarborNavigationBar(
+                      selectedIndex: 0,
+                      onSelected: (index) => _leaveLedger(context, widget.onNavigate!, index),
+                    )
+                  : null,
               body: SafeArea(
-                child: Shortcuts(
+                child: Column(children: <Widget>[
+                  if (!isDesktop && widget.showShellNavigation && widget.onNavigate != null)
+                    HarborNavigationBar(
+                      selectedIndex: 0,
+                      includeBackup: false,
+                      onSelected: (index) => _leaveLedger(context, widget.onNavigate!, index),
+                    ),
+                  Expanded(child: Shortcuts(
                   shortcuts: <LogicalKeySet, Intent>{
                     LogicalKeySet(
                       LogicalKeyboardKey.control,
@@ -3509,7 +3850,11 @@ class _LedgerViewState extends State<_LedgerView> {
                               child: _buildScreenBackground(context),
                             ),
                           ),
-                          if (isDesktop)
+                          if (useHarbor)
+                            _buildHarborWorkspace(context, provider,
+                              isDesktop: isDesktop, isCompact: isCompact,
+                              showRail: showRail, bottomPadding: bottomPadding)
+                          else if (isDesktop)
                             SingleChildScrollView(
                               controller: _tableVerticalController,
                               keyboardDismissBehavior:
@@ -3524,7 +3869,7 @@ class _LedgerViewState extends State<_LedgerView> {
                                 alignment: Alignment.topCenter,
                                 child: SizedBox(
                                   width: desktopPageWidth,
-                                  child: pageContent,
+                                  child: pageContent!,
                                 ),
                               ),
                             )
@@ -3539,13 +3884,14 @@ class _LedgerViewState extends State<_LedgerView> {
                                 isCompact ? 16 : 20,
                                 bottomPadding,
                               ),
-                              child: pageContent,
+                              child: pageContent!,
                             ),
                         ],
                       ),
                     ),
                   ),
-                ),
+                )),
+                ]),
               ),
             );
           },
@@ -6493,4 +6839,12 @@ class _LedgerTransferCustomerDialogState
       ],
     );
   }
+}
+
+class _HarborEntryBalance {
+  const _HarborEntryBalance(this.isOpeningBalanceEntry, this.hasValue, this.balance, this.remaining);
+  final bool isOpeningBalanceEntry;
+  final bool hasValue;
+  final double balance;
+  final double? remaining;
 }

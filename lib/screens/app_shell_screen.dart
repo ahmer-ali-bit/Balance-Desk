@@ -18,8 +18,8 @@ import '../services/manual_update_service.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/app_pin_dialogs.dart';
 import '../widgets/mobile_premium.dart';
+import '../widgets/harbor_navigation.dart';
 import '../widgets/platform_shell_layouts.dart';
-import '../widgets/scale_down_width.dart';
 import 'customer_list_screen.dart';
 import 'snapshot_entries_screen.dart';
 import 'summary_screen.dart';
@@ -127,20 +127,12 @@ class _AppShellScreenState extends State<AppShellScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final content = AnimatedSwitcher(
-      duration: const Duration(milliseconds: 220),
-      layoutBuilder: (Widget? currentChild, List<Widget> previousChildren) =>
-          Stack(
-            alignment: Alignment.topCenter,
-            children: <Widget>[...previousChildren, ?currentChild],
-          ),
-      child: _buildActivePage(),
-    );
+    // A direct keyed page avoids keeping two expensive ledger screens alive
+    // during every navigation transition.
+    final content = _buildActivePage();
 
     if (PlatformHelper.isDesktop) {
-      return ScaleDownWidth(
-        designWidth: 1100,
-        child: DesktopDrawerLayout(
+      return DesktopDrawerLayout(
           title: _destinations[_selectedIndex].label,
           drawerChild: _buildSidebarContent(
             dark: true,
@@ -149,7 +141,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
             showDestinations: false,
           ),
           content: _buildDesktopMain(content),
-        ),
       );
     }
 
@@ -211,7 +202,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
       child: Scaffold(
       resizeToAvoidBottomInset: true,
       backgroundColor: colorScheme.surface,
-      extendBody: true,
+      extendBody: false,
       drawerScrimColor: Colors.black.withValues(alpha: 0.58),
       drawer: Drawer(
         width: math.min(MediaQuery.sizeOf(context).width * 0.88, 356),
@@ -238,51 +229,37 @@ class _AppShellScreenState extends State<AppShellScreen> {
         ),
       ),
       body: _buildMobileMain(content),
-      bottomNavigationBar: _MobileBottomNav(
-        selectedIndex: _selectedIndex,
-        destinations: _destinations,
-        onSelected: _selectIndex,
-      ),
       ),
     );
   }
 
+  void _navigateHarbor(int index) {
+    if (!mounted) return;
+    if (index == 3) {
+      _openBackupRestoreScreen();
+    } else {
+      _selectIndex(index);
+    }
+  }
+
   Widget _buildMobileMain(Widget content) {
-    return DecoratedBox(
+    return Column(
       key: const ValueKey<String>('mobile-content'),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: <Color>[
-            Theme.of(context).colorScheme.surfaceContainerLowest,
-            Theme.of(context).colorScheme.surface,
-          ],
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[Expanded(child: content)],
-      ),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        HarborNavigationBar(selectedIndex: _selectedIndex, onSelected: _navigateHarbor, includeBackup: false),
+        Expanded(child: content),
+      ],
     );
   }
 
   Widget _buildDesktopMain(Widget content) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(6, 8, 6, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          _ShellNavigationHeader(
-            selectedIndex: _selectedIndex,
-            destinations: _destinations,
-            onSelected: _selectIndex,
-          ),
-          const SizedBox(height: 14),
-          Expanded(child: content),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Expanded(child: content),
+        HarborNavigationBar(selectedIndex: _selectedIndex, onSelected: _navigateHarbor),
+      ],
     );
   }
 
@@ -639,9 +616,10 @@ class _AppShellScreenState extends State<AppShellScreen> {
       key: ValueKey<String>(
         '$_selectedIndex-$_reloadRevision-$activeYear-$workspaceId',
       ),
-      child: PlatformHelper.isDesktop
-          ? _PageSurface(child: _destinations[_selectedIndex].child)
-          : _destinations[_selectedIndex].child,
+      child: HarborNavigationScope(
+        onNavigate: _navigateHarbor,
+        child: _destinations[_selectedIndex].child,
+      ),
     );
   }
 
@@ -962,57 +940,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
     setState(() {
       _reloadRevision++;
     });
-  }
-}
-
-class _ShellNavigationHeader extends StatelessWidget {
-  const _ShellNavigationHeader({
-    required this.selectedIndex,
-    required this.destinations,
-    required this.onSelected,
-  });
-
-  final int selectedIndex;
-  final List<_ShellDestination> destinations;
-  final ValueChanged<int> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: ScaleDownWidth(
-        designWidth: 960,
-        child: Row(
-          children: <Widget>[
-            for (
-              var index = 0;
-              index < destinations.length;
-              index++
-            ) ...<Widget>[
-              Expanded(
-                child: _ShellNavigationPill(
-                  label: destinations[index].label,
-                  icon: index == selectedIndex
-                      ? destinations[index].selectedIcon
-                      : destinations[index].icon,
-                  selected: index == selectedIndex,
-                  onTap: () => onSelected(index),
-                ),
-              ),
-              if (index != destinations.length - 1) const SizedBox(width: 10),
-            ],
-          ],
-        ),
-      ),
-    );
   }
 }
 
@@ -1790,106 +1717,6 @@ class _AddYearDialogState extends State<_AddYearDialog> {
   }
 }
 
-class _PageSurface extends StatelessWidget {
-  const _PageSurface({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        if (!PlatformHelper.isDesktop) {
-          return child;
-        }
-
-        final compact =
-            constraints.maxWidth < 720 || constraints.maxHeight < 560;
-        final colorScheme = Theme.of(context).colorScheme;
-        final borderRadius = BorderRadius.circular(compact ? 22 : 28);
-
-        return Padding(
-          padding: EdgeInsets.zero,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: colorScheme.surface,
-              borderRadius: borderRadius,
-              border: Border.all(color: colorScheme.outlineVariant),
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.18),
-                  blurRadius: compact ? 16 : 22,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: ClipRRect(borderRadius: borderRadius, child: child),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _ShellNavigationPill extends StatelessWidget {
-  const _ShellNavigationPill({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Ink(
-          height: 32,
-          decoration: BoxDecoration(
-            color: selected
-                ? colorScheme.primary
-                : colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              Icon(
-                icon,
-                size: 16,
-                color: selected
-                    ? colorScheme.onPrimary
-                    : colorScheme.primary.withValues(alpha: 0.86),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: selected
-                      ? colorScheme.onPrimary
-                      : colorScheme.primary.withValues(alpha: 0.86),
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _SidebarNavItem extends StatefulWidget {
   const _SidebarNavItem({
     required this.icon,
@@ -2375,114 +2202,6 @@ class _MobileDrawerAction extends StatelessWidget {
                 ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MobileBottomNav extends StatelessWidget {
-  const _MobileBottomNav({
-    required this.selectedIndex,
-    required this.destinations,
-    required this.onSelected,
-  });
-
-  final int selectedIndex;
-  final List<_ShellDestination> destinations;
-  final ValueChanged<int> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
-        child: MobilePremiumPanel(
-          padding: const EdgeInsets.all(6),
-          child: Row(
-            children: <Widget>[
-              for (var i = 0; i < destinations.length; i++) ...<Widget>[
-                Expanded(
-                  child: _MobileBottomNavItem(
-                    label: destinations[i].label,
-                    icon: selectedIndex == i
-                        ? destinations[i].selectedIcon
-                        : destinations[i].icon,
-                    selected: selectedIndex == i,
-                    colorScheme: colorScheme,
-                    onTap: () => onSelected(i),
-                  ),
-                ),
-                if (i < destinations.length - 1) const SizedBox(width: 4),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MobileBottomNavItem extends StatelessWidget {
-  const _MobileBottomNavItem({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.colorScheme,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final ColorScheme colorScheme;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(kMobilePremiumRadius),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
-        decoration: BoxDecoration(
-          color: selected
-              ? colorScheme.primary.withValues(alpha: 0.16)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(kMobilePremiumRadius),
-          border: selected
-              ? Border.all(color: colorScheme.primary.withValues(alpha: 0.22))
-              : null,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(
-              icon,
-              size: 22,
-              color: selected
-                  ? colorScheme.primary
-                  : colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected
-                    ? colorScheme.primary
-                    : colorScheme.onSurfaceVariant,
-                fontSize: 10,
-              ),
-            ),
-          ],
         ),
       ),
     );

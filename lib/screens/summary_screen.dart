@@ -10,6 +10,7 @@ import '../services/pdf_service.dart';
 import '../utils/app_colors.dart';
 import '../utils/number_format_utils.dart';
 import '../utils/platform_helper.dart';
+import '../widgets/harbor_navigation.dart';
 import '../widgets/customer_search_field.dart';
 import '../widgets/mobile_premium.dart';
 import '../widgets/summary_stat_card.dart';
@@ -192,6 +193,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
   Future<void> _navigateToCustomerLedger(Customer customer) async {
     final customerProvider = context.read<CustomerProvider>();
+    final shellNavigation = HarborNavigationScope.maybeOf(context);
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => MultiProvider(
@@ -200,7 +202,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
               value: customerProvider,
             ),
           ],
-          child: LedgerScreen(customer: customer, autoOpenAddEntry: false),
+          child: LedgerScreen(customer: customer, autoOpenAddEntry: false, onNavigate: shellNavigation),
         ),
       ),
     );

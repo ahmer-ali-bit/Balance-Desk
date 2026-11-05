@@ -14,6 +14,7 @@ import 'package:shop/screens/customer_list_screen.dart';
 import 'package:shop/screens/ledger_screen.dart';
 import 'package:shop/theme/balance_desk_theme.dart';
 import 'package:shop/widgets/summary_stat_card.dart';
+import 'package:shop/widgets/harbor_navigation.dart';
 import 'package:shop/utils/number_format_utils.dart';
 import 'package:intl/intl.dart';
 
@@ -139,6 +140,142 @@ void main() {
       await tester.pump();
     });
     provider.dispose();
+  });
+
+  testWidgets('Harbor navigation remains usable at phone widths', (tester) async {
+    var selected = -1;
+    await tester.binding.setSurfaceSize(const Size(320, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(MaterialApp(
+      theme: BalanceDeskTheme.lightTheme(),
+      home: Scaffold(body: Column(children: <Widget>[
+        HarborNavigationBar(
+          selectedIndex: 0,
+          includeBackup: false,
+          onSelected: (index) => selected = index,
+        ),
+      ])),
+    ));
+    expect(find.text('Customers'), findsOneWidget);
+    expect(find.text('Summary'), findsOneWidget);
+    expect(find.text('Daily Logs'), findsOneWidget);
+    await tester.tap(find.text('Summary'));
+    expect(selected, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Harbor ledger keeps actions and lazily builds long lists', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final customerProvider = CustomerProvider();
+    late final Customer customer;
+    await tester.runAsync(() async {
+      customer = (await customerProvider.addCustomerAndReturn('Long Ledger'))!;
+      await customerProvider.addCustomerAndReturn('Other Customer');
+      await customerProvider.loadCustomers();
+      final db = await AppDatabase.instance.database;
+      final batch = db.batch();
+      for (var i = 0; i < 200; i++) {
+        batch.insert('entries', <String, Object?>{
+          'customerId': customer.id,
+          'entryDate': '2026-01-01',
+          'createdAt': DateTime(2026, 1, 1).add(Duration(seconds: i)).toIso8601String(),
+          'pageNo': '$i',
+          'description': 'Entry $i',
+          'debit': 1.0,
+          'credit': 0.0,
+          'buyBags': 0,
+          'sellBags': 0,
+        });
+      }
+      await batch.commit(noResult: true);
+      await AppDatabase.instance.setCustomerLedgerOpeningBalance(
+        customerId: customer.id!, debit: 25, credit: 0,
+      );
+    });
+    await tester.runAsync(() async {
+      await tester.pumpWidget(ChangeNotifierProvider<CustomerProvider>.value(
+        value: customerProvider,
+        child: MaterialApp(
+          theme: BalanceDeskTheme.desktopTheme(),
+          home: LedgerScreen(customer: customer, autoOpenAddEntry: false),
+        ),
+      ));
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(find.byKey(const ValueKey<String>('harbor-ledger-scroll')), findsOneWidget);
+      expect(find.text('Entry 199'), findsOneWidget);
+      expect(find.text('Entry 0'), findsNothing); // off-screen rows are not built
+      expect(find.text('225 D'), findsWidgets); // includes opening balance
+      expect(find.byTooltip('Entry Options'), findsWidgets);
+      final scrollBefore = tester.widget<CustomScrollView>(
+        find.byKey(const ValueKey<String>('harbor-ledger-scroll')),
+      );
+      await tester.enterText(find.byType(TextField).first, 'Other');
+      await tester.pump();
+      expect(find.text('Other Customer'), findsOneWidget);
+      expect(identical(scrollBefore, tester.widget<CustomScrollView>(
+        find.byKey(const ValueKey<String>('harbor-ledger-scroll')),
+      )), isTrue); // directory search doesn't rebuild the ledger
+      await tester.enterText(find.byType(TextField).first, '');
+      await tester.pump();
+      await tester.tap(find.byTooltip('Entry Options').first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Edit Entry'), findsOneWidget);
+      expect(find.text('Transfer to another customer'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await tester.pump();
+    });
+    customerProvider.dispose();
+  });
+
+  testWidgets('Harbor stock ledger preserves quantity and balance display', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final customerProvider = CustomerProvider();
+    late final Customer customer;
+    await tester.runAsync(() async {
+      customer = (await customerProvider.addCustomerAndReturn('Stock Customer'))!;
+      final db = AppDatabase.instance;
+      await db.updateCustomerStockMode(customer.id!, true);
+      await db.addStockEntry(customerId: customer.id!, entryDate: '2026-01-01',
+        createdAt: '2026-01-01T09:00:00', pageNo: '1', description: 'Stock purchase',
+        buyBags: '10', buyAmount: 100, sellBags: '', sellAmount: 0);
+      await db.addStockEntry(customerId: customer.id!, entryDate: '2026-01-02',
+        createdAt: '2026-01-02T09:00:00', pageNo: '2', description: 'Stock sale',
+        buyBags: '', buyAmount: 0, sellBags: '4', sellAmount: 40);
+      await customerProvider.loadCustomers();
+    });
+    await tester.runAsync(() async {
+      await tester.pumpWidget(ChangeNotifierProvider<CustomerProvider>.value(
+        value: customerProvider,
+        child: MaterialApp(theme: BalanceDeskTheme.desktopTheme(),
+          home: LedgerScreen(customer: customer, autoOpenAddEntry: false)),
+      ));
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(find.text('Stock sale'), findsOneWidget);
+      expect(find.text('Buy Bags'), findsWidgets);
+      expect(find.text('Sell Bags'), findsWidgets);
+      expect(find.text('Remaining Bags'), findsWidgets);
+      expect(find.text('60 C'), findsWidgets);
+      expect(find.text('6'), findsWidgets);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await tester.pump();
+    });
+    customerProvider.dispose();
   });
 
   test('customer provider can add and reload a customer', () async {

@@ -9,6 +9,7 @@ import '../widgets/app_empty_state.dart';
 import '../widgets/customer_search_field.dart';
 import '../widgets/mobile_premium.dart';
 import '../widgets/scale_down_width.dart';
+import '../widgets/harbor_navigation.dart';
 import 'ledger_screen.dart';
 
 /// Uses the same customer form and provider as the directory screen.
@@ -156,6 +157,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
 
   Future<void> _openLedger(Customer customer) async {
     final customerProvider = context.read<CustomerProvider>();
+    final shellNavigation = HarborNavigationScope.maybeOf(context);
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => MultiProvider(
@@ -164,7 +166,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
               value: customerProvider,
             ),
           ],
-          child: LedgerScreen(customer: customer),
+          child: LedgerScreen(customer: customer, onNavigate: shellNavigation),
         ),
       ),
     );
