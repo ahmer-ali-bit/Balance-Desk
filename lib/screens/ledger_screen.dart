@@ -3947,16 +3947,12 @@ class _LedgerViewState extends State<_LedgerView> {
             ),
           ),
           const SizedBox(height: 10),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              isOpeningBalanceEntry
-                  ? 'Opening Balance'
-                  : entry.displayDescription,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+          Text(
+            isOpeningBalanceEntry ? 'Opening Balance' : entry.displayDescription,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 10),

@@ -13,6 +13,7 @@ import 'package:shop/providers/customer_provider.dart';
 import 'package:shop/screens/customer_list_screen.dart';
 import 'package:shop/screens/ledger_screen.dart';
 import 'package:shop/theme/balance_desk_theme.dart';
+import 'package:shop/widgets/summary_stat_card.dart';
 import 'package:shop/utils/number_format_utils.dart';
 import 'package:intl/intl.dart';
 
@@ -76,6 +77,20 @@ void main() {
       BalanceDeskTheme.desktopTheme().colorScheme.primary,
       BalanceDeskTheme.lightTheme().colorScheme.primary,
     );
+  });
+
+  testWidgets('summary amounts stay legible in the light theme', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      theme: BalanceDeskTheme.desktopTheme(),
+      home: const Scaffold(body: SummaryStatCard(
+        label: 'Total Debit',
+        value: '12,500',
+        backgroundColor: Colors.green,
+        labelColor: Colors.white,
+      )),
+    ));
+    expect(tester.widget<Text>(find.text('12,500')).style?.color, isNot(Colors.white));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('desktop ledger keeps the customer directory and actions', (

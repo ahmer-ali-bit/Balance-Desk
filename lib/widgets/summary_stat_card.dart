@@ -35,6 +35,8 @@ class SummaryStatCard extends StatelessWidget {
     final resolvedHeight = height ?? (compact ? 56 : 76);
 
     final isMetric = backgroundColor != null;
+    final isLightMetric = isMetric && theme.brightness == Brightness.light;
+    final metricTextColor = isLightMetric ? colorScheme.onSurface : labelColor;
     final borderRadius = BorderRadius.circular(compact ? 12 : 16);
 
     return SizedBox(
@@ -73,15 +75,15 @@ class SummaryStatCard extends StatelessWidget {
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: isMetric
-                        ? Colors.white.withValues(alpha: 0.15)
+                        ? (isLightMetric ? backgroundColor! : Colors.white).withValues(alpha: 0.15)
                         : colorScheme.primary.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
                     icon,
                     size: compact ? 16 : 20,
-                    color: labelColor ??
-                        (isMetric ? Colors.white : colorScheme.primary),
+                    color: isLightMetric ? backgroundColor : (labelColor ??
+                        (isMetric ? Colors.white : colorScheme.primary)),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -101,10 +103,10 @@ class SummaryStatCard extends StatelessWidget {
                           style: labelStyle?.copyWith(
                             letterSpacing: 0.5,
                             fontSize: compact ? 9 : 10,
-                            color: labelColor ??
+                            color: isLightMetric ? colorScheme.onSurfaceVariant : (labelColor ??
                                 (isMetric
                                     ? Colors.white.withValues(alpha: 0.7)
-                                    : colorScheme.onSurfaceVariant),
+                                    : colorScheme.onSurfaceVariant)),
                           ),
                         ),
                       ),
@@ -119,7 +121,7 @@ class SummaryStatCard extends StatelessWidget {
                           value,
                           style: valueStyle?.copyWith(
                             fontSize: compact ? 14 : 16,
-                            color: labelColor ??
+                            color: metricTextColor ??
                                 (isMetric ? Colors.white : null),
                           ),
                         ),

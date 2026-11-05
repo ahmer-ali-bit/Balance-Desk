@@ -1790,14 +1790,14 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: (isMetric ? Colors.white : colorScheme.primary)
+                  color: (isMetric ? accentColor : colorScheme.primary)
                       .withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
                   icon,
                   size: 16,
-                  color: isMetric ? Colors.white : colorScheme.primary,
+                  color: isMetric ? accentColor : colorScheme.primary,
                 ),
               ),
               const SizedBox(width: 10),
@@ -1813,9 +1813,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                       child: Text(
                         label.toUpperCase(),
                         style: theme.textTheme.labelMedium?.copyWith(
-                          color: isMetric
-                              ? Colors.white.withValues(alpha: 0.7)
-                              : colorScheme.onSurfaceVariant,
+                          color: colorScheme.onSurfaceVariant,
                           fontSize: 9,
                           letterSpacing: 0.5,
                           fontWeight: FontWeight.w800,
@@ -1829,9 +1827,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                       child: Text(
                         value,
                         style: theme.textTheme.titleSmall?.copyWith(
-                          color: isMetric
-                              ? Colors.white
-                              : colorScheme.onSurface,
+                          color: colorScheme.onSurface,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
