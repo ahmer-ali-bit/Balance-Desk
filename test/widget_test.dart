@@ -7,6 +7,7 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:shop/database/app_database.dart';
+import 'package:shop/main.dart' show ShopDesktopApp;
 import 'package:shop/providers/customer_provider.dart';
 import 'package:shop/screens/customer_list_screen.dart';
 import 'package:shop/utils/number_format_utils.dart';
@@ -105,6 +106,10 @@ void main() {
     expect(provider.customers.length, 1);
 
     provider.dispose();
+  });
+
+  test('application entry point compiles', () {
+    expect(const ShopDesktopApp(), isA<ShopDesktopApp>());
   });
 
   test('batched summary reads match individual ledger reads', () async {

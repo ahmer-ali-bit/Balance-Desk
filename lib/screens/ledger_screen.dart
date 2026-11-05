@@ -2366,9 +2366,7 @@ class _LedgerViewState extends State<_LedgerView> {
               children: <Widget>[
                 LayoutBuilder(
                   builder: (BuildContext context, BoxConstraints constraints) {
-                    final canEdit = true;
-                    final editButton = canEdit
-                        ? IconButton.filledTonal(
+                    final editButton = IconButton.filledTonal(
                             tooltip: 'Edit customer details',
                             onPressed: () => _showEditCustomerDialog(provider),
                             style: IconButton.styleFrom(
@@ -2376,8 +2374,7 @@ class _LedgerViewState extends State<_LedgerView> {
                               foregroundColor: colorScheme.primary,
                             ),
                             icon: const Icon(Icons.edit_outlined),
-                          )
-                        : null;
+                          );
 
                     final titleBlock = Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2466,8 +2463,8 @@ class _LedgerViewState extends State<_LedgerView> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(child: titleBlock),
-                            if (editButton != null) const SizedBox(width: 16),
-                            ?editButton,
+                            const SizedBox(width: 16),
+                            editButton,
                           ],
                         ),
                         const SizedBox(height: 16),
@@ -2719,9 +2716,7 @@ class _LedgerViewState extends State<_LedgerView> {
       );
     }
 
-    final canEdit = true;
-    final editButton = canEdit
-        ? IconButton.filledTonal(
+    final editButton = IconButton.filledTonal(
             tooltip: 'Edit customer details',
             onPressed: () => _showEditCustomerDialog(provider),
             style: IconButton.styleFrom(
@@ -2729,8 +2724,7 @@ class _LedgerViewState extends State<_LedgerView> {
               foregroundColor: colorScheme.primary,
             ),
             icon: const Icon(Icons.edit_outlined),
-          )
-        : null;
+          );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2777,8 +2771,8 @@ class _LedgerViewState extends State<_LedgerView> {
                 ],
               ),
             ),
-            if (editButton != null) const SizedBox(width: 16),
-            ?editButton,
+            const SizedBox(width: 16),
+            editButton,
           ],
         ),
         const SizedBox(height: 20),
@@ -3183,11 +3177,9 @@ class _LedgerViewState extends State<_LedgerView> {
                                         ).colorScheme.onSurfaceVariant,
                                 ),
                                 value: provider.isStockLedger,
-                                onChanged: true
-                                    ? (bool value) {
-                                        provider.toggleStockLedger();
-                                      }
-                                    : null,
+                                onChanged: (bool value) {
+                                  provider.toggleStockLedger();
+                                },
                                 trackColor:
                                     WidgetStateProperty.resolveWith<Color?>(
                                       (states) =>
@@ -3228,10 +3220,8 @@ class _LedgerViewState extends State<_LedgerView> {
                                           ).colorScheme.onSurfaceVariant,
                                   ),
                                   value: provider.useWeight,
-                                  onChanged: true
-                                      ? (bool value) =>
-                                            provider.toggleStockWeight()
-                                      : null,
+                                  onChanged: (bool value) =>
+                                      provider.toggleStockWeight(),
                                   trackColor:
                                       WidgetStateProperty.resolveWith<Color?>(
                                         (states) =>

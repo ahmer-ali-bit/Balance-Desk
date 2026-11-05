@@ -3325,15 +3325,13 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         const DataCell(Text('')),
         DataCell(Text(item.entry.pageNo.isEmpty ? '-' : item.entry.pageNo)),
         DataCell(
-          true
-              ? IconButton(
-                  tooltip: 'Delete or Remove Entry',
-                  icon: const Icon(Icons.remove_circle_outline),
-                  color: Theme.of(context).colorScheme.error,
-                  onPressed: () => _removeEntryFromDailyLog(item.entry),
-                  visualDensity: VisualDensity.compact,
-                )
-              : const SizedBox.shrink(),
+          IconButton(
+            tooltip: 'Delete or Remove Entry',
+            icon: const Icon(Icons.remove_circle_outline),
+            color: Theme.of(context).colorScheme.error,
+            onPressed: () => _removeEntryFromDailyLog(item.entry),
+            visualDensity: VisualDensity.compact,
+          ),
         ),
       ],
     );
@@ -3449,9 +3447,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                       : () => _deleteSnapshot(snapshot),
                   icon: const Icon(Icons.delete_outline),
                   visualDensity: VisualDensity.compact,
-                )
-              else
-                const SizedBox.shrink(),
+                ),
             ],
           ),
         ),
@@ -3722,25 +3718,21 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
 enum _TimelineNodeType { entry, snapshotCard, balanceCard }
 
 class _TimelineNode {
-  const _TimelineNode(this.type, {this.entryIndex, this.snapshotIndex, this.isOpeningBalance = false});
+  const _TimelineNode.entry(this.entryIndex)
+      : type = _TimelineNodeType.entry,
+        snapshotIndex = null,
+        isOpeningBalance = false;
 
-  const factory _TimelineNode.entry(int entryIndex) =
-      _TimelineNode._entry;
+  const _TimelineNode.snapshotCard(this.snapshotIndex)
+      : type = _TimelineNodeType.snapshotCard,
+        entryIndex = null,
+        isOpeningBalance = false;
 
-  const factory _TimelineNode.snapshotCard(int snapshotIndex) =
-      _TimelineNode._snapshotCard;
-
-  const factory _TimelineNode.balanceCard(int snapshotIndex, {bool isOpeningBalance}) =
-      _TimelineNode._balanceCard;
-
-  const _TimelineNode._entry(int entryIndex)
-      : this(_TimelineNodeType.entry, entryIndex: entryIndex);
-
-  const _TimelineNode._snapshotCard(int snapshotIndex)
-      : this(_TimelineNodeType.snapshotCard, snapshotIndex: snapshotIndex);
-
-  const _TimelineNode._balanceCard(int snapshotIndex, {bool isOpeningBalance = false})
-      : this(_TimelineNodeType.balanceCard, snapshotIndex: snapshotIndex, isOpeningBalance: isOpeningBalance);
+  const _TimelineNode.balanceCard(
+    this.snapshotIndex, {
+    this.isOpeningBalance = false,
+  })  : type = _TimelineNodeType.balanceCard,
+        entryIndex = null;
 
   final _TimelineNodeType type;
   final int? entryIndex;

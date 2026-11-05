@@ -315,6 +315,14 @@ class _AppShellScreenState extends State<AppShellScreen> {
       onWorkspaceSwitched: () {
         _closeDrawerIfNeeded(closeDrawerOnAction);
       },
+      onBackupRequested: () => _runDrawerAction(
+        closeDrawerOnAction: closeDrawerOnAction,
+        action: _openBackupRestoreScreen,
+      ),
+      onPinRequested: () => _runDrawerAction(
+        closeDrawerOnAction: closeDrawerOnAction,
+        action: _openPinSettings,
+      ),
       onCompanyProfileRequested: () => _runDrawerAction(
         closeDrawerOnAction: closeDrawerOnAction,
         action: _openCompanyProfileEditor,
@@ -327,9 +335,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
         closeDrawerOnAction: closeDrawerOnAction,
         action: _openManualUpdateDialog,
       ),
-      onWorkspaceSwitched: () {
-        _closeDrawerIfNeeded(closeDrawerOnAction);
-      },
+
       pinButtonLabel: _isPinEnabled ? 'Manage App PIN' : 'Set App PIN',
       companyName: _companyProfile.name.trim().isEmpty
           ? 'Balance Desk'
@@ -777,6 +783,17 @@ class _AppShellScreenState extends State<AppShellScreen> {
   }
 
   Future<void> _openBackupRestoreScreen() async {
+    final yearProvider = context.read<LedgerYearProvider>();
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const BackupRestoreScreen()),
+    );
+    if (!mounted) return;
+    await yearProvider.loadYears();
+    if (!mounted) return;
+    await _reloadActiveYearData();
+  }
+
+  Future<void> _openCompanyProfileEditor({bool isInitial = false}) async {
     final nameController = TextEditingController(text: _companyProfile.name);
     String? pickedLogoPath = _companyProfile.logoPath;
     bool removeLogo = false;
