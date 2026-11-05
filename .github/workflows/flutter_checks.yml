@@ -65,6 +65,12 @@ jobs:
       - run: flutter pub get
       - name: Build Windows app
         run: flutter build windows --release
+      - name: Save Windows test build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Balance-Desk-Windows-UI-preview
+          path: build/windows/x64/runner/Release/
+          if-no-files-found: error
 
   android-build:
     runs-on: ubuntu-latest
@@ -81,3 +87,9 @@ jobs:
       - run: flutter pub get
       - name: Build Android app
         run: flutter build apk --debug
+      - name: Save Android test build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Balance-Desk-Android-UI-preview
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
