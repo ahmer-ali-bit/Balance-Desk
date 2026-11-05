@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import '../database/app_database.dart';
 import '../models/customer.dart';
 import '../models/customer_summary.dart';
@@ -18,10 +20,13 @@ class SummaryProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
 
-  List<CustomerSummary> get customerSummaries =>
-      List<CustomerSummary>.unmodifiable(_customerSummaries);
-  List<SummarySnapshot> get snapshots =>
-      List<SummarySnapshot>.unmodifiable(_snapshots);
+  late UnmodifiableListView<CustomerSummary> _customerSummariesView =
+      UnmodifiableListView<CustomerSummary>(_customerSummaries);
+  late UnmodifiableListView<SummarySnapshot> _snapshotsView =
+      UnmodifiableListView<SummarySnapshot>(_snapshots);
+
+  List<CustomerSummary> get customerSummaries => _customerSummariesView;
+  List<SummarySnapshot> get snapshots => _snapshotsView;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
@@ -107,6 +112,8 @@ class SummaryProvider extends ChangeNotifier {
 
       _customerSummaries = summaries;
       _snapshots = snapshots;
+      _customerSummariesView = UnmodifiableListView<CustomerSummary>(summaries);
+      _snapshotsView = UnmodifiableListView<SummarySnapshot>(snapshots);
       _errorMessage = null;
     } catch (error, stackTrace) {
       debugPrint('SummaryProvider.loadSummary failed: $error');

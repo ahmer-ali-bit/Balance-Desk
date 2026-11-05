@@ -23,9 +23,16 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
   final FocusNode searchFocusNode = FocusNode();
   final ScrollController _tableVerticalController = ScrollController();
 
+  /// Cards/rows rendered per batch; both the mobile card list and the desktop
+  /// table used to materialise every customer on each build.
+  static const int _customerPageSize = 150;
+  int _visibleCustomerLimit = _customerPageSize;
+  int _totalCustomerCount = 0;
+
   @override
   void initState() {
     super.initState();
+    _tableVerticalController.addListener(_maybeGrowVisibleCustomers);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -36,6 +43,39 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
         provider.loadCustomers();
       }
     });
+  }
+
+  void _maybeGrowVisibleCustomers() {
+    if (!mounted || _visibleCustomerLimit >= _totalCustomerCount) return;
+    if (!_tableVerticalController.hasClients) return;
+    final ScrollPosition position = _tableVerticalController.position;
+    if (position.pixels < position.maxScrollExtent - 600) return;
+    setState(() {
+      _visibleCustomerLimit = _visibleCustomerLimit + _customerPageSize;
+    });
+  }
+
+  void _showMoreCustomers() {
+    setState(() {
+      _visibleCustomerLimit = _visibleCustomerLimit + _customerPageSize;
+    });
+  }
+
+  Widget _buildCustomerLoadMoreFooter(BuildContext context) {
+    final int remaining = _totalCustomerCount - _visibleCustomerLimit;
+    if (remaining <= 0) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Center(
+        child: TextButton.icon(
+          onPressed: _showMoreCustomers,
+          icon: const Icon(Icons.expand_more_rounded, size: 18),
+          label: Text('Show more customers ($remaining more)'),
+        ),
+      ),
+    );
   }
 
   void _scrollTable(double delta) {
@@ -56,6 +96,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
 
   @override
   void dispose() {
+    _tableVerticalController.removeListener(_maybeGrowVisibleCustomers);
     _searchController.dispose();
     searchFocusNode.dispose();
     _tableVerticalController.dispose();
@@ -357,11 +398,20 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    _totalCustomerCount = customers.length;
+    final int visibleCount = customers.length > _visibleCustomerLimit
+        ? _visibleCustomerLimit
+        : customers.length;
+    final bool hasMore = customers.length > visibleCount;
+
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: customers.length,
+      itemCount: visibleCount + (hasMore ? 1 : 0),
       itemBuilder: (context, index) {
+        if (index >= visibleCount) {
+          return _buildCustomerLoadMoreFooter(context);
+        }
         final customer = customers[index];
         return Padding(
           padding: EdgeInsets.only(top: index == 0 ? 0 : 10),
@@ -589,6 +639,8 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       return state;
     }
 
+    _totalCustomerCount = customers.length;
+
     if (compactCards) {
       return _buildCustomerCardList(
         context: context,
@@ -655,9 +707,11 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                           ),
                         ),
                       ],
-                      rows: List<DataRow>.generate(customers.length, (
-                        int index,
-                      ) {
+                      rows: List<DataRow>.generate(
+                        customers.length > _visibleCustomerLimit
+                            ? _visibleCustomerLimit
+                            : customers.length,
+                        (int index) {
                         final customer = customers[index];
 
                         return DataRow.byIndex(

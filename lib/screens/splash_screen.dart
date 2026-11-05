@@ -19,6 +19,10 @@ class _SplashScreenState extends State<SplashScreen>
   final CompanyProfileService _companyProfileService = CompanyProfileService();
   CompanyProfile _profile = const CompanyProfile(name: '', logoPath: null);
 
+  /// Cached once when the profile loads — `existsSync()` inside `build()` did a
+  /// synchronous disk hit on every frame of the splash animation.
+  bool _logoExists = false;
+
   late AnimationController _mainController;
   late Animation<double> _scaleAnimation;
   late Animation<double> _opacityAnimation;
@@ -33,7 +37,7 @@ class _SplashScreenState extends State<SplashScreen>
   void _setupAnimations() {
     _mainController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2500),
+      duration: const Duration(milliseconds: 1100),
     );
 
     _scaleAnimation = TweenSequence<double>([
@@ -67,11 +71,19 @@ class _SplashScreenState extends State<SplashScreen>
     final profile = await _companyProfileService.loadProfile();
     if (!mounted) return;
 
+    final logoPath = profile.logoPath;
+    final hasLogoFile =
+        logoPath != null &&
+        logoPath.trim().isNotEmpty &&
+        await File(logoPath).exists();
+    if (!mounted) return;
+
     setState(() {
       _profile = profile;
+      _logoExists = hasLogoFile;
     });
 
-    await Future.delayed(const Duration(milliseconds: 3200));
+    await Future.delayed(const Duration(milliseconds: 1300));
     if (!mounted) return;
 
     if (context.mounted) {
@@ -81,7 +93,7 @@ class _SplashScreenState extends State<SplashScreen>
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(opacity: animation, child: child);
           },
-          transitionDuration: const Duration(milliseconds: 800),
+          transitionDuration: const Duration(milliseconds: 350),
         ),
       );
     }
@@ -104,7 +116,7 @@ class _SplashScreenState extends State<SplashScreen>
         _profile.logoPath == null || _profile.logoPath!.trim().isEmpty
         ? null
         : File(_profile.logoPath!);
-    final hasLogo = logoFile != null && logoFile.existsSync();
+    final hasLogo = logoFile != null && _logoExists;
 
     if (!PlatformHelper.isDesktop) {
       return _buildPremiumMobileSplash(
@@ -210,6 +222,7 @@ class _SplashScreenState extends State<SplashScreen>
                                         child: Image.file(
                                           logoFile,
                                           fit: BoxFit.contain,
+                                          cacheWidth: 512,
                                         ),
                                       )
                                     : Icon(
@@ -385,7 +398,11 @@ class _SplashScreenState extends State<SplashScreen>
                             ],
                           ),
                           child: hasLogo
-                              ? Image.file(logoFile!, fit: BoxFit.contain)
+                              ? Image.file(
+                                  logoFile!,
+                                  fit: BoxFit.contain,
+                                  cacheWidth: 512,
+                                )
                               : Icon(
                                   Icons.account_balance_rounded,
                                   size: 46,

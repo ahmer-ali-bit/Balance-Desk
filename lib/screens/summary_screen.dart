@@ -41,14 +41,31 @@ class _SummaryScreenState extends State<SummaryScreen> {
   bool _showSummaryTools = false;
   bool _showSummaryTotals = false;
 
+  /// Rows rendered per batch; the summary list/table used to build every
+  /// customer on each frame.
+  static const int _customerPageSize = 150;
+  int _visibleCustomerLimit = _customerPageSize;
+  int _totalCustomerCount = 0;
+
   @override
   void initState() {
     super.initState();
+    _tableVerticalController.addListener(_maybeGrowVisibleCustomers);
     _loadSummary();
+  }
+
+  /// Grows the rendered window as the desktop table is scrolled to its end.
+  void _maybeGrowVisibleCustomers() {
+    if (!mounted || _visibleCustomerLimit >= _totalCustomerCount) return;
+    if (!_tableVerticalController.hasClients) return;
+    final ScrollPosition position = _tableVerticalController.position;
+    if (position.pixels < position.maxScrollExtent - 600) return;
+    _showMoreSummaries();
   }
 
   @override
   void dispose() {
+    _tableVerticalController.removeListener(_maybeGrowVisibleCustomers);
     _tableVerticalController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
@@ -67,6 +84,20 @@ class _SummaryScreenState extends State<SummaryScreen> {
           .map<Customer>((Map<String, Object?> row) => Customer.fromMap(row))
           .toList(growable: false);
 
+      // Two queries for the whole screen instead of five per customer.
+      final openingBalances = await _database.getCustomerLedgerOpeningBalances();
+      final groupedRows = await _database.getEntriesForActiveYearGrouped();
+
+      // Rows arrive already ordered per customer exactly like
+      // getEntriesByCustomer used to return them.
+      final entriesByCustomer = <int, List<Map<String, Object?>>>{};
+      for (final row in groupedRows) {
+        final idValue = row['customerId'];
+        final id = idValue is int ? idValue : int.tryParse('$idValue');
+        if (id == null) continue;
+        (entriesByCustomer[id] ??= <Map<String, Object?>>[]).add(row);
+      }
+
       final summaries = <_CustomerSummary>[];
 
       for (final customer in customers) {
@@ -75,9 +106,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
           continue;
         }
 
-        final entryRows = await _database.getEntriesByCustomer(customerId);
+        final entryRows =
+            entriesByCustomer[customerId] ?? const <Map<String, Object?>>[];
         final openingBalance =
-            await _database.getCustomerLedgerOpeningBalance(customerId) ??
+            openingBalances[customerId] ??
             const SnapshotOpeningBalance(debit: 0, credit: 0);
         final entries = entryRows
             .map<Entry>((Map<String, Object?> row) => Entry.fromMap(row))
@@ -503,6 +535,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
   Widget _buildPremiumMobileSummaryPage(BuildContext context) {
     final filteredCustomers = _filteredCustomers();
+    _totalCustomerCount = filteredCustomers.length;
     final overallBalance = _summaryData.finalBalance;
     final balanceColor = AppColors.balanceColor(overallBalance);
 
@@ -656,16 +689,47 @@ class _SummaryScreenState extends State<SummaryScreen> {
     BuildContext context,
     List<_CustomerSummary> customers,
   ) {
+    final int visibleCount = customers.length > _visibleCustomerLimit
+        ? _visibleCustomerLimit
+        : customers.length;
+    final bool hasMore = customers.length > visibleCount;
+
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: customers.length,
+      itemCount: visibleCount + (hasMore ? 1 : 0),
       itemBuilder: (context, index) {
+        if (index >= visibleCount) {
+          return _buildSummaryLoadMoreFooter(context, customers.length);
+        }
         return Padding(
           padding: EdgeInsets.only(top: index == 0 ? 0 : 10),
           child: _buildPremiumMobileSummaryCard(context, customers[index]),
         );
       },
+    );
+  }
+
+  void _showMoreSummaries() {
+    setState(() {
+      _visibleCustomerLimit = _visibleCustomerLimit + _customerPageSize;
+    });
+  }
+
+  Widget _buildSummaryLoadMoreFooter(BuildContext context, int total) {
+    final int remaining = total - _visibleCustomerLimit;
+    if (remaining <= 0) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Center(
+        child: TextButton.icon(
+          onPressed: _showMoreSummaries,
+          icon: const Icon(Icons.expand_more_rounded, size: 18),
+          label: Text('Show more customers ($remaining more)'),
+        ),
+      ),
     );
   }
 
@@ -945,6 +1009,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
         _summaryData.overallDebit - _summaryData.overallCredit;
 
     final filteredCustomers = _filteredCustomers();
+    _totalCustomerCount = filteredCustomers.length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -961,6 +1026,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
         filteredCustomers.isEmpty
             ? _buildEmptyState(context)
             : _buildSummaryTable(context, filteredCustomers),
+        _buildSummaryLoadMoreFooter(context, filteredCustomers.length),
       ],
     );
   }
@@ -1166,7 +1232,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
                   ),
                 ],
                 rows: <DataRow>[
-                  ...customers.map((item) {
+                  ...customers
+                      .take(
+                        customers.length > _visibleCustomerLimit
+                            ? _visibleCustomerLimit
+                            : customers.length,
+                      )
+                      .map((item) {
                     return DataRow(
                       onLongPress: () =>
                           _navigateToCustomerLedger(item.customer),
@@ -1224,7 +1296,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        for (var index = 0; index < customers.length; index++) ...<Widget>[
+        for (var index = 0; index < customers.length && index < _visibleCustomerLimit; index++) ...<Widget>[
           if (index != 0) const SizedBox(height: 10),
           _buildSummaryListCard(context, customers[index]),
         ],

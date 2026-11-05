@@ -792,9 +792,15 @@ class _AppShellScreenState extends State<AppShellScreen> {
               if (path == null || path.trim().isEmpty) {
                 return const SizedBox.shrink();
               }
-              final file = File(path);
-              if (!file.existsSync()) return const SizedBox.shrink();
-              return CircleAvatar(radius: 28, backgroundImage: FileImage(file));
+              return CircleAvatar(
+                radius: 28,
+                backgroundImage: ResizeImage(
+                  FileImage(File(path)),
+                  width: 112,
+                  height: 112,
+                ),
+                onBackgroundImageError: (_, _) {},
+              );
             }
 
             return AlertDialog(
@@ -1275,6 +1281,7 @@ class _SidebarContentState extends State<_SidebarContent> {
                           child: Image.file(
                             File(widget.companyLogoPath!),
                             fit: BoxFit.cover,
+                            cacheWidth: 160,
                             errorBuilder: (_, _, _) => Icon(
                               Icons.account_balance_wallet_rounded,
                               color: colorScheme.primary,
@@ -2052,6 +2059,11 @@ class _ManualUpdateDialogState extends State<_ManualUpdateDialog> {
   bool _isLoading = false;
   String? _statusMessage;
 
+  /// Kept in state: building the future inside `build()` fired a platform
+  /// channel call on every rebuild.
+  late final Future<AppVersionInfo> _versionInfoFuture = widget.service
+      .getAppVersionInfo();
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -2059,7 +2071,7 @@ class _ManualUpdateDialogState extends State<_ManualUpdateDialog> {
       content: SizedBox(
         width: 420,
         child: FutureBuilder<AppVersionInfo>(
-          future: widget.service.getAppVersionInfo(),
+          future: _versionInfoFuture,
           builder: (BuildContext context, AsyncSnapshot<AppVersionInfo> snap) {
             final versionLabel = snap.data?.label ?? 'Loading...';
             return Column(

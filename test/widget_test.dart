@@ -8,6 +8,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:shop/database/app_database.dart';
 import 'package:shop/providers/customer_provider.dart';
 import 'package:shop/screens/customer_list_screen.dart';
+import 'package:shop/utils/number_format_utils.dart';
+import 'package:intl/intl.dart';
 
 void main() {
   setUp(() async {
@@ -89,4 +91,70 @@ void main() {
 
     provider.dispose();
   });
+
+  test('batched summary reads match individual ledger reads', () async {
+    final db = AppDatabase.instance;
+    final first = await db.addCustomer('Alpha');
+    final second = await db.addCustomer('Beta');
+    await db.setCustomerLedgerOpeningBalance(
+      customerId: first,
+      debit: 125.5,
+      credit: 23,
+      buyBags: 4.5,
+      sellBags: 2,
+    );
+    await db.addEntry(
+      customerId: first,
+      entryDate: '2026-01-01',
+      createdAt: '2026-01-01T09:00:00',
+      pageNo: 'old',
+      description: 'first',
+      debit: 120,
+      credit: 10,
+    );
+    await db.addEntry(
+      customerId: first,
+      entryDate: '2026-01-02',
+      createdAt: '2026-01-02T09:00:00',
+      pageNo: 'new',
+      description: 'second',
+      debit: 0,
+      credit: 45,
+    );
+    await db.addEntry(
+      customerId: second,
+      entryDate: '2026-01-01',
+      createdAt: '2026-01-01T09:00:00',
+      pageNo: 'other',
+      description: 'other',
+      debit: 3,
+      credit: 1,
+    );
+
+    final grouped = await db.getEntriesForActiveYearGrouped();
+    for (final id in [first, second]) {
+      expect(
+        grouped.where((row) => row['customerId'] == id).toList(),
+        await db.getEntriesByCustomer(id),
+      );
+    }
+    final opening = (await db.getCustomerLedgerOpeningBalance(first))!;
+    final allOpenings = await db.getCustomerLedgerOpeningBalances();
+    expect(allOpenings[first]!.debit, opening.debit);
+    expect(allOpenings[first]!.credit, opening.credit);
+    expect(allOpenings[first]!.buyBags, opening.buyBags);
+    expect(allOpenings[first]!.sellBags, opening.sellBags);
+    expect(allOpenings.containsKey(second), isFalse);
+  });
+
+  test('cached number formats preserve original formatting', () {
+    for (final amount in <double>[0, 1, -17, 1234567, 2.5, -1834.24]) {
+      final original = NumberFormat('#,##,##0.##', 'en_IN');
+      final digits = amount == amount.roundToDouble() ? 0 : 2;
+      original.minimumFractionDigits = digits;
+      original.maximumFractionDigits = digits;
+      expect(formatAmount(amount), original.format(amount));
+    }
+  });
+
 }

@@ -59,6 +59,17 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   String _searchQuery = '';
   Timer? _obDebounceTimer;
 
+  /// Timeline nodes rendered per batch; the mobile timeline used to build the
+  /// whole period at once inside its parent scroll view.
+  static const int _nodePageSize = 150;
+  int _visibleNodeLimit = _nodePageSize;
+
+  void _showMoreNodes() {
+    setState(() {
+      _visibleNodeLimit = _visibleNodeLimit + _nodePageSize;
+    });
+  }
+
   SummarySnapshot? get _latestSnapshot =>
       _snapshots.isEmpty ? null : _snapshots.last;
 
@@ -2090,11 +2101,30 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       }
     }
 
+    final int visibleCount = nodes.length > _visibleNodeLimit
+        ? _visibleNodeLimit
+        : nodes.length;
+    final bool hasMore = nodes.length > visibleCount;
+
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: nodes.length,
+      itemCount: visibleCount + (hasMore ? 1 : 0),
       itemBuilder: (context, index) {
+        if (index >= visibleCount) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Center(
+              child: TextButton.icon(
+                onPressed: _showMoreNodes,
+                icon: const Icon(Icons.expand_more_rounded, size: 18),
+                label: Text(
+                  'Show older entries (${nodes.length - visibleCount} more)',
+                ),
+              ),
+            ),
+          );
+        }
         final node = nodes[index];
         final child = switch (node.type) {
           _TimelineNodeType.entry =>

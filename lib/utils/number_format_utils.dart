@@ -1,15 +1,25 @@
 import 'package:intl/intl.dart';
 
+// NumberFormat construction is comparatively expensive (pattern parsing +
+// locale lookup), so the formatters are built once and reused. Building one per
+// call is what made large ledger/summary tables janky while scrolling.
+final NumberFormat _wholeAmountFormatter =
+    NumberFormat('#,##,##0.##', 'en_IN')
+      ..minimumFractionDigits = 0
+      ..maximumFractionDigits = 0;
+
+final NumberFormat _fractionAmountFormatter =
+    NumberFormat('#,##,##0.##', 'en_IN')
+      ..minimumFractionDigits = 2
+      ..maximumFractionDigits = 2;
+
+final NumberFormat _bagsFormatter = NumberFormat('#,##,##0', 'en_IN');
+
 String formatAmount(double amount) {
   // Indian numbering format: 1,00,000 / 1,00,00,000
-  final formatter = NumberFormat('#,##,##0.##', 'en_IN');
-  if (amount == amount.roundToDouble()) {
-    formatter.minimumFractionDigits = 0;
-    formatter.maximumFractionDigits = 0;
-  } else {
-    formatter.minimumFractionDigits = 2;
-    formatter.maximumFractionDigits = 2;
-  }
+  final formatter = amount == amount.roundToDouble()
+      ? _wholeAmountFormatter
+      : _fractionAmountFormatter;
   return formatter.format(amount);
 }
 
@@ -25,8 +35,7 @@ String formatBalance(double balance) {
 
 String formatBags(double bags) {
   // Always format bags as integers per user request
-  final formatter = NumberFormat('#,##,##0', 'en_IN');
-  return formatter.format(bags.round());
+  return _bagsFormatter.format(bags.round());
 }
 
 String formatBagsString(String bags) {

@@ -40,16 +40,17 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
     try {
       final dir = await _getBackupDir();
       if (!await dir.exists()) return [];
-      final entities = dir.listSync();
       final files = <FileInfo>[];
-      for (final e in entities) {
-        if (e is! File) continue;
-        if (p.extension(e.path).toLowerCase() != '.json') continue;
-        final stat = e.statSync();
+      // Async scan: `listSync`/`statSync` blocked the UI isolate while the
+      // backup folder was read.
+      await for (final entity in dir.list()) {
+        if (entity is! File) continue;
+        if (p.extension(entity.path).toLowerCase() != '.json') continue;
+        final stat = await entity.stat();
         files.add(
           FileInfo(
-            path: e.path,
-            name: p.basename(e.path),
+            path: entity.path,
+            name: p.basename(entity.path),
             size: stat.size,
             modified: stat.modified,
           ),

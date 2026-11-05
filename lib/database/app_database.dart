@@ -349,6 +349,16 @@ class DatabaseHelper {
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_entries_created_at ON $entriesTable(createdAt)',
     );
+    // Ledger screens always read one customer's rows newest-first; the
+    // composite index keeps that scan off the table heap on big ledgers.
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_entries_customer_created '
+      'ON $entriesTable(customerId, createdAt DESC, entryDate DESC, id DESC)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_summary_snapshots_saved_at '
+      'ON $summarySnapshotsTable(ledgerYear, savedAt)',
+    );
   }
 
   Future<void> _ensureColumn({
@@ -482,31 +492,40 @@ class DatabaseHelper {
   Future<SnapshotOpeningBalance?> getCustomerLedgerOpeningBalance(
     int customerId,
   ) async {
-    final debitSetting = await getAppSetting(
-      _customerLedgerOpeningDebitSettingKey(
-        year: _activeYear,
-        customerId: customerId,
-      ),
+    final debitKey = _customerLedgerOpeningDebitSettingKey(
+      year: _activeYear,
+      customerId: customerId,
     );
-    final creditSetting = await getAppSetting(
-      _customerLedgerOpeningCreditSettingKey(
-        year: _activeYear,
-        customerId: customerId,
-      ),
+    final creditKey = _customerLedgerOpeningCreditSettingKey(
+      year: _activeYear,
+      customerId: customerId,
+    );
+    final buyBagsKey = _customerLedgerOpeningBuyBagsSettingKey(
+      year: _activeYear,
+      customerId: customerId,
+    );
+    final sellBagsKey = _customerLedgerOpeningSellBagsSettingKey(
+      year: _activeYear,
+      customerId: customerId,
     );
 
-    final buyBagsSetting = await getAppSetting(
-      _customerLedgerOpeningBuyBagsSettingKey(
-        year: _activeYear,
-        customerId: customerId,
-      ),
+    // One round trip for the four keys instead of four — this runs every time
+    // a ledger opens.
+    final db = await database;
+    final rows = await db.query(
+      appSettingsTable,
+      columns: <String>['settingKey', 'settingValue'],
+      where: 'settingKey IN (?, ?, ?, ?)',
+      whereArgs: <Object?>[debitKey, creditKey, buyBagsKey, sellBagsKey],
     );
-    final sellBagsSetting = await getAppSetting(
-      _customerLedgerOpeningSellBagsSettingKey(
-        year: _activeYear,
-        customerId: customerId,
-      ),
-    );
+    final stored = <String, String?>{
+      for (final row in rows)
+        (row['settingKey'] as String? ?? ''): row['settingValue'] as String?,
+    };
+    final debitSetting = stored[debitKey];
+    final creditSetting = stored[creditKey];
+    final buyBagsSetting = stored[buyBagsKey];
+    final sellBagsSetting = stored[sellBagsKey];
 
     if (debitSetting == null &&
         creditSetting == null &&
@@ -521,6 +540,75 @@ class DatabaseHelper {
       buyBags: double.tryParse(buyBagsSetting ?? '') ?? 0,
       sellBags: double.tryParse(sellBagsSetting ?? '') ?? 0,
     );
+  }
+
+  /// All per-customer ledger opening balances for the active year, keyed by
+  /// customer id. One query instead of four [getAppSetting] round trips per
+  /// customer, which made the summary screen crawl on big ledgers.
+  ///
+  /// Values are parsed exactly like [getCustomerLedgerOpeningBalance], and a
+  /// customer is only present when at least one of its four keys exists.
+  Future<Map<int, SnapshotOpeningBalance>>
+  getCustomerLedgerOpeningBalances() async {
+    final db = await database;
+    final rows = await db.query(
+      appSettingsTable,
+      columns: <String>['settingKey', 'settingValue'],
+      where: 'settingKey LIKE ?',
+      whereArgs: <Object?>['ledgerOpening%'],
+    );
+
+    final prefixes = <String, int>{
+      'ledgerOpeningDebit:$_activeYear:': 0,
+      'ledgerOpeningCredit:$_activeYear:': 1,
+      'ledgerOpeningBuyBags:$_activeYear:': 2,
+      'ledgerOpeningSellBags:$_activeYear:': 3,
+    };
+    final values = <int, List<double?>>{};
+
+    for (final row in rows) {
+      final key = row['settingKey'] as String?;
+      if (key == null) continue;
+      for (final MapEntry<String, int> prefix in prefixes.entries) {
+        if (!key.startsWith(prefix.key)) continue;
+        final customerId = int.tryParse(key.substring(prefix.key.length));
+        if (customerId == null) break;
+        final parts = values.putIfAbsent(
+          customerId,
+          () => <double?>[null, null, null, null],
+        );
+        parts[prefix.value] = double.tryParse(
+          (row['settingValue'] as String?) ?? '',
+        );
+        break;
+      }
+    }
+
+    final result = <int, SnapshotOpeningBalance>{};
+    values.forEach((int customerId, List<double?> parts) {
+      result[customerId] = SnapshotOpeningBalance(
+        debit: parts[0] ?? 0,
+        credit: parts[1] ?? 0,
+        buyBags: parts[2] ?? 0,
+        sellBags: parts[3] ?? 0,
+      );
+    });
+    return result;
+  }
+
+  /// Every ledger entry of the active year, ordered exactly like
+  /// [getEntriesByCustomer] orders a single customer's rows
+  /// (`createdAt DESC, entryDate DESC, id DESC`). Callers group the rows by
+  /// `customerId` to get identical results without one query per customer.
+  Future<List<Map<String, Object?>>> getEntriesForActiveYearGrouped() async {
+    final db = await database;
+    return db.rawQuery('''
+      SELECT e.*
+      FROM $entriesTable e
+      JOIN $customersTable c ON c.id = e.customerId
+      WHERE c.ledgerYear = ?
+      ORDER BY e.customerId ASC, e.createdAt DESC, e.entryDate DESC, e.id DESC
+      ''', <Object?>[_activeYear]);
   }
 
   Future<void> setCustomerLedgerOpeningBalance({
@@ -2224,6 +2312,15 @@ class AppDatabase {
     int customerId,
   ) {
     return _helper.getCustomerLedgerOpeningBalance(customerId);
+  }
+
+  Future<Map<int, SnapshotOpeningBalance>>
+  getCustomerLedgerOpeningBalances() {
+    return _helper.getCustomerLedgerOpeningBalances();
+  }
+
+  Future<List<Map<String, Object?>>> getEntriesForActiveYearGrouped() {
+    return _helper.getEntriesForActiveYearGrouped();
   }
 
   Future<void> setCustomerLedgerOpeningBalance({

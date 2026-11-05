@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'dart:async';
+import 'dart:collection';
 
 import '../database/app_database.dart';
 import '../models/customer.dart';
@@ -22,7 +23,11 @@ class CustomerProvider extends ChangeNotifier {
   String? _errorMessage;
   String _searchQuery = '';
 
-  List<Customer> get customers => List<Customer>.unmodifiable(_customers);
+  late UnmodifiableListView<Customer> _customersView = UnmodifiableListView(
+    _customers,
+  );
+
+  List<Customer> get customers => _customersView;
   List<Customer> get filteredCustomers {
     final query = _searchQuery.trim().toLowerCase();
     if (query.isEmpty) {
@@ -211,6 +216,7 @@ class CustomerProvider extends ChangeNotifier {
         return leftId.compareTo(rightId);
       });
     _customers = List<Customer>.unmodifiable(sortedCustomers);
+    _customersView = UnmodifiableListView<Customer>(_customers);
   }
 
   void _setLoading(bool value) {

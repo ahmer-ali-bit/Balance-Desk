@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:collection';
+
 import 'package:flutter/material.dart';
 
 import '../database/app_database.dart';
@@ -38,6 +40,13 @@ class LedgerProvider extends ChangeNotifier {
   }
 
   List<Entry> _entries = <Entry>[];
+  late UnmodifiableListView<Entry> _entriesView = UnmodifiableListView<Entry>(
+    _visibleEntries,
+  );
+  double _totalDebit = 0;
+  double _totalCredit = 0;
+  double _totalBuyBags = 0;
+  double _totalSellBags = 0;
   List<Entry> _visibleEntries = <Entry>[];
   SnapshotOpeningBalance _openingBalance = SnapshotOpeningBalance(
     debit: 0,
@@ -61,7 +70,7 @@ class LedgerProvider extends ChangeNotifier {
   String get customerPhone => _customerPhone;
   LedgerDateFilter get activeFilter => _activeFilter;
   DateTimeRange? get customRange => _customRange;
-  List<Entry> get entries => List<Entry>.unmodifiable(_visibleEntries);
+  List<Entry> get entries => _entriesView;
   SnapshotOpeningBalance get openingBalance => _openingBalance;
   bool get hasOpeningBalance => _openingBalance.hasValue;
   bool get isStockLedger => _isStockLedger;
@@ -69,39 +78,15 @@ class LedgerProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
-  double get totalDebit {
-    final entriesSum = _entries.fold<double>(
-      0,
-      (double sum, Entry entry) => sum + entry.debit,
-    );
-    return entriesSum + _openingBalance.debit;
-  }
+  double get totalDebit => _totalDebit;
 
-  double get totalCredit {
-    final entriesSum = _entries.fold<double>(
-      0,
-      (double sum, Entry entry) => sum + entry.credit,
-    );
-    return entriesSum + _openingBalance.credit;
-  }
+  double get totalCredit => _totalCredit;
 
   double get finalBalance => totalDebit - totalCredit;
 
-  double get totalBuyBags {
-    final entriesSum = _entries.fold<double>(
-      0,
-      (double sum, Entry entry) => sum + (double.tryParse(entry.buyBags) ?? 0),
-    );
-    return entriesSum + _openingBalance.buyBags;
-  }
+  double get totalBuyBags => _totalBuyBags;
 
-  double get totalSellBags {
-    final entriesSum = _entries.fold<double>(
-      0,
-      (double sum, Entry entry) => sum + (double.tryParse(entry.sellBags) ?? 0),
-    );
-    return entriesSum + _openingBalance.sellBags;
-  }
+  double get totalSellBags => _totalSellBags;
 
   double get finalRemainingBags => totalBuyBags - totalSellBags;
 
@@ -634,8 +619,11 @@ class LedgerProvider extends ChangeNotifier {
   }
 
   void _rebuildVisibleEntries() {
+    _recalculateTotals();
+
     if (!_openingBalance.hasValue) {
       _visibleEntries = List<Entry>.from(_entries, growable: false);
+      _entriesView = UnmodifiableListView<Entry>(_visibleEntries);
       return;
     }
 
@@ -653,6 +641,26 @@ class LedgerProvider extends ChangeNotifier {
         sellBags: _openingBalance.sellBags == 0 ? '' : _openingBalance.sellBags.toString(),
       ),
     ];
+    _entriesView = UnmodifiableListView<Entry>(_visibleEntries);
+  }
+
+  /// Recomputes the aggregate totals once per data change instead of on every
+  /// getter call (the ledger UI asks for them several times per frame).
+  void _recalculateTotals() {
+    double debit = 0;
+    double credit = 0;
+    double buyBags = 0;
+    double sellBags = 0;
+    for (final Entry entry in _entries) {
+      debit += entry.debit;
+      credit += entry.credit;
+      buyBags += double.tryParse(entry.buyBags) ?? 0;
+      sellBags += double.tryParse(entry.sellBags) ?? 0;
+    }
+    _totalDebit = debit + _openingBalance.debit;
+    _totalCredit = credit + _openingBalance.credit;
+    _totalBuyBags = buyBags + _openingBalance.buyBags;
+    _totalSellBags = sellBags + _openingBalance.sellBags;
   }
 
   void _setLoading(bool value) {

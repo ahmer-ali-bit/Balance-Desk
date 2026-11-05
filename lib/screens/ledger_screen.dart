@@ -93,9 +93,17 @@ class _LedgerViewState extends State<_LedgerView> {
   bool _didAutoOpenAddEntry = false;
   Timer? _obDebounceTimer;
 
+  /// Rows rendered per batch. A ledger with thousands of entries used to build
+  /// every card/DataRow on each frame (a whole-page `SingleChildScrollView`),
+  /// which is what froze both the desktop table and the mobile card list.
+  static const int _entryPageSize = 150;
+  int _visibleEntryLimit = _entryPageSize;
+  int _totalEntryCount = 0;
+
   @override
   void initState() {
     super.initState();
+    _tableVerticalController.addListener(_maybeGrowVisibleEntries);
     // Feature 3: Auto-open Add Entry dialog when ledger opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _didAutoOpenAddEntry || !widget.autoOpenAddEntry) return;
@@ -104,8 +112,50 @@ class _LedgerViewState extends State<_LedgerView> {
     });
   }
 
+  /// Grows the rendered window as the user scrolls, so long ledgers stay
+  /// smooth while everything is still reachable.
+  void _maybeGrowVisibleEntries() {
+    if (!mounted || _visibleEntryLimit >= _totalEntryCount) return;
+    if (!_tableVerticalController.hasClients) return;
+    final ScrollPosition position = _tableVerticalController.position;
+    if (position.pixels < position.maxScrollExtent - 900) return;
+    setState(() {
+      _visibleEntryLimit = math.min(
+        _visibleEntryLimit + _entryPageSize,
+        _totalEntryCount,
+      );
+    });
+  }
+
+  void _showMoreEntries() {
+    setState(() {
+      _visibleEntryLimit = math.min(
+        _visibleEntryLimit + _entryPageSize,
+        _totalEntryCount,
+      );
+    });
+  }
+
+  Widget _buildEntryLoadMoreFooter(BuildContext context) {
+    final int remaining = _totalEntryCount - _visibleEntryLimit;
+    if (remaining <= 0) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Center(
+        child: TextButton.icon(
+          onPressed: _showMoreEntries,
+          icon: const Icon(Icons.expand_more_rounded, size: 18),
+          label: Text('Show older entries ($remaining more)'),
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
+    _tableVerticalController.removeListener(_maybeGrowVisibleEntries);
     _tableVerticalController.dispose();
     _openingDebitController.dispose();
     _openingCreditController.dispose();
@@ -3367,6 +3417,8 @@ class _LedgerViewState extends State<_LedgerView> {
     required LedgerProvider provider,
     required bool compactLayout,
   }) {
+    _totalEntryCount = provider.entries.length;
+
     if (provider.isLoading && provider.entries.isEmpty) {
       return const SizedBox(
         height: 240,
@@ -3415,155 +3467,161 @@ class _LedgerViewState extends State<_LedgerView> {
                   : 4.0
             : 18.0;
 
-        return Card(
-          clipBehavior: Clip.antiAlias,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minWidth: constraints.maxWidth),
-              child: DataTable(
-                dataTextStyle: dataTextStyle,
-                horizontalMargin: horizontalMargin,
-                columnSpacing: columnSpacing,
-                headingRowHeight: 54,
-                dataRowMinHeight: 50,
-                dataRowMaxHeight: 56,
-                headingRowColor: WidgetStatePropertyAll(
-                  Theme.of(context).colorScheme.surfaceContainerHighest,
-                ),
-                columns: provider.isStockLedger
-                    ? <DataColumn>[
-                        const DataColumn(
-                          label: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('Entry Date'),
-                          ),
-                        ),
-                        const DataColumn(
-                          label: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('Created Date'),
-                          ),
-                        ),
-                        const DataColumn(
-                          label: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('Page No'),
-                          ),
-                        ),
-                        DataColumn(
-                          label: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              provider.useWeight ? 'Buy Weight' : 'Buy Qty',
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Card(
+              clipBehavior: Clip.antiAlias,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                  child: DataTable(
+                    dataTextStyle: dataTextStyle,
+                    horizontalMargin: horizontalMargin,
+                    columnSpacing: columnSpacing,
+                    headingRowHeight: 54,
+                    dataRowMinHeight: 50,
+                    dataRowMaxHeight: 56,
+                    headingRowColor: WidgetStatePropertyAll(
+                      Theme.of(context).colorScheme.surfaceContainerHighest,
+                    ),
+                    columns: provider.isStockLedger
+                        ? <DataColumn>[
+                            const DataColumn(
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text('Entry Date'),
+                              ),
                             ),
-                          ),
-                          numeric: true,
-                        ),
-                        const DataColumn(
-                          label: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('Buy Amount'),
-                          ),
-                          numeric: true,
-                        ),
-                        DataColumn(
-                          label: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              provider.useWeight ? 'Sell Weight' : 'Sell Qty',
+                            const DataColumn(
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text('Created Date'),
+                              ),
                             ),
-                          ),
-                          numeric: true,
-                        ),
-                        const DataColumn(
-                          label: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('Sell Amount'),
-                          ),
-                          numeric: true,
-                        ),
-                        DataColumn(
-                          label: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              provider.useWeight ? 'Rem. Weight' : 'Remaining',
+                            const DataColumn(
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text('Page No'),
+                              ),
                             ),
-                          ),
-                          numeric: true,
-                        ),
-                        const DataColumn(
-                          label: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('Balance'),
-                          ),
-                        ),
-                        const DataColumn(
-                          label: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('Actions'),
-                          ),
-                        ),
-                      ]
-                    : const <DataColumn>[
-                        DataColumn(
-                          label: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('Entry Date'),
-                          ),
-                        ),
-                        DataColumn(
-                          label: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('Created Date'),
-                          ),
-                        ),
-                        DataColumn(
-                          label: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('Page No'),
-                          ),
-                        ),
-                        DataColumn(
-                          label: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('Description'),
-                          ),
-                        ),
-                        DataColumn(
-                          label: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('Debit'),
-                          ),
-                          numeric: true,
-                        ),
-                        DataColumn(
-                          label: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('Credit'),
-                          ),
-                          numeric: true,
-                        ),
-                        DataColumn(
-                          label: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('Balance'),
-                          ),
-                        ),
-                        DataColumn(
-                          label: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('Actions'),
-                          ),
-                        ),
-                      ],
-                rows: _buildLedgerRows(
-                  provider,
-                  compact: constraints.maxWidth < 1100,
+                            DataColumn(
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  provider.useWeight ? 'Buy Weight' : 'Buy Qty',
+                                ),
+                              ),
+                              numeric: true,
+                            ),
+                            const DataColumn(
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text('Buy Amount'),
+                              ),
+                              numeric: true,
+                            ),
+                            DataColumn(
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  provider.useWeight ? 'Sell Weight' : 'Sell Qty',
+                                ),
+                              ),
+                              numeric: true,
+                            ),
+                            const DataColumn(
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text('Sell Amount'),
+                              ),
+                              numeric: true,
+                            ),
+                            DataColumn(
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  provider.useWeight ? 'Rem. Weight' : 'Remaining',
+                                ),
+                              ),
+                              numeric: true,
+                            ),
+                            const DataColumn(
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text('Balance'),
+                              ),
+                            ),
+                            const DataColumn(
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text('Actions'),
+                              ),
+                            ),
+                          ]
+                        : const <DataColumn>[
+                            DataColumn(
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text('Entry Date'),
+                              ),
+                            ),
+                            DataColumn(
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text('Created Date'),
+                              ),
+                            ),
+                            DataColumn(
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text('Page No'),
+                              ),
+                            ),
+                            DataColumn(
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text('Description'),
+                              ),
+                            ),
+                            DataColumn(
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text('Debit'),
+                              ),
+                              numeric: true,
+                            ),
+                            DataColumn(
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text('Credit'),
+                              ),
+                              numeric: true,
+                            ),
+                            DataColumn(
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text('Balance'),
+                              ),
+                            ),
+                            DataColumn(
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text('Actions'),
+                              ),
+                            ),
+                          ],
+                    rows: _buildLedgerRows(
+                      provider,
+                      compact: constraints.maxWidth < 1100,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
+            _buildEntryLoadMoreFooter(context),
+          ],
         );
       },
     );
@@ -3623,25 +3681,35 @@ class _LedgerViewState extends State<_LedgerView> {
     final reversedBalances = balances.reversed.toList();
     final chronEntries = entries.reversed.toList();
 
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: chronEntries.length,
-      itemBuilder: (context, index) {
-        final b = reversedBalances[index];
-        return Padding(
-          padding: EdgeInsets.only(top: index == 0 ? 0 : 12),
-          child: _buildLedgerEntryCard(
-            context,
-            provider,
-            entry: chronEntries[index],
-            balanceLabel: b.balanceLabel,
-            balance: b.balance,
-            remainingBagsLabel: b.remainingBagsLabel,
-            isOpeningBalanceEntry: b.isOpeningBalanceEntry,
-          ),
-        );
-      },
+    final int visibleCount = chronEntries.length > _visibleEntryLimit
+        ? _visibleEntryLimit
+        : chronEntries.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: visibleCount,
+          itemBuilder: (context, index) {
+            final b = reversedBalances[index];
+            return Padding(
+              padding: EdgeInsets.only(top: index == 0 ? 0 : 12),
+              child: _buildLedgerEntryCard(
+                context,
+                provider,
+                entry: chronEntries[index],
+                balanceLabel: b.balanceLabel,
+                balance: b.balance,
+                remainingBagsLabel: b.remainingBagsLabel,
+                isOpeningBalanceEntry: b.isOpeningBalanceEntry,
+              ),
+            );
+          },
+        ),
+        _buildEntryLoadMoreFooter(context),
+      ],
     );
   }
 
@@ -4358,6 +4426,7 @@ class _LedgerViewState extends State<_LedgerView> {
     double? runningRemainingBags;
 
     final entries = provider.entries.reversed.toList();
+    var entryIndex = 0;
     for (final entry in entries) {
       final isOpeningBalanceEntry = _isOpeningBalanceEntry(provider, entry);
       final debit = entry.debit;
@@ -4392,6 +4461,12 @@ class _LedgerViewState extends State<_LedgerView> {
           runningRemainingBags = currentRemainingBags;
           remainingBagsLabel = provider.formatBags(currentRemainingBags);
         }
+      }
+
+      // Running balances above still need the full sweep, but only the visible
+      // window becomes a DataRow — the table is otherwise O(all entries).
+      if (entryIndex++ < entries.length - _visibleEntryLimit) {
+        continue;
       }
 
       final List<DataCell> cells = <DataCell>[
