@@ -407,6 +407,50 @@ void main() {
     customerProvider.dispose();
   });
 
+  testWidgets('mobile ledger menu opens backup through the sidebar', (tester) async {
+    PlatformHelper.debugDesktopOverride = false;
+    addTearDown(() => PlatformHelper.debugDesktopOverride = null);
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final provider = CustomerProvider();
+    var selected = -1;
+    await tester.runAsync(() async {
+      final customer = (await provider.addCustomerAndReturn('Mobile Navigation'))!;
+      await provider.loadCustomers();
+      await tester.pumpWidget(ChangeNotifierProvider<CustomerProvider>.value(value: provider,
+        child: MaterialApp(theme: BalanceDeskTheme.lightTheme(), home: Builder(builder: (context) => Scaffold(
+          body: TextButton(onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) => LedgerScreen(customer: customer, autoOpenAddEntry: false, onNavigate: (index) => selected = index))),
+            child: const Text('Open ledger')))))));
+      await tester.tap(find.text('Open ledger'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(find.text('Backup & Restore'), findsNothing);
+      await tester.tap(find.byTooltip('More actions'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('Menu'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.ensureVisible(find.text('Backup & Restore'));
+      await tester.pump();
+      await tester.tap(find.text('Backup & Restore'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(selected, 3);
+      expect(find.text('Open ledger'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await tester.pump();
+    });
+    provider.dispose();
+  });
+
   testWidgets('Harbor stock ledger preserves quantity and balance display', (tester) async {
     tester.view.physicalSize = const Size(1600, 1000);
     tester.view.devicePixelRatio = 1;
