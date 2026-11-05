@@ -20,4 +20,21 @@ jobs:
         run: flutter test
       - name: Analyze project
         if: always()
-        run: flutter analyze --no-fatal-infos
+        shell: bash
+        run: |
+          set +e
+          flutter analyze --no-fatal-infos > "$RUNNER_TEMP/analyze.log" 2>&1
+          result=$?
+          cat "$RUNNER_TEMP/analyze.log"
+          python3 - "$RUNNER_TEMP/analyze.log" <<'PYTHON'
+          import re
+          import sys
+
+          for line in open(sys.argv[1], encoding='utf-8'):
+              match = re.search(r'(error|warning) • (.*?) • (.*?):(\d+):(\d+) • (.*)', line)
+              if match:
+                  level, message, path, row, column, rule = match.groups()
+                  message = message.replace('%', '%25').replace('\n', '%0A').replace('\r', '%0D')
+                  print(f'::{level} file={path},line={row},col={column}::{message} ({rule})')
+          PYTHON
+          exit "$result"
