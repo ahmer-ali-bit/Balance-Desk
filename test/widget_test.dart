@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:shop/database/app_database.dart';
@@ -11,23 +12,37 @@ import 'package:shop/screens/customer_list_screen.dart';
 import 'package:shop/utils/number_format_utils.dart';
 import 'package:intl/intl.dart';
 
+class _TestPathProvider extends PathProviderPlatform {
+  _TestPathProvider(this.directory);
+
+  final String directory;
+
+  @override
+  Future<String?> getApplicationSupportPath() async => directory;
+}
+
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  late Directory testDirectory;
+  late PathProviderPlatform previousPathProvider;
+
   setUp(() async {
+    testDirectory = await Directory.systemTemp.createTemp('balance_desk_test_');
+    previousPathProvider = PathProviderPlatform.instance;
+    PathProviderPlatform.instance = _TestPathProvider(testDirectory.path);
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
 
     await AppDatabase.instance.close();
-    final databasePath = await AppDatabase.instance.databasePath;
-    final databaseFile = File(databasePath);
-    if (await databaseFile.exists()) {
-      await databaseFile.delete();
-    }
-
     await AppDatabase.instance.initialize();
   });
 
   tearDown(() async {
     await AppDatabase.instance.close();
+    PathProviderPlatform.instance = previousPathProvider;
+    if (await testDirectory.exists()) {
+      await testDirectory.delete(recursive: true);
+    }
   });
 
   testWidgets('customer screen renders without framework exceptions', (
