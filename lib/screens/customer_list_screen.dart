@@ -10,6 +10,7 @@ import '../widgets/customer_search_field.dart';
 import '../widgets/mobile_premium.dart';
 import '../widgets/scale_down_width.dart';
 import '../widgets/harbor_navigation.dart';
+import '../widgets/harbor_workspace.dart';
 import 'ledger_screen.dart';
 
 /// Uses the same customer form and provider as the directory screen.
@@ -272,6 +273,10 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                     );
                   }
 
+                  if (constraints.maxWidth >= 900 && constraints.maxHeight >= 400) {
+                    return _buildHarborDesktopCustomers(context, provider, customers);
+                  }
+
                   final pagePadding = EdgeInsets.fromLTRB(
                     isCompact ? 14 : 16,
                     12,
@@ -326,6 +331,92 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     );
   }
 
+  Widget _buildHarborDesktopCustomers(BuildContext context, CustomerProvider provider, List<Customer> customers) {
+    _totalCustomerCount = customers.length;
+    final state = _buildCustomerState(provider: provider, customers: customers);
+    final count = customers.length > _visibleCustomerLimit ? _visibleCustomerLimit : customers.length;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+        HarborPageHeading(
+          eyebrow: 'Customer directory', title: 'Customers',
+          subtitle: '${customers.length} customers in this view',
+        ),
+        const SizedBox(height: 18),
+        Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+          Expanded(child: HarborPanel(
+            padding: EdgeInsets.zero,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+              Padding(padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                child: Text('ALL CUSTOMERS', style: Theme.of(context).textTheme.labelLarge)),
+              const Divider(height: 1),
+              Expanded(child: state ?? ListView.builder(
+                key: const ValueKey<String>('harbor-customer-list'),
+                controller: _tableVerticalController,
+                itemCount: count + (count < customers.length ? 1 : 0),
+                itemBuilder: (context, index) => index == count
+                    ? _buildCustomerLoadMoreFooter(context)
+                    : _buildHarborCustomerRow(context, customers[index], desktop: true),
+              )),
+            ]),
+          )),
+          const SizedBox(width: 16),
+          SizedBox(width: 280, child: SingleChildScrollView(child: HarborPanel(
+            tint: true,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+              Text('Directory tools', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              _buildSearchField(provider),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: provider.isLoading ? null : provider.loadCustomers,
+                icon: const Icon(Icons.refresh_rounded), label: const Text('Refresh')),
+              const SizedBox(height: 8),
+              FilledButton.icon(onPressed: _showAddCustomerDialog,
+                icon: const Icon(Icons.person_add_alt_1_rounded), label: const Text('Add Customer')),
+              const SizedBox(height: 16),
+              Text('${provider.customers.length} total customers', style: Theme.of(context).textTheme.bodySmall),
+            ]),
+          ))),
+        ])),
+      ]),
+    );
+  }
+
+  Widget _buildHarborCustomerRow(BuildContext context, Customer customer, {required bool desktop}) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Material(
+      color: colors.surface,
+      child: InkWell(
+        onTap: () => _openLedger(customer),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Row(children: <Widget>[
+            CircleAvatar(radius: 18, backgroundColor: colors.primaryContainer,
+              child: Text(customer.name.trim().isEmpty ? '?' : customer.name.trim()[0].toUpperCase(),
+                style: TextStyle(color: colors.primary, fontWeight: FontWeight.w800))),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+              Text(customer.name, maxLines: 2, overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+              Text('Customer ID ${customer.id ?? '-'}${customer.isStockLedger ? '  •  Stock' : ''}',
+                style: theme.textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant)),
+            ])),
+            if (desktop)
+              TextButton.icon(onPressed: () => _openLedger(customer),
+                icon: const Icon(Icons.menu_book_outlined), label: const Text('View'))
+            else
+              IconButton(tooltip: 'Open ledger', onPressed: () => _openLedger(customer),
+                icon: const Icon(Icons.arrow_forward_rounded)),
+            IconButton(tooltip: 'Delete customer', onPressed: () => _confirmDelete(customer),
+              icon: const Icon(Icons.delete_outline_rounded)),
+          ]),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSearchField(CustomerProvider provider) {
     return CustomerSearchField(
       controller: _searchController,
@@ -356,6 +447,9 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
+            HarborPageHeading(eyebrow: 'Customer directory', title: 'Customers',
+              subtitle: '${provider.customers.length} customers'),
+            const SizedBox(height: 12),
             MobilePremiumPanel(
               padding: const EdgeInsets.all(12),
               child: Column(
@@ -414,106 +508,18 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     required List<Customer> customers,
     required bool canEdit,
   }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
     _totalCustomerCount = customers.length;
-    final int visibleCount = customers.length > _visibleCustomerLimit
-        ? _visibleCustomerLimit
-        : customers.length;
-    final bool hasMore = customers.length > visibleCount;
-
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: visibleCount + (hasMore ? 1 : 0),
-      itemBuilder: (context, index) {
-        if (index >= visibleCount) {
-          return _buildCustomerLoadMoreFooter(context);
-        }
-        final customer = customers[index];
-        return Padding(
-          padding: EdgeInsets.only(top: index == 0 ? 0 : 10),
-          child: MobilePremiumPanel(
-            onTap: () => _openLedger(customer),
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: <Widget>[
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(kMobilePremiumRadius),
-                    border: Border.all(
-                      color: colorScheme.primary.withValues(alpha: 0.2),
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      customer.name.trim().isEmpty
-                          ? '?'
-                          : customer.name.trim()[0].toUpperCase(),
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: colorScheme.primary,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          customer.name,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: <Widget>[
-                          MobileStatusPill(
-                            icon: Icons.tag_rounded,
-                            label: '${customer.id ?? '-'}',
-                            color: colorScheme.tertiary,
-                          ),
-                          if (customer.isStockLedger)
-                            MobileStatusPill(
-                              icon: Icons.inventory_2_outlined,
-                              label: 'Stock',
-                              color: colorScheme.secondary,
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  tooltip: 'Open ledger',
-                  onPressed: () => _openLedger(customer),
-                  icon: const Icon(Icons.arrow_forward_rounded),
-                ),
-                if (canEdit)
-                  IconButton(
-                    tooltip: 'Delete customer',
-                    onPressed: () => _confirmDelete(customer),
-                    icon: const Icon(Icons.delete_outline_rounded),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
+    final count = customers.length > _visibleCustomerLimit ? _visibleCustomerLimit : customers.length;
+    return HarborPanel(
+      padding: EdgeInsets.zero,
+      child: ListView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: count + (count < customers.length ? 1 : 0),
+        itemBuilder: (context, index) => index == count
+            ? _buildCustomerLoadMoreFooter(context)
+            : _buildHarborCustomerRow(context, customers[index], desktop: false),
+      ),
     );
   }
 

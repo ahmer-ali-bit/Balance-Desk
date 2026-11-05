@@ -5,6 +5,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../services/csv_backup_service.dart';
 import '../widgets/mobile_premium.dart';
+import '../widgets/harbor_workspace.dart';
+import '../utils/platform_helper.dart';
 
 class BackupRestoreScreen extends StatefulWidget {
   const BackupRestoreScreen({super.key});
@@ -208,8 +210,11 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
-    if (Platform.isAndroid || Platform.isIOS) {
+    if (!PlatformHelper.isDesktop) {
       return _buildPremiumMobileBackupScreen(theme, cs);
+    }
+    if (MediaQuery.sizeOf(context).width >= 900 && MediaQuery.sizeOf(context).height >= 560) {
+      return _buildHarborDesktopBackup(context, theme, cs);
     }
 
     return Scaffold(
@@ -364,6 +369,53 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
     );
   }
 
+  Widget _buildHarborDesktopBackup(BuildContext context, ThemeData theme, ColorScheme cs) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Backup & Restore')),
+      body: SafeArea(child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+          const HarborPageHeading(eyebrow: 'Data protection', title: 'Backup & Restore',
+            subtitle: 'Create a copy or restore a saved backup'),
+          const SizedBox(height: 18),
+          Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+            Expanded(child: HarborPanel(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+              Row(children: <Widget>[
+                Expanded(child: Text('Saved backups', style: theme.textTheme.titleMedium)),
+                IconButton(tooltip: 'Refresh backups', onPressed: _isLoading ? null : _refresh,
+                  icon: const Icon(Icons.refresh_rounded)),
+              ]),
+              const Divider(),
+              Expanded(child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _backups.isEmpty
+                      ? Center(child: Text('No backups yet', style: theme.textTheme.bodyMedium))
+                      : ListView.builder(
+                          itemCount: _backups.length,
+                          itemBuilder: (context, index) => _buildFileCard(theme, cs, _backups[index]),
+                        )),
+            ]))),
+            const SizedBox(width: 16),
+            SizedBox(width: 300, child: SingleChildScrollView(child: HarborPanel(
+              tint: true,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+                Text('Backup tools', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 12),
+                FilledButton.icon(onPressed: _isLoading ? null : _createBackup,
+                  icon: const Icon(Icons.backup_rounded), label: const Text('Create Backup')),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(onPressed: _isLoading ? null : _pickAndRestore,
+                  icon: const Icon(Icons.folder_open_rounded), label: const Text('Pick & Restore')),
+                const SizedBox(height: 16),
+                Text('Tap a saved file to restore it.', style: theme.textTheme.bodySmall),
+              ]),
+            ))),
+          ])),
+        ]),
+      )),
+    );
+  }
+
   Widget _buildPremiumMobileBackupScreen(ThemeData theme, ColorScheme cs) {
     return Scaffold(
       appBar: AppBar(
@@ -381,60 +433,25 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                MobilePremiumHeader(
-                  icon: Icons.backup_rounded,
-                  title: 'Backups',
+                HarborPageHeading(eyebrow: 'Data protection', title: 'Backup & Restore',
                   subtitle: '${_backups.length} saved restore points',
-                  trailing: IconButton(
-                    tooltip: 'Refresh backups',
-                    onPressed: _refresh,
-                    icon: const Icon(Icons.refresh_rounded),
-                  ),
-                  children: <Widget>[
-                    MobileMetricGrid(
-                      children: <Widget>[
-                        MobileMetricTile(
-                          label: 'Local',
-                          value: '${_backups.length}',
-                          icon: Icons.folder_rounded,
-                          color: cs.primary,
-                        ),
-                        MobileMetricTile(
-                          label: 'Format',
-                          value: 'JSON',
-                          icon: Icons.data_object_rounded,
-                          color: cs.tertiary,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                  trailing: IconButton(tooltip: 'Refresh backups', onPressed: _refresh,
+                    icon: const Icon(Icons.refresh_rounded))),
                 const SizedBox(height: 12),
-                MobilePremiumPanel(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    children: <Widget>[
-                      Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: FilledButton.icon(
-                              onPressed: _createBackup,
-                              icon: const Icon(Icons.backup_rounded),
-                              label: const Text('Create Backup'),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: _pickAndRestore,
-                              icon: const Icon(Icons.restore_page_rounded),
-                              label: const Text('Pick & Restore'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                HarborPanel(
+                  tint: true,
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+                    Text('Backup tools', style: theme.textTheme.titleMedium),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(onPressed: _createBackup,
+                      icon: const Icon(Icons.backup_rounded), label: const Text('Create Backup')),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(onPressed: _saveBackupToFolder,
+                      icon: const Icon(Icons.drive_folder_upload_rounded), label: const Text('Save to…')),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(onPressed: _pickAndRestore,
+                      icon: const Icon(Icons.folder_open_rounded), label: const Text('Pick & Restore')),
+                  ]),
                 ),
                 const SizedBox(height: 16),
                 MobileSectionHeader(

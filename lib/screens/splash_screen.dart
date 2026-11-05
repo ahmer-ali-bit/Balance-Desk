@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../services/company_profile_service.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/mobile_premium.dart';
+import '../widgets/harbor_workspace.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key, required this.child});
@@ -125,6 +126,10 @@ class _SplashScreenState extends State<SplashScreen>
         logoFile: logoFile,
         hasLogo: hasLogo,
       );
+    }
+
+    if (MediaQuery.sizeOf(context).width >= 800 && MediaQuery.sizeOf(context).height >= 500) {
+      return _buildHarborDesktopSplash(context, displayName, logoFile, hasLogo);
     }
 
     return Scaffold(
@@ -350,6 +355,38 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
+  Widget _buildHarborDesktopSplash(BuildContext context, String displayName, File? logoFile, bool hasLogo) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Scaffold(body: SafeArea(child: Center(child: Padding(
+      padding: const EdgeInsets.all(32),
+      child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 820),
+        child: Row(children: <Widget>[
+          Expanded(child: HarborPanel(tint: true, padding: const EdgeInsets.all(36),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+              SizedBox(width: 72, height: 72, child: hasLogo
+                ? Image.file(logoFile!, fit: BoxFit.contain, cacheWidth: 512)
+                : Icon(Icons.account_balance_rounded, size: 48, color: colors.primary)),
+              const SizedBox(height: 24),
+              Text(displayName, maxLines: 2, overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              Text('Premium Accounting', style: theme.textTheme.labelLarge?.copyWith(color: colors.primary)),
+            ]))),
+          const SizedBox(width: 20),
+          Expanded(child: HarborPanel(padding: const EdgeInsets.all(36),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+              const CircularProgressIndicator(),
+              const SizedBox(height: 20),
+              Text('Preparing workspace', style: theme.textTheme.titleLarge),
+              const SizedBox(height: 12),
+              Text('DEVELOPED BY AHMER ABID', style: theme.textTheme.labelSmall),
+              Text('DESIGNED FOR PRECISION', style: theme.textTheme.labelSmall),
+            ]))),
+        ])),
+    ))));
+  }
+
   Widget _buildPremiumMobileSplash(
     BuildContext context, {
     required String displayName,
@@ -374,7 +411,8 @@ class _SplashScreenState extends State<SplashScreen>
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
                       const Spacer(),
-                      Center(
+                      Align(
+                        alignment: Alignment.centerLeft,
                         child: Container(
                           width: 104,
                           height: 104,
@@ -413,7 +451,7 @@ class _SplashScreenState extends State<SplashScreen>
                       const SizedBox(height: 22),
                       Text(
                         displayName,
-                        textAlign: TextAlign.center,
+                        textAlign: TextAlign.start,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.headlineSmall?.copyWith(
@@ -421,7 +459,8 @@ class _SplashScreenState extends State<SplashScreen>
                         ),
                       ),
                       const SizedBox(height: 10),
-                      Center(
+                      Align(
+                        alignment: Alignment.centerLeft,
                         child: MobileStatusPill(
                           icon: Icons.verified_rounded,
                           label: 'Premium Accounting',

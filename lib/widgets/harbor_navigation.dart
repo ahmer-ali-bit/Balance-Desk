@@ -25,7 +25,7 @@ class HarborNavigationBar extends StatelessWidget {
     super.key,
     required this.selectedIndex,
     required this.onSelected,
-    this.includeBackup = true,
+    this.includeBackup = false,
   });
 
   final int selectedIndex;

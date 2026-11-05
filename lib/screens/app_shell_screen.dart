@@ -247,8 +247,8 @@ class _AppShellScreenState extends State<AppShellScreen> {
       key: const ValueKey<String>('mobile-content'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        HarborNavigationBar(selectedIndex: _selectedIndex, onSelected: _navigateHarbor, includeBackup: false),
         Expanded(child: content),
+        HarborNavigationBar(selectedIndex: _selectedIndex, onSelected: _navigateHarbor, includeBackup: false),
       ],
     );
   }

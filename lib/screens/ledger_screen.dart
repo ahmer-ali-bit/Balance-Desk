@@ -110,6 +110,7 @@ class _LedgerScreenState extends State<LedgerScreen> {
                   selectedCustomer: _selectedCustomer,
                   onSelectCustomer: _selectCustomer,
                   onAddCustomer: _addCustomer,
+                  onBackup: widget.onNavigate == null ? null : () => _leaveLedger(context, widget.onNavigate!, 3),
                 ),
                 Expanded(child: ledger),
               ])),
@@ -137,10 +138,12 @@ class _CustomerSidebar extends StatefulWidget {
     required this.selectedCustomer,
     required this.onSelectCustomer,
     required this.onAddCustomer,
+    this.onBackup,
   });
   final Customer selectedCustomer;
   final ValueChanged<Customer> onSelectCustomer;
   final VoidCallback onAddCustomer;
+  final VoidCallback? onBackup;
 
   @override
   State<_CustomerSidebar> createState() => _CustomerSidebarState();
@@ -236,6 +239,15 @@ class _CustomerSidebarState extends State<_CustomerSidebar> {
                         },
                       ),
               ),
+              if (widget.onBackup != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                  child: TextButton.icon(
+                    onPressed: widget.onBackup,
+                    icon: const Icon(Icons.backup_outlined),
+                    label: const Text('Backup & Restore'),
+                  ),
+                ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
                 child: OutlinedButton.icon(
@@ -3681,6 +3693,17 @@ class _LedgerViewState extends State<_LedgerView> {
                                 context: context,
                                 provider: provider,
                               ),
+                              if (widget.onNavigate != null) ...<Widget>[
+                                const SizedBox(height: 16),
+                                ListTile(
+                                  leading: const Icon(Icons.backup_outlined),
+                                  title: const Text('Backup & Restore'),
+                                  onTap: () {
+                                    Navigator.of(context).pop();
+                                    _leaveLedger(context, widget.onNavigate!, 3);
+                                  },
+                                ),
+                              ],
                               const SizedBox(height: 24),
                               Text(
                                 'LEDGER TYPE',

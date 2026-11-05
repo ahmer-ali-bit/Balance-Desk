@@ -6,6 +6,7 @@ import '../services/biometric_auth_service.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/app_pin_dialogs.dart';
 import '../widgets/mobile_premium.dart';
+import '../widgets/harbor_workspace.dart';
 
 class AppPinGateScreen extends StatefulWidget {
   const AppPinGateScreen({super.key, required this.child});
@@ -201,6 +202,27 @@ class _AppPinGateScreenState extends State<AppPinGateScreen> {
       return _buildPremiumMobileGate(context);
     }
 
+    if (MediaQuery.sizeOf(context).width >= 800 && MediaQuery.sizeOf(context).height >= 480) {
+      return Scaffold(body: SafeArea(child: Center(child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 900), child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(child: HarborPanel(tint: true, child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Icon(Icons.shield_outlined, size: 40, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(height: 18),
+                const HarborPageHeading(eyebrow: 'Balance Desk', title: 'Private workspace',
+                  subtitle: 'Security on this device'),
+              ],
+            ))),
+            const SizedBox(width: 16),
+            Expanded(child: HarborPanel(child: _buildGateBody(context))),
+          ],
+        )),
+      ))));
+    }
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -227,7 +249,12 @@ class _AppPinGateScreenState extends State<AppPinGateScreen> {
         child: SingleChildScrollView(
           child: MobilePremiumPage(
             padding: const EdgeInsets.fromLTRB(20, 28, 20, 28),
-            child: _buildPremiumMobileGateBody(context),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+              const HarborPageHeading(eyebrow: 'Balance Desk', title: 'Private workspace',
+                subtitle: 'Security on this device'),
+              const SizedBox(height: 18),
+              _buildPremiumMobileGateBody(context),
+            ]),
           ),
         ),
       ),

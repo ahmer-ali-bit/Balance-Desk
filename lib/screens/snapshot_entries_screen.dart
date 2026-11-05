@@ -15,6 +15,7 @@ import '../utils/app_colors.dart';
 import '../utils/number_format_utils.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/harbor_navigation.dart';
+import '../widgets/harbor_workspace.dart';
 import '../widgets/mobile_premium.dart';
 import 'ledger_screen.dart';
 
@@ -1008,6 +1009,10 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 );
               }
 
+              if (constraints.maxWidth >= 900 && constraints.maxHeight >= 560) {
+                return _buildHarborDesktopDailyLog(context, headerActions, latestSnapshot);
+              }
+
               final page = SingleChildScrollView(
                 controller: _entryTableVerticalController,
                 keyboardDismissBehavior:
@@ -1064,6 +1069,49 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     );
   }
 
+  Widget _buildHarborDesktopDailyLog(BuildContext context, Widget actions, SummarySnapshot? latestSnapshot) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+        const HarborPageHeading(eyebrow: 'Ledger activity', title: 'Daily Logs',
+          subtitle: 'Entries, snapshots and opening balances'),
+        const SizedBox(height: 12),
+        actions,
+        if (latestSnapshot != null) ...<Widget>[
+          const SizedBox(height: 12),
+          _buildDesktopSnapshotSummarySection(context, latestSnapshot),
+        ],
+        const SizedBox(height: 16),
+        Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+          Expanded(child: SingleChildScrollView(
+            controller: _entryTableVerticalController,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            child: HarborPanel(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+              Text('Daily activity', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              _buildTimelineContent(context),
+            ])),
+          )),
+          const SizedBox(width: 16),
+          SizedBox(width: 300, child: SingleChildScrollView(child: HarborPanel(
+            tint: true,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+              Text('Opening balance', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              _buildOpeningBalanceSection(context),
+              if (_snapshots.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 16),
+                Text('Find snapshot', style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 8),
+                _buildSearchBar(compact: true),
+              ],
+            ]),
+          ))),
+        ])),
+      ]),
+    );
+  }
+
   void _scrollTable(double delta) {
     if (!_entryTableVerticalController.hasClients) {
       return;
@@ -1100,6 +1148,11 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
+            const HarborPageHeading(eyebrow: 'Ledger activity', title: 'Daily Logs',
+              subtitle: 'Entries and snapshots'),
+            const SizedBox(height: 12),
+            HarborBalanceTile(label: 'Opening Balance', value: openingLabel),
+            const SizedBox(height: 12),
             IntrinsicHeight(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,

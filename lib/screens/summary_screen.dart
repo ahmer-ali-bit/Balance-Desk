@@ -11,6 +11,7 @@ import '../utils/app_colors.dart';
 import '../utils/number_format_utils.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/harbor_navigation.dart';
+import '../widgets/harbor_workspace.dart';
 import '../widgets/customer_search_field.dart';
 import '../widgets/mobile_premium.dart';
 import '../widgets/summary_stat_card.dart';
@@ -435,6 +436,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 return _buildPremiumMobileSummaryPage(context);
               }
 
+              if (constraints.maxWidth >= 900 && constraints.maxHeight >= 400) {
+                return _buildHarborDesktopSummary(context);
+              }
+
               final page = SingleChildScrollView(
                 controller: _tableVerticalController,
                 keyboardDismissBehavior:
@@ -466,6 +471,45 @@ class _SummaryScreenState extends State<SummaryScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildHarborDesktopSummary(BuildContext context) {
+    final customers = _filteredCustomers();
+    _totalCustomerCount = customers.length;
+    final body = _isLoading || _errorMessage != null
+        ? _buildMainContent(context, compactLayout: true)
+        : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+            _buildSummarySectionHeader(context, count: customers.length),
+            const SizedBox(height: 12),
+            customers.isEmpty ? _buildEmptyState(context) : _buildSummaryCardList(context, customers),
+            _buildSummaryLoadMoreFooter(context, customers.length),
+          ]);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+        const HarborPageHeading(eyebrow: 'Accounts overview', title: 'Summary',
+          subtitle: 'Customer balances and totals'),
+        const SizedBox(height: 18),
+        Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+          Expanded(child: SingleChildScrollView(
+            controller: _tableVerticalController,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            child: HarborPanel(child: body),
+          )),
+          const SizedBox(width: 16),
+          SizedBox(width: 300, child: SingleChildScrollView(child: HarborPanel(
+            tint: true,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+              Text('Overview', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              _buildSummaryMetrics(context, overallBalance: _summaryData.overallDebit - _summaryData.overallCredit),
+              const SizedBox(height: 16),
+              _buildSummaryToolbar(isCompact: true),
+            ]),
+          ))),
+        ])),
+      ]),
     );
   }
 
@@ -562,6 +606,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
               children: <Widget>[
                 Column(
                   children: <Widget>[
+                    HarborBalanceTile(label: 'Overall Balance', value: _formatBalance(overallBalance)),
+                    const SizedBox(height: 8),
                     Row(
                       children: <Widget>[
                         Expanded(
@@ -583,11 +629,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    HarborBalanceTile(
-                      label: 'Overall Balance',
-                      value: _formatBalance(overallBalance),
-                    ),
+
                   ],
                 ),
               ],
@@ -732,97 +774,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
     );
   }
 
-  Widget _buildPremiumMobileSummaryCard(
-    BuildContext context,
-    _CustomerSummary item,
-  ) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final balanceColor = AppColors.balanceColor(item.balance);
-
-    return MobilePremiumPanel(
-      onTap: () => _navigateToCustomerLedger(item.customer),
-      padding: const EdgeInsets.all(12),
-      accentColor: balanceColor,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: colorScheme.primary.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(kMobilePremiumRadius),
-                ),
-                child: Center(
-                  child: Text(
-                    item.customer.name.trim().isEmpty
-                        ? '?'
-                        : item.customer.name.trim()[0].toUpperCase(),
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: colorScheme.primary,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    item.customer.name,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Column(
-            children: <Widget>[
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: MobileMetricTile(
-                      label: item.customer.isStockLedger ? 'Buy' : 'Debit',
-                      value: _formatAmount(item.totalDebit),
-                      icon: Icons.south_west_rounded,
-                      color: item.customer.isStockLedger
-                          ? AppColors.credit
-                          : AppColors.debit,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: MobileMetricTile(
-                      label: item.customer.isStockLedger ? 'Sell' : 'Credit',
-                      value: _formatAmount(item.totalCredit),
-                      icon: Icons.north_east_rounded,
-                      color: item.customer.isStockLedger
-                          ? AppColors.debit
-                          : AppColors.credit,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              MobileMetricTile(
-                label: 'Balance',
-                value: _formatBalance(item.balance),
-                icon: Icons.account_balance_wallet_outlined,
-                color: balanceColor,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+  Widget _buildPremiumMobileSummaryCard(BuildContext context, _CustomerSummary item) {
+    return _buildSummaryListCard(context, item);
   }
 
   Widget _buildCompactSummaryControls(BuildContext context) {
@@ -1309,6 +1262,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
     final balanceColor = AppColors.balanceColor(item.balance);
 
     return GestureDetector(
+      onTap: () => _navigateToCustomerLedger(item.customer),
       onLongPress: () => _navigateToCustomerLedger(item.customer),
       child: Container(
         padding: const EdgeInsets.all(14),

@@ -12,6 +12,9 @@ import 'package:shop/models/customer.dart';
 import 'package:shop/providers/customer_provider.dart';
 import 'package:shop/screens/customer_list_screen.dart';
 import 'package:shop/screens/ledger_screen.dart';
+import 'package:shop/screens/summary_screen.dart';
+import 'package:shop/screens/snapshot_entries_screen.dart';
+import 'package:shop/screens/backup_restore_screen.dart';
 import 'package:shop/theme/balance_desk_theme.dart';
 import 'package:shop/widgets/summary_stat_card.dart';
 import 'package:shop/widgets/harbor_navigation.dart';
@@ -26,6 +29,9 @@ class _TestPathProvider extends PathProviderPlatform {
 
   @override
   Future<String?> getApplicationSupportPath() async => directory;
+
+  @override
+  Future<String?> getApplicationDocumentsPath() async => directory;
 }
 
 void main() {
@@ -189,7 +195,6 @@ void main() {
       home: Scaffold(body: Column(children: <Widget>[
         HarborNavigationBar(
           selectedIndex: 0,
-          includeBackup: false,
           onSelected: (index) => selected = index,
         ),
       ])),
@@ -197,6 +202,7 @@ void main() {
     expect(find.text('Customers'), findsOneWidget);
     expect(find.text('Summary'), findsOneWidget);
     expect(find.text('Daily Logs'), findsOneWidget);
+    expect(find.text('Backup & Restore'), findsNothing);
     await tester.tap(find.text('Summary'));
     expect(selected, 1);
     expect(tester.takeException(), isNull);
@@ -373,6 +379,16 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       expect(selected, 1);
       expect(find.text('Open ledger'), findsOneWidget);
+      await tester.tap(find.text('Open ledger'));
+      await tester.pump();
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(find.text('Backup & Restore'), findsOneWidget);
+      await tester.tap(find.text('Backup & Restore'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(selected, 3);
+      expect(find.text('Open ledger'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
       await Future<void>.delayed(const Duration(milliseconds: 100));
@@ -420,6 +436,115 @@ void main() {
       await tester.pump();
     });
     customerProvider.dispose();
+  });
+
+  testWidgets('Harbor desktop screens keep their tools and totals', (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final provider = CustomerProvider();
+    await tester.runAsync(() async {
+      final customer = (await provider.addCustomerAndReturn('Harbor Test'))!;
+      await AppDatabase.instance.addEntry(customerId: customer.id!, entryDate: '2026-01-01',
+        createdAt: '2026-01-01T09:00:00', pageNo: '7', description: 'Test activity', debit: 120, credit: 20);
+      await provider.loadCustomers();
+      Future<void> open(Widget screen) async {
+        await tester.pumpWidget(ChangeNotifierProvider<CustomerProvider>.value(value: provider,
+          child: MaterialApp(theme: BalanceDeskTheme.desktopTheme(), home: Scaffold(body: screen))));
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+        await tester.pump();
+      }
+      await open(const CustomerListScreen());
+      expect(find.byKey(const ValueKey<String>('harbor-customer-list')), findsOneWidget);
+      expect(find.text('Harbor Test'), findsOneWidget);
+      expect(find.text('Add Customer'), findsWidgets);
+      expect(find.byTooltip('Delete customer'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await open(const SummaryScreen());
+      expect(find.text('Overview'), findsOneWidget);
+      expect(find.text('Harbor Test'), findsOneWidget);
+      expect(find.text('120'), findsWidgets);
+      expect(find.text('20'), findsWidgets);
+      expect(find.text('Refresh'), findsWidgets);
+      expect(find.text('Export'), findsWidgets);
+      expect(tester.takeException(), isNull);
+
+      await open(const SnapshotEntriesScreen());
+      expect(find.text('Daily activity'), findsOneWidget);
+      expect(find.textContaining('Test activity'), findsOneWidget);
+      expect(find.text('Save Snapshot'), findsOneWidget);
+      expect(find.text('Export'), findsWidgets);
+      expect(find.text('Debit Opening Balance'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await open(const BackupRestoreScreen());
+      expect(find.text('Backup tools'), findsOneWidget);
+      expect(find.text('Create Backup'), findsOneWidget);
+      expect(find.text('Pick & Restore'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await tester.pump();
+    });
+    provider.dispose();
+  });
+
+  testWidgets('mobile Harbor screens fit and preserve customer actions', (tester) async {
+    PlatformHelper.debugDesktopOverride = false;
+    addTearDown(() => PlatformHelper.debugDesktopOverride = null);
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final provider = CustomerProvider();
+    await tester.runAsync(() async {
+      final customer = (await provider.addCustomerAndReturn('Phone Harbor'))!;
+      await AppDatabase.instance.addEntry(customerId: customer.id!, entryDate: '2026-01-01',
+        createdAt: '2026-01-01T09:00:00', pageNo: '8', description: 'Mobile activity', debit: 50, credit: 5);
+      await provider.loadCustomers();
+      Future<void> open(Widget screen) async {
+        await tester.pumpWidget(ChangeNotifierProvider<CustomerProvider>.value(value: provider,
+          child: MaterialApp(theme: BalanceDeskTheme.lightTheme(), home: Scaffold(body: screen))));
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+        await tester.pump();
+      }
+      await open(const CustomerListScreen());
+      expect(find.text('Phone Harbor'), findsOneWidget);
+      expect(find.byTooltip('Delete customer'), findsOneWidget);
+      expect(find.byTooltip('Open ledger'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await open(const SummaryScreen());
+      expect(find.text('Overall Balance'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await open(const SnapshotEntriesScreen());
+      expect(find.text('Opening Balance'), findsWidgets);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await tester.pump();
+    });
+    provider.dispose();
+  });
+
+  testWidgets('mobile backup retains all file actions', (tester) async {
+    PlatformHelper.debugDesktopOverride = false;
+    addTearDown(() => PlatformHelper.debugDesktopOverride = null);
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.runAsync(() async {
+      await tester.pumpWidget(MaterialApp(theme: BalanceDeskTheme.lightTheme(), home: const BackupRestoreScreen()));
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      await tester.pump();
+      expect(find.text('Create Backup'), findsOneWidget);
+      expect(find.text('Save to…'), findsOneWidget);
+      expect(find.text('Pick & Restore'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
   });
 
   test('customer provider can add and reload a customer', () async {
