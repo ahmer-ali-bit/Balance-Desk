@@ -92,6 +92,14 @@ class BalanceDeskTheme {
       useMaterial3: true,
       brightness: Brightness.light,
       colorScheme: colorScheme,
+      // macOS' default slide transition can show both large screens at once.
+      // Avoid transition snapshots while preserving all route destinations.
+      pageTransitionsTheme: PageTransitionsTheme(
+        builders: <TargetPlatform, PageTransitionsBuilder>{
+          ...const PageTransitionsTheme().builders,
+          TargetPlatform.macOS: const _MacInstantPageTransitionsBuilder(),
+        },
+      ),
       scaffoldBackgroundColor: _desktopScaffoldBackgroundColor,
       canvasColor: _desktopCanvasColor,
       splashFactory: InkRipple.splashFactory,
@@ -513,4 +521,24 @@ class BalanceDeskTheme {
       ),
     );
   }
+}
+
+/// Avoid compositing two full-size desktop pages during macOS navigation.
+class _MacInstantPageTransitionsBuilder extends PageTransitionsBuilder {
+  const _MacInstantPageTransitionsBuilder();
+
+  @override
+  Duration get transitionDuration => Duration.zero;
+
+  @override
+  Duration get reverseTransitionDuration => Duration.zero;
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) => child;
 }

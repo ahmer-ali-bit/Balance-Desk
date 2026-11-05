@@ -18,6 +18,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: '3.47.9'
           cache: true
       - run: flutter --version
       - run: flutter pub get
@@ -45,9 +46,46 @@ jobs:
           set -euo pipefail
           app="build/macos/Build/Products/Release/Balance Desk.app"
           test -d "$app"
+          # Verify the packaged application, not just the source plist.
+          renderer_flag=$(/usr/libexec/PlistBuddy -c 'Print FLTEnableImpeller' "$app/Contents/Info.plist")
+          test "$renderer_flag" = "false"
+          echo "::notice title=macOS renderer::Impeller disabled in packaged app (Skia fallback)"
           binary=$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$app/Contents/Info.plist")
           architectures=$(lipo -archs "$app/Contents/MacOS/$binary")
           echo "::notice title=macOS architectures::$architectures"
+          # A hosted runner may not provide a WindowServer. If launch succeeds,
+          # verify the engine log; never claim hardware coverage from this smoke test.
+          python3 - "$app/Contents/MacOS/$binary" <<'PYTHON'
+          import os
+          import signal
+          import subprocess
+          import sys
+          import tempfile
+          import time
+
+          with tempfile.TemporaryFile(mode='w+') as output:
+              process = subprocess.Popen([sys.argv[1]], stdout=output, stderr=subprocess.STDOUT,
+                                         start_new_session=True)
+              try:
+                  time.sleep(12)
+              finally:
+                  if process.poll() is None:
+                      os.killpg(process.pid, signal.SIGTERM)
+                      try:
+                          process.wait(timeout=5)
+                      except subprocess.TimeoutExpired:
+                          os.killpg(process.pid, signal.SIGKILL)
+                          process.wait()
+              output.seek(0)
+              log = output.read()
+              if 'Using the Impeller rendering backend' in log:
+                  print('::error::macOS app unexpectedly started Impeller')
+                  sys.exit(1)
+              if 'Using the Skia rendering backend' in log:
+                  print('::notice title=macOS renderer smoke test::Skia observed at runtime')
+              else:
+                  print('::warning title=macOS renderer smoke test::Runtime renderer not observed on hosted runner; packaged plist verified')
+          PYTHON
           ditto -c -k --sequesterRsrc --keepParent "$app" "$RUNNER_TEMP/Balance-Desk-macOS-preview.zip"
       - name: Save macOS preview
         uses: actions/upload-artifact@v4

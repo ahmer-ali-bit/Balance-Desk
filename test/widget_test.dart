@@ -81,6 +81,43 @@ void main() {
     );
   });
 
+  test('macOS desktop routes avoid composited slide transitions', () {
+    final transitions = BalanceDeskTheme.desktopTheme().pageTransitionsTheme;
+    final mac = transitions.builders[TargetPlatform.macOS]!;
+    expect(mac.transitionDuration, Duration.zero);
+    expect(mac.reverseTransitionDuration, Duration.zero);
+    expect(
+      transitions.builders[TargetPlatform.windows].runtimeType,
+      const PageTransitionsTheme().builders[TargetPlatform.windows].runtimeType,
+    );
+    expect(
+      transitions.builders[TargetPlatform.iOS].runtimeType,
+      const PageTransitionsTheme().builders[TargetPlatform.iOS].runtimeType,
+    );
+  });
+
+  testWidgets('macOS page navigation completes without a sliding overlap', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      theme: BalanceDeskTheme.desktopTheme().copyWith(platform: TargetPlatform.macOS),
+      home: Builder(builder: (context) => Scaffold(
+        body: TextButton(
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) => const Scaffold(body: Text('Destination page')),
+          )),
+          child: const Text('Open page'),
+        ),
+      )),
+    ));
+    await tester.tap(find.text('Open page'));
+    await tester.pump();
+    expect(find.text('Destination page'), findsOneWidget);
+    expect(find.text('Open page'), findsNothing);
+    Navigator.of(tester.element(find.text('Destination page'))).pop();
+    await tester.pump();
+    expect(find.text('Open page'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('summary amounts stay legible in the light theme', (tester) async {
     await tester.pumpWidget(MaterialApp(
       theme: BalanceDeskTheme.desktopTheme(),
@@ -313,7 +350,7 @@ void main() {
       await customerProvider.loadCustomers();
       await tester.pumpWidget(ChangeNotifierProvider<CustomerProvider>.value(
         value: customerProvider,
-        child: MaterialApp(theme: BalanceDeskTheme.desktopTheme(),
+        child: MaterialApp(theme: BalanceDeskTheme.desktopTheme().copyWith(platform: TargetPlatform.macOS),
           home: HarborNavigationScope(
             onNavigate: (index) => selected = index,
             child: Builder(builder: (context) => Scaffold(
