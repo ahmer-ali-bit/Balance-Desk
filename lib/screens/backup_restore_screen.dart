@@ -3,6 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:provider/provider.dart';
 import '../services/csv_backup_service.dart';
 import '../widgets/mobile_premium.dart';
 
@@ -17,6 +18,12 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
   final _service = CsvBackupService();
   List<FileInfo> _backups = [];
   bool _isLoading = true;
+
+  bool _canEdit = true;
+
+  bool _readCanEdit(BuildContext context, {bool listen = true}) {
+    return true;
+  }
 
   @override
   void initState() {
@@ -206,6 +213,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    _canEdit = _readCanEdit(context);
 
     if (Platform.isAndroid || Platform.isIOS) {
       return _buildPremiumMobileBackupScreen(theme, cs);
@@ -256,6 +264,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                         icon: Icons.restore_page_rounded,
                         label: 'Pick & Restore',
                         onTap: _pickAndRestore,
+                        enabled: _canEdit,
                       ),
                     ),
                   ],
@@ -280,6 +289,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                         icon: Icons.restore_page_rounded,
                         label: 'Pick & Restore',
                         onTap: _pickAndRestore,
+                        enabled: _canEdit,
                       ),
                     ),
                   ],
@@ -423,7 +433,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                           const SizedBox(width: 10),
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: _pickAndRestore,
+                              onPressed: _canEdit ? _pickAndRestore : null,
                               icon: const Icon(Icons.restore_page_rounded),
                               label: const Text('Pick & Restore'),
                             ),
@@ -533,7 +543,9 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
           ),
           IconButton(
             tooltip: 'Restore backup',
-            onPressed: () => _confirmRestore(file.path, file.name),
+            onPressed: _canEdit
+                ? () => _confirmRestore(file.path, file.name)
+                : null,
             icon: const Icon(Icons.restore_rounded),
           ),
         ],
@@ -547,33 +559,37 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    bool enabled = true,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 8),
-        decoration: BoxDecoration(
-          color: cs.surfaceContainer,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: cs.primary.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(14),
+    return Opacity(
+      opacity: enabled ? 1 : 0.45,
+      child: GestureDetector(
+        onTap: enabled ? onTap : null,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 8),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainer,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: cs.primary, size: 24),
               ),
-              child: Icon(icon, color: cs.primary, size: 24),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              label,
-              style: theme.textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.w600,
+              const SizedBox(height: 10),
+              Text(
+                label,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -644,7 +660,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                     size: 18,
                     color: cs.onSurfaceVariant,
                   ),
-                  onPressed: () => _confirmRestore(f.path, f.name),
+                  onPressed: _canEdit ? () => _confirmRestore(f.path, f.name) : null,
                 ),
               ],
             ),

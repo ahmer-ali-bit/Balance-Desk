@@ -8,7 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../database/app_database.dart';
 import '../models/customer.dart';
-import '../models/entry.dart';
+import '../models/entry.dart'
 import '../models/snapshot_opening_balance.dart';
 import '../models/summary_snapshot.dart';
 import '../providers/customer_provider.dart';
@@ -100,11 +100,15 @@ class _LedgerViewState extends State<_LedgerView> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _didAutoOpenAddEntry || !widget.autoOpenAddEntry) return;
       _didAutoOpenAddEntry = true;
-      final canEdit = true;
-      if (canEdit) {
+      if (_canEdit(context, listen: false)) {
         _showAddEntryDialog();
       }
     });
+  }
+
+  /// Always returns true since linked devices feature is removed.
+  bool _canEdit(BuildContext context, {bool listen = true}) {
+    return true;
   }
 
   @override
@@ -444,7 +448,7 @@ class _LedgerViewState extends State<_LedgerView> {
                   ),
                 ),
                 const Divider(),
-                if (true) ...[
+                if (_canEdit(context)) ...[
                   ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 24),
                     leading: Container(
@@ -1141,7 +1145,7 @@ class _LedgerViewState extends State<_LedgerView> {
         await _printPdf();
         break;
       case _LedgerAppBarAction.editCustomer:
-        if (true) {
+        if (_canEdit(context, listen: false)) {
           await _showEditCustomerDialog(provider);
         }
         break;
@@ -1189,7 +1193,7 @@ class _LedgerViewState extends State<_LedgerView> {
                     label: 'Print',
                   ),
                 ),
-                if (true)
+                if (_canEdit(context))
                   PopupMenuItem<_LedgerAppBarAction>(
                     value: _LedgerAppBarAction.editCustomer,
                     child: _buildAppBarMenuItem(
@@ -1248,7 +1252,7 @@ class _LedgerViewState extends State<_LedgerView> {
                   icon: const Icon(Icons.tune_rounded),
                   label: const Text('Menu'),
                 ),
-                if (true) ...[
+                if (_canEdit(context)) ...[
                   const SizedBox(width: 10),
                   FilledButton.icon(
                     onPressed: _showAddEntryDialog,
@@ -1483,7 +1487,7 @@ class _LedgerViewState extends State<_LedgerView> {
   }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final canEdit = true;
+    final canEdit = _canEdit(context);
     final readOnly = !canEdit;
     final hasInvalidAmount =
         _parseOpeningBalanceValue(_openingDebitController.text) == null ||
@@ -1608,7 +1612,7 @@ class _LedgerViewState extends State<_LedgerView> {
                         ),
                         icon: const Icon(Icons.restart_alt_rounded, size: 18),
                       ),
-                      if (true) ...[
+                      if (_canEdit(context)) ...[
                         IconButton(
                           tooltip: 'Clear opening balance',
                           onPressed: !provider.hasOpeningBalance
@@ -1709,7 +1713,7 @@ class _LedgerViewState extends State<_LedgerView> {
                         readOnly ||
                             provider.isLoading ||
                             !_readOpeningBalance(provider).hasValue ||
-                            !true
+                            !canEdit
                         ? null
                         : () => _clearOpeningBalance(provider),
                     style: TextButton.styleFrom(
@@ -1732,7 +1736,7 @@ class _LedgerViewState extends State<_LedgerView> {
                             provider.isLoading ||
                             hasInvalidAmount ||
                             !hasChanges ||
-                            !true
+                            !canEdit
                         ? null
                         : _saveOpeningBalance,
                     style: FilledButton.styleFrom(
@@ -2002,7 +2006,7 @@ class _LedgerViewState extends State<_LedgerView> {
                   ],
                 ),
               ),
-              if (true)
+              if (_canEdit(context))
                 IconButton.filledTonal(
                   tooltip: 'Edit customer details',
                   onPressed: () => _showEditCustomerDialog(provider),
@@ -2321,7 +2325,7 @@ class _LedgerViewState extends State<_LedgerView> {
               children: <Widget>[
                 LayoutBuilder(
                   builder: (BuildContext context, BoxConstraints constraints) {
-                    const canEdit = true;
+                    final canEdit = _canEdit(context);
                     final editButton = canEdit
                         ? IconButton.filledTonal(
                             tooltip: 'Edit customer details',
@@ -2674,7 +2678,7 @@ class _LedgerViewState extends State<_LedgerView> {
       );
     }
 
-    final canEdit = true;
+    final canEdit = _canEdit(context);
     final editButton = canEdit
         ? IconButton.filledTonal(
             tooltip: 'Edit customer details',
@@ -3138,8 +3142,7 @@ class _LedgerViewState extends State<_LedgerView> {
                                         ).colorScheme.onSurfaceVariant,
                                 ),
                                 value: provider.isStockLedger,
-                                onChanged:
-                                    true
+                                onChanged: _canEdit(context)
                                     ? (bool value) {
                                         provider.toggleStockLedger();
                                       }
@@ -3184,11 +3187,10 @@ class _LedgerViewState extends State<_LedgerView> {
                                           ).colorScheme.onSurfaceVariant,
                                   ),
                                   value: provider.useWeight,
-                                  onChanged:
-                                      true
-                                       ? (bool value) =>
-                                             provider.toggleStockWeight()
-                                       : null,
+                                  onChanged: _canEdit(context)
+                                      ? (bool value) =>
+                                            provider.toggleStockWeight()
+                                      : null,
                                   trackColor:
                                       WidgetStateProperty.resolveWith<Color?>(
                                         (states) =>
@@ -3254,8 +3256,7 @@ class _LedgerViewState extends State<_LedgerView> {
                   isCompact: isCompact,
                 ),
               ),
-              floatingActionButton:
-                  hasFab && true
+              floatingActionButton: hasFab && _canEdit(context)
                   ? FloatingActionButton.extended(
                       onPressed: _showAddEntryDialog,
                       icon: const Icon(Icons.add_rounded),
@@ -3295,7 +3296,7 @@ class _LedgerViewState extends State<_LedgerView> {
                     actions: <Type, Action<Intent>>{
                       _LedgerIntent: CallbackAction<_LedgerIntent>(
                         onInvoke: (_LedgerIntent intent) {
-                          const canEdit = true;
+                          final canEdit = _canEdit(context, listen: false);
                           if (intent.action == _LedgerShortcut.addEntry &&
                               canEdit) {
                             _showAddEntryDialog();
@@ -3383,12 +3384,16 @@ class _LedgerViewState extends State<_LedgerView> {
     }
 
     if (provider.entries.isEmpty) {
+      final canEdit = _canEdit(context);
       return AppEmptyState(
         icon: Icons.receipt_long_outlined,
         title: 'No ledger entries yet',
-        message: 'Add the first debit or credit entry for this customer.',
-        actionLabel: 'Add Entry',
-        onAction: _showAddEntryDialog,
+        message: canEdit
+            ? 'Add the first debit or credit entry for this customer.'
+            : 'This device is linked in read-only mode, so entries can only be '
+                  'added from a device with edit access.',
+        actionLabel: canEdit ? 'Add Entry' : null,
+        onAction: canEdit ? _showAddEntryDialog : null,
       );
     }
 
@@ -3975,8 +3980,7 @@ class _LedgerViewState extends State<_LedgerView> {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: <Widget>[
-              if (isOpeningBalanceEntry &&
-                  true)
+              if (isOpeningBalanceEntry && _canEdit(context))
                 IconButton(
                   tooltip: 'Clear opening balance',
                   onPressed: () => _clearOpeningBalance(provider),
@@ -4516,8 +4520,7 @@ class _LedgerViewState extends State<_LedgerView> {
           ),
         ),
         DataCell(
-          isOpeningBalanceEntry &&
-                  true
+          isOpeningBalanceEntry && _canEdit(context)
               ? IconButton(
                   tooltip: 'Clear opening balance',
                   onPressed: () => _clearOpeningBalance(provider),

@@ -97,6 +97,31 @@ class WorkspaceService {
     return workspace;
   }
 
+  /// Creates (or reuses) a workspace under a caller supplied id.
+  ///
+  /// Joining a shared workspace uses this so the same cloud workspace always
+  /// maps to the same local database file, even if the device leaves and
+  /// rejoins later.
+  Future<Workspace> addWorkspaceWithId(String workspaceId, String name) async {
+    final prefs = await SharedPreferences.getInstance();
+    final index = _workspaces.indexWhere((Workspace w) => w.id == workspaceId);
+    if (index >= 0) {
+      if (_workspaces[index].name != name.trim() && name.trim().isNotEmpty) {
+        _workspaces[index] = _workspaces[index].copyWith(name: name.trim());
+        await _saveWorkspaces(prefs);
+      }
+      return _workspaces[index];
+    }
+
+    final workspace = Workspace(id: workspaceId, name: name.trim());
+    _workspaces.add(workspace);
+    await _saveWorkspaces(prefs);
+    return workspace;
+  }
+
+  bool hasWorkspace(String workspaceId) =>
+      _workspaces.any((Workspace w) => w.id == workspaceId);
+
   Future<void> renameWorkspace(String workspaceId, String newName) async {
     final prefs = await SharedPreferences.getInstance();
     final index = _workspaces.indexWhere((Workspace w) => w.id == workspaceId);

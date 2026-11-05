@@ -10,21 +10,25 @@ dependencies:
   flutter:
     sdk: flutter
   app_links: ^6.4.1
-  crypto: ^3.0.3
+  crypto: ^3.0.7
   cupertino_icons: ^1.0.8
   file_picker: ^11.0.2
+  http: ^1.6.0
   open_filex: ^4.5.0
   package_info_plus: ^8.0.3
   path: ^1.9.1
-  path_provider: ^2.1.5
+  path_provider: ^2.1.6
   pdf: ^3.11.3
   printing: ^5.14.2
-  provider: ^6.1.5
-  sqflite: ^2.4.2
-  sqflite_common_ffi: ^2.3.6
+  provider: ^6.1.5+1
+  qr_flutter: ^4.1.0
+  sqflite: ^2.4.3
+  sqflite_common_ffi: ^2.4.2+1
   intl: ^0.20.2
   shared_preferences: ^2.5.5
   local_auth: ^2.3.0
+  device_info_plus: 12.3.0
+  mobile_scanner: ^7.4.0
 
 dev_dependencies:
   flutter_test:

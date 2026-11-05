@@ -280,14 +280,9 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     );
   }
 
+  /// Always returns true since linked devices feature is removed.
   bool _canEdit(BuildContext context, {bool listen = true}) {
-    try {
-      return listen
-          ? true
-          : true;
-    } catch (_) {
-      return true;
-    }
+    return true;
   }
 
   Widget _buildPremiumMobileCustomerLayout({

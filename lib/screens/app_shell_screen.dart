@@ -11,6 +11,7 @@ import '../models/workspace.dart';
 import '../providers/customer_provider.dart';
 import '../providers/ledger_year_provider.dart';
 import '../providers/workspace_provider.dart';
+import '../services/app_deep_link_service.dart';
 import '../services/app_pin_service.dart';
 import '../services/biometric_auth_service.dart';
 import '../services/company_profile_service.dart';
@@ -39,6 +40,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
   final BiometricAuthService _biometricService = BiometricAuthService();
   final CompanyProfileService _companyProfileService = CompanyProfileService();
   final ManualUpdateService _manualUpdateService = ManualUpdateService.instance;
+  final AppDeepLinkService _deepLinkService = AppDeepLinkService.instance;
   int _selectedIndex = 0;
   int _reloadRevision = 0;
   bool _isPinEnabled = false;
@@ -51,6 +53,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
   );
   bool _didPromptCompanyProfile = false;
   String _sidebarNotes = '';
+  bool _isOpeningJoinScreen = false;
 
   static const List<_ShellDestination> _destinations = <_ShellDestination>[
     _ShellDestination(
@@ -312,15 +315,9 @@ class _AppShellScreenState extends State<AppShellScreen> {
         _closeDrawerIfNeeded(closeDrawerOnAction);
         _confirmDeleteYear();
       },
-      onBackupRequested: () => _runDrawerAction(
-        closeDrawerOnAction: closeDrawerOnAction,
-        action: _openBackupRestoreScreen,
-      ),
-
-      onPinRequested: () => _runDrawerAction(
-        closeDrawerOnAction: closeDrawerOnAction,
-        action: _openPinSettings,
-      ),
+      onWorkspaceSwitched: () {
+        _closeDrawerIfNeeded(closeDrawerOnAction);
+      },
       onCompanyProfileRequested: () => _runDrawerAction(
         closeDrawerOnAction: closeDrawerOnAction,
         action: _openCompanyProfileEditor,
@@ -783,14 +780,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
   }
 
   Future<void> _openBackupRestoreScreen() async {
-    if (!mounted) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const BackupRestoreScreen()),
-    );
-  }
-
-  Future<void> _openCompanyProfileEditor({bool isInitial = false}) async {
     final nameController = TextEditingController(text: _companyProfile.name);
     String? pickedLogoPath = _companyProfile.logoPath;
     bool removeLogo = false;
@@ -1067,10 +1056,9 @@ class _SidebarContentState extends State<_SidebarContent> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final canEdit = true;
 
     if (!PlatformHelper.isDesktop) {
-      return _buildMobileDrawer(context, canEdit: canEdit);
+      return _buildMobileDrawer(context);
     }
 
     return Column(
@@ -1142,7 +1130,7 @@ class _SidebarContentState extends State<_SidebarContent> {
             return _buildYearSwitcher(
               context: context,
               provider: provider,
-              onDeleteRequested: canEdit ? widget.onDeleteYearRequested : () {},
+              onDeleteRequested: widget.onDeleteYearRequested,
             );
           },
         ),
@@ -1161,39 +1149,35 @@ class _SidebarContentState extends State<_SidebarContent> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _DrawerSectionLabel('Settings'),
-                  if (canEdit) ...[
-                    _DrawerListTile(
-                      icon: Icons.business_outlined,
-                      label: 'Company Profile',
-                      onTap: widget.onCompanyProfileRequested,
-                    ),
-                    _DrawerListTile(
-                      icon: Icons.edit_note_outlined,
-                      label: 'Notes',
-                      trailing: widget.hasNotes ? '●' : null,
-                      onTap: widget.onNotesRequested,
-                    ),
-                  ],
+                  _DrawerListTile(
+                    icon: Icons.business_outlined,
+                    label: 'Company Profile',
+                    onTap: widget.onCompanyProfileRequested,
+                  ),
+                  _DrawerListTile(
+                    icon: Icons.edit_note_outlined,
+                    label: 'Notes',
+                    trailing: widget.hasNotes ? '●' : null,
+                    onTap: widget.onNotesRequested,
+                  ),
                   Divider(
                     height: 1,
                     color: colorScheme.outlineVariant,
                     indent: 16,
                     endIndent: 16,
                   ),
-                  if (canEdit) ...[
-                    _DrawerSectionLabel('Data'),
-                    _DrawerListTile(
-                      icon: Icons.backup_rounded,
-                      label: 'Backup & Restore',
-                      onTap: widget.onBackupRequested,
-                    ),
-                    _DrawerSectionLabel('Security'),
-                    _DrawerListTile(
-                      icon: Icons.lock_outline_rounded,
-                      label: widget.pinButtonLabel,
-                      onTap: widget.onPinRequested,
-                    ),
-                  ],
+                  _DrawerSectionLabel('Data'),
+                  _DrawerListTile(
+                    icon: Icons.backup_rounded,
+                    label: 'Backup & Restore',
+                    onTap: widget.onBackupRequested,
+                  ),
+                  _DrawerSectionLabel('Security'),
+                  _DrawerListTile(
+                    icon: Icons.lock_outline_rounded,
+                    label: widget.pinButtonLabel,
+                    onTap: widget.onPinRequested,
+                  ),
                   Divider(
                     height: 1,
                     color: colorScheme.outlineVariant,
@@ -1217,23 +1201,31 @@ class _SidebarContentState extends State<_SidebarContent> {
           decoration: BoxDecoration(
             border: Border(top: BorderSide(color: colorScheme.outlineVariant)),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+          child: Row(
             children: [
-              Text(
-                'Balance Desk',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Developer: Ahmer Abid',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
-                  fontSize: 10,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Balance Desk',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Developer: Ahmer Abid',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant.withValues(
+                          alpha: 0.8,
+                        ),
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1243,7 +1235,7 @@ class _SidebarContentState extends State<_SidebarContent> {
     );
   }
 
-  Widget _buildMobileDrawer(BuildContext context, {required bool canEdit}) {
+  Widget _buildMobileDrawer(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
@@ -1323,6 +1315,7 @@ class _SidebarContentState extends State<_SidebarContent> {
                     ],
                   ),
                 ),
+                // Renders nothing on a standalone workspace.
               ],
             ),
           ),
@@ -1338,9 +1331,7 @@ class _SidebarContentState extends State<_SidebarContent> {
                     _buildYearSwitcher(
                       context: context,
                       provider: context.watch<LedgerYearProvider>(),
-                      onDeleteRequested: canEdit
-                          ? widget.onDeleteYearRequested
-                          : () {},
+                      onDeleteRequested: widget.onDeleteYearRequested,
                     ),
                     const SizedBox(height: 10),
                     _WorkspaceSwitcher(
@@ -1349,40 +1340,36 @@ class _SidebarContentState extends State<_SidebarContent> {
                     const SizedBox(height: 14),
                     MobileSectionHeader(title: 'Workspace Tools'),
                     const SizedBox(height: 8),
-                    if (canEdit) ...[
-                      _MobileDrawerAction(
-                        icon: Icons.business_outlined,
-                        label: 'Company Profile',
-                        onTap: widget.onCompanyProfileRequested,
-                      ),
-                      _MobileDrawerAction(
-                        icon: Icons.edit_note_outlined,
-                        label: 'Notes',
-                        trailing: widget.hasNotes
-                            ? MobileStatusPill(
-                                icon: Icons.check_rounded,
-                                label: 'Saved',
-                                color: colorScheme.secondary,
-                              )
-                            : null,
-                        onTap: widget.onNotesRequested,
-                      ),
-                    ],
-                    if (canEdit) ...[
-                      const SizedBox(height: 12),
-                      MobileSectionHeader(title: 'Data & Security'),
-                      const SizedBox(height: 8),
-                      _MobileDrawerAction(
-                        icon: Icons.backup_rounded,
-                        label: 'Backup & Restore',
-                        onTap: widget.onBackupRequested,
-                      ),
-                      _MobileDrawerAction(
-                        icon: Icons.lock_outline_rounded,
-                        label: widget.pinButtonLabel,
-                        onTap: widget.onPinRequested,
-                      ),
-                    ],
+                    _MobileDrawerAction(
+                      icon: Icons.business_outlined,
+                      label: 'Company Profile',
+                      onTap: widget.onCompanyProfileRequested,
+                    ),
+                    _MobileDrawerAction(
+                      icon: Icons.edit_note_outlined,
+                      label: 'Notes',
+                      trailing: widget.hasNotes
+                          ? MobileStatusPill(
+                              icon: Icons.check_rounded,
+                              label: 'Saved',
+                              color: colorScheme.secondary,
+                            )
+                          : null,
+                      onTap: widget.onNotesRequested,
+                    ),
+                    const SizedBox(height: 12),
+                    MobileSectionHeader(title: 'Data & Security'),
+                    const SizedBox(height: 8),
+                    _MobileDrawerAction(
+                      icon: Icons.backup_rounded,
+                      label: 'Backup & Restore',
+                      onTap: widget.onBackupRequested,
+                    ),
+                    _MobileDrawerAction(
+                      icon: Icons.lock_outline_rounded,
+                      label: widget.pinButtonLabel,
+                      onTap: widget.onPinRequested,
+                    ),
                     const SizedBox(height: 12),
                     _MobileDrawerAction(
                       icon: Icons.system_update_alt_outlined,
@@ -1419,7 +1406,7 @@ class _SidebarContentState extends State<_SidebarContent> {
     final years = provider.years.isEmpty
         ? <int>[provider.activeYear]
         : provider.years;
-    final canEdit = true;
+    final canEdit = _canEdit(context);
 
     return Padding(
       padding: const EdgeInsets.all(12),

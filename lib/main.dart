@@ -38,7 +38,9 @@ class ShopDesktopApp extends StatelessWidget {
             ? BalanceDeskTheme.desktopTheme()
             : BalanceDeskTheme.darkTheme(),
         themeMode: isDesktop ? ThemeMode.light : ThemeMode.system,
-        home: const SplashScreen(child: AppPinGateScreen(child: AppShellScreen())),
+        home: const SplashScreen(
+          child: AppPinGateScreen(child: AppShellScreen()),
+        ),
       ),
     );
   }
