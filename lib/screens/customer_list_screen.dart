@@ -180,7 +180,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
               ),
               _CustomerIntent: CallbackAction<_CustomerIntent>(
                 onInvoke: (_CustomerIntent intent) {
-                  final canEdit = _canEdit(context, listen: false);
+                  final canEdit = true;
                   if (intent.action == _CustomerShortcut.add && canEdit) {
                     _showAddCustomerDialog();
                   } else if (intent.action == _CustomerShortcut.refresh) {
@@ -280,17 +280,12 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     );
   }
 
-  /// Always returns true since linked devices feature is removed.
-  bool _canEdit(BuildContext context, {bool listen = true}) {
-    return true;
-  }
-
   Widget _buildPremiumMobileCustomerLayout({
     required BuildContext context,
     required CustomerProvider provider,
     required List<Customer> customers,
   }) {
-    final canEdit = _canEdit(context);
+    final canEdit = true;
     final state = _buildCustomerState(provider: provider, customers: customers);
 
     return SingleChildScrollView(
@@ -507,7 +502,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
           icon: const Icon(Icons.refresh_rounded),
           label: const Text('Refresh'),
         ),
-        if (_canEdit(context))
+        if (true)
           FilledButton.icon(
             onPressed: _showAddCustomerDialog,
             icon: const Icon(Icons.person_add_alt_1_rounded),
@@ -561,8 +556,8 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
         icon: Icons.people_outline,
         title: 'No customers yet',
         message: 'Add your first customer to start managing ledgers.',
-        actionLabel: _canEdit(context) ? 'Add Customer' : null,
-        onAction: _canEdit(context) ? _showAddCustomerDialog : null,
+        actionLabel: 'Add Customer',
+        onAction: _showAddCustomerDialog,
       );
     }
 
@@ -736,13 +731,11 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                               ),
                             ),
                             DataCell(
-                              _canEdit(context)
-                                  ? IconButton(
-                                      tooltip: 'Delete customer',
-                                      onPressed: () => _confirmDelete(customer),
-                                      icon: const Icon(Icons.delete_outline),
-                                    )
-                                  : const SizedBox.shrink(),
+                              IconButton(
+                                tooltip: 'Delete customer',
+                                onPressed: () => _confirmDelete(customer),
+                                icon: const Icon(Icons.delete_outline),
+                              ),
                             ),
                           ],
                         );
@@ -836,7 +829,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                     onPressed: () => _openLedger(customer),
                     icon: const Icon(Icons.chevron_right_rounded),
                   ),
-                  if (_canEdit(context))
+                  if (true)
                     IconButton(
                       tooltip: 'Delete customer',
                       onPressed: () => _confirmDelete(customer),

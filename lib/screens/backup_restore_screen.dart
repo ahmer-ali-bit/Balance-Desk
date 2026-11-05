@@ -19,12 +19,6 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
   List<FileInfo> _backups = [];
   bool _isLoading = true;
 
-  bool _canEdit = true;
-
-  bool _readCanEdit(BuildContext context, {bool listen = true}) {
-    return true;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -213,7 +207,6 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    _canEdit = _readCanEdit(context);
 
     if (Platform.isAndroid || Platform.isIOS) {
       return _buildPremiumMobileBackupScreen(theme, cs);
@@ -264,7 +257,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                         icon: Icons.restore_page_rounded,
                         label: 'Pick & Restore',
                         onTap: _pickAndRestore,
-                        enabled: _canEdit,
+                        enabled: true,
                       ),
                     ),
                   ],
@@ -289,7 +282,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                         icon: Icons.restore_page_rounded,
                         label: 'Pick & Restore',
                         onTap: _pickAndRestore,
-                        enabled: _canEdit,
+                        enabled: true,
                       ),
                     ),
                   ],
@@ -433,7 +426,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                           const SizedBox(width: 10),
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: _canEdit ? _pickAndRestore : null,
+                              onPressed: _pickAndRestore,
                               icon: const Icon(Icons.restore_page_rounded),
                               label: const Text('Pick & Restore'),
                             ),
@@ -543,9 +536,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
           ),
           IconButton(
             tooltip: 'Restore backup',
-            onPressed: _canEdit
-                ? () => _confirmRestore(file.path, file.name)
-                : null,
+            onPressed: () => _confirmRestore(file.path, file.name),
             icon: const Icon(Icons.restore_rounded),
           ),
         ],
@@ -660,7 +651,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                     size: 18,
                     color: cs.onSurfaceVariant,
                   ),
-                  onPressed: _canEdit ? () => _confirmRestore(f.path, f.name) : null,
+                  onPressed: () => _confirmRestore(f.path, f.name),
                 ),
               ],
             ),

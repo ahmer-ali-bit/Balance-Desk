@@ -11,7 +11,6 @@ import '../models/workspace.dart';
 import '../providers/customer_provider.dart';
 import '../providers/ledger_year_provider.dart';
 import '../providers/workspace_provider.dart';
-import '../services/app_deep_link_service.dart';
 import '../services/app_pin_service.dart';
 import '../services/biometric_auth_service.dart';
 import '../services/company_profile_service.dart';
@@ -40,7 +39,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
   final BiometricAuthService _biometricService = BiometricAuthService();
   final CompanyProfileService _companyProfileService = CompanyProfileService();
   final ManualUpdateService _manualUpdateService = ManualUpdateService.instance;
-  final AppDeepLinkService _deepLinkService = AppDeepLinkService.instance;
   int _selectedIndex = 0;
   int _reloadRevision = 0;
   bool _isPinEnabled = false;
@@ -53,7 +51,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
   );
   bool _didPromptCompanyProfile = false;
   String _sidebarNotes = '';
-  bool _isOpeningJoinScreen = false;
 
   static const List<_ShellDestination> _destinations = <_ShellDestination>[
     _ShellDestination(
@@ -1406,7 +1403,7 @@ class _SidebarContentState extends State<_SidebarContent> {
     final years = provider.years.isEmpty
         ? <int>[provider.activeYear]
         : provider.years;
-    final canEdit = _canEdit(context);
+    final canEdit = true;
 
     return Padding(
       padding: const EdgeInsets.all(12),

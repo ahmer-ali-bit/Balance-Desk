@@ -10,12 +10,6 @@ set(BINARY_NAME "shop")
 # versions of CMake.
 cmake_policy(VERSION 3.14...3.25)
 
-if(CMAKE_VERSION VERSION_GREATER_EQUAL "4.0")
-  # The bundled Firebase C++ SDK still declares an older minimum CMake
-  # version; keep a compatible policy floor for that dependency tree.
-  set(CMAKE_POLICY_VERSION_MINIMUM "3.10" CACHE STRING "" FORCE)
-endif()
-
 # Define build configuration option.
 get_property(IS_MULTICONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 if(IS_MULTICONFIG)
