@@ -8,8 +8,11 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:shop/database/app_database.dart';
 import 'package:shop/main.dart' show ShopDesktopApp;
+import 'package:shop/models/customer.dart';
 import 'package:shop/providers/customer_provider.dart';
 import 'package:shop/screens/customer_list_screen.dart';
+import 'package:shop/screens/ledger_screen.dart';
+import 'package:shop/theme/balance_desk_theme.dart';
 import 'package:shop/utils/number_format_utils.dart';
 import 'package:intl/intl.dart';
 
@@ -64,6 +67,58 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600));
 
     expect(tester.takeException(), isNull);
+  });
+
+  test('desktop and mobile themes use the same readable light palette', () {
+    expect(BalanceDeskTheme.desktopTheme().brightness, Brightness.light);
+    expect(BalanceDeskTheme.lightTheme().brightness, Brightness.light);
+    expect(
+      BalanceDeskTheme.desktopTheme().colorScheme.primary,
+      BalanceDeskTheme.lightTheme().colorScheme.primary,
+    );
+  });
+
+  testWidgets('desktop ledger keeps the customer directory and actions', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final provider = CustomerProvider();
+    late final Customer first;
+    await tester.runAsync(() async {
+      first = (await provider.addCustomerAndReturn('Ali Traders'))!;
+      await provider.addCustomerAndReturn('Beta Traders');
+      await provider.loadCustomers();
+    });
+    await tester.pumpWidget(
+      ChangeNotifierProvider<CustomerProvider>.value(
+        value: provider,
+        child: MaterialApp(
+          theme: BalanceDeskTheme.desktopTheme(),
+          home: LedgerScreen(customer: first, autoOpenAddEntry: false),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Beta Traders'), findsOneWidget);
+    expect(find.byTooltip('Add customer'), findsOneWidget);
+    expect(find.text('Refresh'), findsWidgets);
+    expect(find.text('Export'), findsWidgets);
+    expect(find.text('Print'), findsWidgets);
+    expect(find.text('Menu'), findsWidgets);
+    expect(find.text('Add Entry'), findsWidgets);
+
+    await tester.tap(find.text('Beta Traders'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Beta Traders Ledger'), findsOneWidget);
+    expect(find.text('Save Entry'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    provider.dispose();
   });
 
   test('customer provider can add and reload a customer', () async {

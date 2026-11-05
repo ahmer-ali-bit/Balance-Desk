@@ -22,6 +22,7 @@ import '../widgets/amount_input_field.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/decimal_text_input_formatter.dart';
 import '../widgets/scale_down_width.dart';
+import 'customer_list_screen.dart' show showCreateCustomerDialog;
 
 enum _ExportChoice { pdf, excel }
 
@@ -41,7 +42,7 @@ class _ScrollIntent extends Intent {
   final double delta;
 }
 
-class LedgerScreen extends StatelessWidget {
+class LedgerScreen extends StatefulWidget {
   const LedgerScreen({
     super.key,
     required this.customer,
@@ -52,13 +53,153 @@ class LedgerScreen extends StatelessWidget {
   final bool autoOpenAddEntry;
 
   @override
+  State<LedgerScreen> createState() => _LedgerScreenState();
+}
+
+class _LedgerScreenState extends State<LedgerScreen> {
+  late Customer _selectedCustomer;
+  late bool _autoOpenAddEntry;
+  String _customerQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCustomer = widget.customer;
+    _autoOpenAddEntry = widget.autoOpenAddEntry;
+  }
+
+  void _selectCustomer(Customer customer) {
+    if (customer.id == _selectedCustomer.id) return;
+    setState(() {
+      _selectedCustomer = customer;
+      // Opening a customer from the directory has always opened Add Entry.
+      _autoOpenAddEntry = true;
+    });
+  }
+
+  Future<void> _addCustomer() async {
+    final customer = await showCreateCustomerDialog(context);
+    if (!mounted || customer == null) return;
+    _selectCustomer(customer);
+  }
+
+  Widget _buildCustomerSidebar(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Consumer<CustomerProvider>(
+      builder: (context, provider, _) {
+        final query = _customerQuery.trim().toLowerCase();
+        final customers = query.isEmpty
+            ? provider.customers
+            : provider.customers.where((customer) =>
+                customer.name.toLowerCase().contains(query)).toList();
+        return Container(
+          width: 278,
+          decoration: BoxDecoration(
+            color: colors.surface,
+            border: Border(right: BorderSide(color: colors.outlineVariant)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text('Balance Desk', style: theme.textTheme.titleLarge),
+                    const SizedBox(height: 18),
+                    Row(children: <Widget>[
+                      Expanded(child: Text('Customers', style: theme.textTheme.titleMedium)),
+                      Text('${provider.customers.length}', style: theme.textTheme.labelMedium),
+                      IconButton(
+                        tooltip: 'Add customer',
+                        onPressed: _addCustomer,
+                        icon: const Icon(Icons.person_add_alt_rounded),
+                      ),
+                    ]),
+                    const SizedBox(height: 8),
+                    TextField(
+                      onChanged: (value) => setState(() => _customerQuery = value),
+                      decoration: const InputDecoration(
+                        hintText: 'Search customers',
+                        prefixIcon: Icon(Icons.search_rounded),
+                        isDense: true,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: customers.isEmpty
+                    ? Center(child: Text('No customers found', style: theme.textTheme.bodyMedium))
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                        itemCount: customers.length,
+                        itemBuilder: (context, index) {
+                          final customer = customers[index];
+                          final selected = customer.id == _selectedCustomer.id;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Material(
+                              color: selected ? colors.secondaryContainer : colors.surfaceContainerLow,
+                              borderRadius: BorderRadius.circular(10),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(10),
+                                onTap: () => _selectCustomer(customer),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  child: Row(children: <Widget>[
+                                    Expanded(child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        Text(customer.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                          style: theme.textTheme.titleSmall),
+                                        const SizedBox(height: 2),
+                                        Text('ID: ${customer.id ?? '-'}${customer.isStockLedger ? '  •  Stock' : ''}',
+                                          style: theme.textTheme.labelSmall?.copyWith(color: colors.onSurfaceVariant)),
+                                      ],
+                                    )),
+                                    if (selected) Icon(Icons.check_circle_rounded, size: 18, color: colors.secondary),
+                                  ]),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider<LedgerProvider>(
-      create: (_) => LedgerProvider(customer: customer)..loadEntries(),
+    final ledger = ChangeNotifierProvider<LedgerProvider>(
+      key: ValueKey<int?>(_selectedCustomer.id),
+      create: (_) => LedgerProvider(customer: _selectedCustomer)..loadEntries(),
       child: _LedgerView(
-        customer: customer,
-        autoOpenAddEntry: autoOpenAddEntry,
+        customer: _selectedCustomer,
+        autoOpenAddEntry: _autoOpenAddEntry,
       ),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (!PlatformHelper.isDesktop || constraints.maxWidth < 1000) {
+          return ledger;
+        }
+        return Scaffold(
+          body: SafeArea(
+            child: Row(children: <Widget>[
+              _buildCustomerSidebar(context),
+              Expanded(child: ledger),
+            ]),
+          ),
+        );
+      },
     );
   }
 }
@@ -2036,7 +2177,7 @@ class _LedgerViewState extends State<_LedgerView> {
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        'Total',
+                        customer.name,
                         style: theme.textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w800,
                         ),
@@ -2708,8 +2849,8 @@ class _LedgerViewState extends State<_LedgerView> {
         label: item.label,
         value: item.value,
         backgroundColor: bgColor,
-        labelColor: isMetric ? Colors.white70 : colorScheme.onSurfaceVariant,
-        valueColor: isMetric ? Colors.white : colorScheme.onSurface,
+        labelColor: colorScheme.onSurfaceVariant,
+        valueColor: isMetric ? bgColor : colorScheme.onSurface,
         borderColor: isMetric ? Colors.transparent : colorScheme.outlineVariant,
         isMetric: isMetric,
         maxWidth: maxWidth,
@@ -2776,14 +2917,22 @@ class _LedgerViewState extends State<_LedgerView> {
           ],
         ),
         const SizedBox(height: 20),
-        // Row 2: Metric Cards (Equal width/height)
-        Row(
-          children: [
-            for (int i = 0; i < metricItems.length; i++) ...[
-              if (i > 0) const SizedBox(width: 12),
-              Expanded(child: buildTile(metricItems[i], true)),
-            ],
-          ],
+        // Stock ledgers have more metrics; wrap on narrower desktop windows.
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = metricItems.length > 3 && constraints.maxWidth < 960
+                ? 3
+                : metricItems.length;
+            final width = (constraints.maxWidth - (columns - 1) * 12) / columns;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                for (final item in metricItems)
+                  SizedBox(width: width, child: buildTile(item, true)),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -3078,7 +3227,7 @@ class _LedgerViewState extends State<_LedgerView> {
           builder: (BuildContext context, BoxConstraints constraints) {
             final isDesktop = PlatformHelper.isDesktop;
             final isCompact = !isDesktop && constraints.maxWidth < 760;
-            final useCardLayout = constraints.maxWidth < 1100;
+            final useCardLayout = !isDesktop && constraints.maxWidth < 1100;
             final hasFab = isCompact;
             const desktopHorizontalPadding = 20.0;
             final desktopPageWidth = constraints.maxWidth;
@@ -3101,7 +3250,10 @@ class _LedgerViewState extends State<_LedgerView> {
                   _buildLedgerStats(context, provider),
                 ],
                 const SizedBox(height: 12),
-                const SizedBox(height: 18),
+                if (isDesktop) ...<Widget>[
+                  _buildFilterBar(context: context, provider: provider, compactForDesktop: true),
+                  const SizedBox(height: 12),
+                ],
                 _buildEntriesSectionHeader(
                   context,
                   provider,
@@ -3460,151 +3612,157 @@ class _LedgerViewState extends State<_LedgerView> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Card(
-              clipBehavior: Clip.antiAlias,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                  child: DataTable(
-                    dataTextStyle: dataTextStyle,
-                    horizontalMargin: horizontalMargin,
-                    columnSpacing: columnSpacing,
-                    headingRowHeight: 54,
-                    dataRowMinHeight: 50,
-                    dataRowMaxHeight: 56,
-                    headingRowColor: WidgetStatePropertyAll(
-                      Theme.of(context).colorScheme.surfaceContainerHighest,
-                    ),
-                    columns: provider.isStockLedger
-                        ? <DataColumn>[
-                            const DataColumn(
-                              label: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text('Entry Date'),
-                              ),
-                            ),
-                            const DataColumn(
-                              label: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text('Created Date'),
-                              ),
-                            ),
-                            const DataColumn(
-                              label: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text('Page No'),
-                              ),
-                            ),
-                            DataColumn(
-                              label: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text(
-                                  provider.useWeight ? 'Buy Weight' : 'Buy Qty',
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                child: Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                      child: DataTable(
+                        dataTextStyle: dataTextStyle,
+                        horizontalMargin: horizontalMargin,
+                        columnSpacing: columnSpacing,
+                        headingRowHeight: 54,
+                        dataRowMinHeight: 50,
+                        dataRowMaxHeight: 56,
+                        headingRowColor: WidgetStatePropertyAll(
+                          Theme.of(context).colorScheme.surfaceContainerHighest,
+                        ),
+                        columns: provider.isStockLedger
+                            ? <DataColumn>[
+                                const DataColumn(
+                                  label: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text('Entry Date'),
+                                  ),
                                 ),
-                              ),
-                              numeric: true,
-                            ),
-                            const DataColumn(
-                              label: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text('Buy Amount'),
-                              ),
-                              numeric: true,
-                            ),
-                            DataColumn(
-                              label: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text(
-                                  provider.useWeight ? 'Sell Weight' : 'Sell Qty',
+                                const DataColumn(
+                                  label: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text('Created Date'),
+                                  ),
                                 ),
-                              ),
-                              numeric: true,
-                            ),
-                            const DataColumn(
-                              label: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text('Sell Amount'),
-                              ),
-                              numeric: true,
-                            ),
-                            DataColumn(
-                              label: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text(
-                                  provider.useWeight ? 'Rem. Weight' : 'Remaining',
+                                const DataColumn(
+                                  label: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text('Page No'),
+                                  ),
                                 ),
-                              ),
-                              numeric: true,
-                            ),
-                            const DataColumn(
-                              label: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text('Balance'),
-                              ),
-                            ),
-                            const DataColumn(
-                              label: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text('Actions'),
-                              ),
-                            ),
-                          ]
-                        : const <DataColumn>[
-                            DataColumn(
-                              label: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text('Entry Date'),
-                              ),
-                            ),
-                            DataColumn(
-                              label: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text('Created Date'),
-                              ),
-                            ),
-                            DataColumn(
-                              label: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text('Page No'),
-                              ),
-                            ),
-                            DataColumn(
-                              label: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text('Description'),
-                              ),
-                            ),
-                            DataColumn(
-                              label: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text('Debit'),
-                              ),
-                              numeric: true,
-                            ),
-                            DataColumn(
-                              label: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text('Credit'),
-                              ),
-                              numeric: true,
-                            ),
-                            DataColumn(
-                              label: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text('Balance'),
-                              ),
-                            ),
-                            DataColumn(
-                              label: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text('Actions'),
-                              ),
-                            ),
-                          ],
-                    rows: _buildLedgerRows(
-                      provider,
-                      compact: constraints.maxWidth < 1100,
+                                DataColumn(
+                                  label: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      provider.useWeight ? 'Buy Weight' : 'Buy Qty',
+                                    ),
+                                  ),
+                                  numeric: true,
+                                ),
+                                const DataColumn(
+                                  label: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text('Buy Amount'),
+                                  ),
+                                  numeric: true,
+                                ),
+                                DataColumn(
+                                  label: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      provider.useWeight ? 'Sell Weight' : 'Sell Qty',
+                                    ),
+                                  ),
+                                  numeric: true,
+                                ),
+                                const DataColumn(
+                                  label: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text('Sell Amount'),
+                                  ),
+                                  numeric: true,
+                                ),
+                                DataColumn(
+                                  label: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      provider.useWeight ? 'Rem. Weight' : 'Remaining',
+                                    ),
+                                  ),
+                                  numeric: true,
+                                ),
+                                const DataColumn(
+                                  label: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text('Balance'),
+                                  ),
+                                ),
+                                const DataColumn(
+                                  label: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text('Actions'),
+                                  ),
+                                ),
+                              ]
+                            : const <DataColumn>[
+                                DataColumn(
+                                  label: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text('Entry Date'),
+                                  ),
+                                ),
+                                DataColumn(
+                                  label: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text('Created Date'),
+                                  ),
+                                ),
+                                DataColumn(
+                                  label: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text('Page No'),
+                                  ),
+                                ),
+                                DataColumn(
+                                  label: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text('Description'),
+                                  ),
+                                ),
+                                DataColumn(
+                                  label: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text('Debit'),
+                                  ),
+                                  numeric: true,
+                                ),
+                                DataColumn(
+                                  label: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text('Credit'),
+                                  ),
+                                  numeric: true,
+                                ),
+                                DataColumn(
+                                  label: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text('Balance'),
+                                  ),
+                                ),
+                                DataColumn(
+                                  label: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text('Actions'),
+                                  ),
+                                ),
+                              ],
+                        rows: _buildLedgerRows(
+                          provider,
+                          compact: constraints.maxWidth < 1100,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -6185,9 +6343,7 @@ class _CustomerInfoTile extends StatelessWidget {
                       Text(
                         label.toUpperCase(),
                         style: theme.textTheme.labelMedium?.copyWith(
-                          color: isMetric
-                              ? Colors.white.withValues(alpha: 0.7)
-                              : labelColor ?? colorScheme.onSurfaceVariant,
+                          color: labelColor ?? colorScheme.onSurfaceVariant,
                           fontSize: 9,
                           letterSpacing: 0.5,
                           fontWeight: FontWeight.w800,
@@ -6197,9 +6353,7 @@ class _CustomerInfoTile extends StatelessWidget {
                       Text(
                         value,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: isMetric
-                              ? Colors.white
-                              : (valueColor ?? colorScheme.onSurface),
+                          color: valueColor ?? colorScheme.onSurface,
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
                         ),

@@ -3,80 +3,47 @@ import 'package:flutter/material.dart';
 class BalanceDeskTheme {
   BalanceDeskTheme._();
 
+  // A shared light palette keeps the ledger readable on desktop and mobile.
   static const ColorScheme _desktopColorScheme = ColorScheme(
-    brightness: Brightness.dark,
-    primary: Color(0xFF56C48D),
-    onPrimary: Color(0xFF071B12),
-    primaryContainer: Color(0xFF153728),
-    onPrimaryContainer: Color(0xFFD5F5E2),
-    secondary: Color(0xFF3F8D69),
-    onSecondary: Color(0xFFF2FBF5),
-    secondaryContainer: Color(0xFF183C2D),
-    onSecondaryContainer: Color(0xFFD6F0E1),
-    tertiary: Color(0xFF4DB889),
-    onTertiary: Color(0xFF071B12),
-    tertiaryContainer: Color(0xFF133427),
-    onTertiaryContainer: Color(0xFFD5F5E2),
-    error: Color(0xFFFF8A80),
-    onError: Color(0xFF3A0A07),
-    errorContainer: Color(0xFF5F1914),
-    onErrorContainer: Color(0xFFFFDAD4),
-    surface: Color(0xFF0C241B),
-    onSurface: Color(0xFFF1F7F3),
-    onSurfaceVariant: Color(0xFF92B3A1),
-    outline: Color(0xFF194233),
-    outlineVariant: Color(0xFF15362A),
-    surfaceContainerLowest: Color(0xFF06110D),
-    surfaceContainerLow: Color(0xFF0A1B15),
-    surfaceContainer: Color(0xFF0E2219),
-    surfaceContainerHigh: Color(0xFF133126),
-    surfaceContainerHighest: Color(0xFF214438),
-    inverseSurface: Color(0xFFE7F2EB),
-    onInverseSurface: Color(0xFF10221A),
-    inversePrimary: Color(0xFF1E5D45),
+    brightness: Brightness.light,
+    primary: Color(0xFF12294D),
+    onPrimary: Colors.white,
+    primaryContainer: Color(0xFFDCE8F6),
+    onPrimaryContainer: Color(0xFF102744),
+    secondary: Color(0xFF087B80),
+    onSecondary: Colors.white,
+    secondaryContainer: Color(0xFFD3EEEE),
+    onSecondaryContainer: Color(0xFF064E51),
+    tertiary: Color(0xFF4C6688),
+    onTertiary: Colors.white,
+    tertiaryContainer: Color(0xFFE4ECF8),
+    onTertiaryContainer: Color(0xFF243E60),
+    error: Color(0xFFB3261E),
+    onError: Colors.white,
+    errorContainer: Color(0xFFFFDAD6),
+    onErrorContainer: Color(0xFF410002),
+    surface: Color(0xFFFFFFFF),
+    onSurface: Color(0xFF15253A),
+    onSurfaceVariant: Color(0xFF536476),
+    outline: Color(0xFF9DAEBF),
+    outlineVariant: Color(0xFFD8E0E8),
+    surfaceContainerLowest: Color(0xFFFFFFFF),
+    surfaceContainerLow: Color(0xFFF8FAFC),
+    surfaceContainer: Color(0xFFF3F6F9),
+    surfaceContainerHigh: Color(0xFFEAF0F5),
+    surfaceContainerHighest: Color(0xFFE1E9F0),
+    inverseSurface: Color(0xFF24374B),
+    onInverseSurface: Color(0xFFF4F8FC),
+    inversePrimary: Color(0xFFAFC7EC),
     scrim: Colors.black,
     shadow: Colors.black,
   );
-  static const Color _desktopScaffoldBackgroundColor = Color(0xFF071611);
-  static const Color _desktopCanvasColor = Color(0xFF081610);
-  static const Color _desktopAppBarBackgroundColor = Color(0xFF0A1D16);
-  static const Color _desktopDrawerBackgroundColor = Color(0xFF081911);
-  static const Color _desktopInputFillColor = Color(0xFF05100C);
-
-  static const ColorScheme _mobileColorScheme = ColorScheme(
-    brightness: Brightness.dark,
-    primary: Color(0xFF39D98A),
-    onPrimary: Color(0xFF062016),
-    primaryContainer: Color(0xFF0F3B2B),
-    onPrimaryContainer: Color(0xFFCFF8E0),
-    secondary: Color(0xFFF2B84B),
-    onSecondary: Color(0xFF291B00),
-    secondaryContainer: Color(0xFF49350E),
-    onSecondaryContainer: Color(0xFFFFE8B8),
-    tertiary: Color(0xFF63B3FF),
-    onTertiary: Color(0xFF071C2F),
-    tertiaryContainer: Color(0xFF123A5B),
-    onTertiaryContainer: Color(0xFFD5EBFF),
-    error: Color(0xFFFF6F61),
-    onError: Color(0xFFFFFFFF),
-    errorContainer: Color(0xFF5A1E18),
-    onErrorContainer: Color(0xFFFFD8D2),
-    surface: Color(0xFF08110F),
-    onSurface: Color(0xFFF3F7F2),
-    onSurfaceVariant: Color(0xFF9AA8A1),
-    outline: Color(0xFF243631),
-    outlineVariant: Color(0xFF1B2A26),
-    surfaceContainerLowest: Color(0xFF050907),
-    surfaceContainerLow: Color(0xFF0B1714),
-    surfaceContainer: Color(0xFF10211D),
-    surfaceContainerHigh: Color(0xFF172D28),
-    surfaceContainerHighest: Color(0xFF203A34),
-    inverseSurface: Color(0xFFE8F1EC),
-    onInverseSurface: Color(0xFF0A1512),
-    inversePrimary: Color(0xFF176B48),
-    scrim: Colors.black,
-    shadow: Colors.black,
-  );
+  static const Color _desktopScaffoldBackgroundColor = Color(0xFFF5F7FA);
+  static const Color _desktopCanvasColor = Color(0xFFF5F7FA);
+  static const Color _desktopAppBarBackgroundColor = Color(0xFFFFFFFF);
+  static const Color _desktopDrawerBackgroundColor = Color(0xFFFFFFFF);
+  static const Color _desktopInputFillColor = Color(0xFFF4F7FA);
+  static const ColorScheme _mobileColorScheme = _desktopColorScheme;
 
   static ThemeData lightTheme() => _buildMobileTheme();
 
@@ -85,7 +52,7 @@ class BalanceDeskTheme {
   static ThemeData desktopTheme() {
     final colorScheme = _desktopColorScheme;
 
-    final baseText = Typography.material2021().white;
+    final baseText = Typography.material2021().black;
     final textTheme = baseText
         .apply(
           bodyColor: colorScheme.onSurface,
@@ -123,7 +90,7 @@ class BalanceDeskTheme {
 
     return ThemeData(
       useMaterial3: true,
-      brightness: Brightness.dark,
+      brightness: Brightness.light,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: _desktopScaffoldBackgroundColor,
       canvasColor: _desktopCanvasColor,
@@ -146,7 +113,7 @@ class BalanceDeskTheme {
         margin: EdgeInsets.zero,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(12),
           side: BorderSide(color: colorScheme.outlineVariant),
         ),
       ),
@@ -184,7 +151,7 @@ class BalanceDeskTheme {
           foregroundColor: colorScheme.onPrimary,
           disabledBackgroundColor: colorScheme.surfaceContainerHighest,
           disabledForegroundColor: colorScheme.onSurfaceVariant,
-          shape: const StadiumBorder(),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
           textStyle: textTheme.labelLarge,
         ),
@@ -194,7 +161,7 @@ class BalanceDeskTheme {
           foregroundColor: colorScheme.onSurface,
           backgroundColor: colorScheme.surfaceContainerLow,
           side: BorderSide(color: colorScheme.outlineVariant),
-          shape: const StadiumBorder(),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
           textStyle: textTheme.labelLarge,
         ),
@@ -202,7 +169,7 @@ class BalanceDeskTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: colorScheme.primary,
-          shape: const StadiumBorder(),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           textStyle: textTheme.labelLarge,
         ),
@@ -212,7 +179,7 @@ class BalanceDeskTheme {
           backgroundColor: colorScheme.primary,
           foregroundColor: colorScheme.onPrimary,
           elevation: 0,
-          shape: const StadiumBorder(),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
         ),
       ),
@@ -278,7 +245,7 @@ class BalanceDeskTheme {
 
   static ThemeData _buildMobileTheme() {
     final colorScheme = _mobileColorScheme;
-    final textBase = Typography.material2021().white;
+    final textBase = Typography.material2021().black;
 
     final textTheme = textBase
         .apply(
@@ -347,7 +314,7 @@ class BalanceDeskTheme {
 
     return ThemeData(
       useMaterial3: true,
-      brightness: Brightness.dark,
+      brightness: Brightness.light,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: colorScheme.surface,
       canvasColor: colorScheme.surface,

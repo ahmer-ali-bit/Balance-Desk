@@ -11,6 +11,23 @@ import '../widgets/mobile_premium.dart';
 import '../widgets/scale_down_width.dart';
 import 'ledger_screen.dart';
 
+/// Uses the same customer form and provider as the directory screen.
+Future<Customer?> showCreateCustomerDialog(BuildContext context) async {
+  final provider = context.read<CustomerProvider>();
+  final draft = await showDialog<_CustomerDraft>(
+    context: context,
+    builder: (BuildContext context) => const _AddCustomerDialog(),
+  );
+  if (draft == null) return null;
+  final customer = await provider.addCustomerAndReturn(draft.name);
+  if (customer == null && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(provider.errorMessage ?? 'Unable to add customer.')),
+    );
+  }
+  return customer;
+}
+
 class CustomerListScreen extends StatefulWidget {
   const CustomerListScreen({super.key});
 
