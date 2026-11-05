@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -1743,9 +1742,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
 
     return ClipRRect(
       borderRadius: borderRadius,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
+      child: Container(
           height: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
@@ -1839,7 +1836,6 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
               ),
             ],
           ),
-        ),
       ),
     );
   }
@@ -2400,11 +2396,9 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              MobileMetricTile(
+              HarborBalanceTile(
                 label: 'Balance',
                 value: _formatBalance(balance.finalBalance),
-                icon: Icons.account_balance_wallet_outlined,
-                color: balanceColor,
               ),
             ],
           ),

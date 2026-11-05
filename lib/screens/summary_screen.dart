@@ -539,7 +539,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
     final filteredCustomers = _filteredCustomers();
     _totalCustomerCount = filteredCustomers.length;
     final overallBalance = _summaryData.finalBalance;
-    final balanceColor = AppColors.balanceColor(overallBalance);
 
     return SingleChildScrollView(
       controller: _tableVerticalController,
@@ -585,11 +584,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    MobileMetricTile(
-                      label: 'Balance',
+                    HarborBalanceTile(
+                      label: 'Overall Balance',
                       value: _formatBalance(overallBalance),
-                      icon: Icons.account_balance_wallet_outlined,
-                      color: balanceColor,
                     ),
                   ],
                 ),

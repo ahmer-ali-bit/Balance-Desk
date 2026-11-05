@@ -16,6 +16,7 @@ import 'package:shop/theme/balance_desk_theme.dart';
 import 'package:shop/widgets/summary_stat_card.dart';
 import 'package:shop/widgets/harbor_navigation.dart';
 import 'package:shop/utils/number_format_utils.dart';
+import 'package:shop/utils/platform_helper.dart';
 import 'package:intl/intl.dart';
 
 class _TestPathProvider extends PathProviderPlatform {
@@ -226,9 +227,115 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('Edit Entry'), findsOneWidget);
       expect(find.text('Transfer to another customer'), findsOneWidget);
-      await tester.pageBack();
+      Navigator.of(tester.element(find.text('Edit Entry'))).pop();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
+      await tester.scrollUntilVisible(
+        find.text('Entry 0'), 1200,
+        scrollable: find.descendant(
+          of: find.byKey(const ValueKey<String>('harbor-ledger-scroll')),
+          matching: find.byType(Scrollable),
+        ),
+        maxScrolls: 100,
+      );
+      expect(find.text('Entry 0'), findsOneWidget);
+      expect(find.text('26 D'), findsWidgets);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await tester.pump();
+    });
+    customerProvider.dispose();
+  });
+
+  testWidgets('mobile ledger keeps navigation and action menu at phone widths', (tester) async {
+    PlatformHelper.debugDesktopOverride = false;
+    addTearDown(() => PlatformHelper.debugDesktopOverride = null);
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final customerProvider = CustomerProvider();
+    late final Customer customer;
+    await tester.runAsync(() async {
+      customer = (await customerProvider.addCustomerAndReturn('Phone Customer'))!;
+      await AppDatabase.instance.addEntry(
+        customerId: customer.id!, entryDate: '2026-01-01',
+        createdAt: '2026-01-01T10:00:00', pageNo: '9',
+        description: 'Phone Entry', debit: 50, credit: 0,
+      );
+      await customerProvider.loadCustomers();
+    });
+    await tester.runAsync(() async {
+      await tester.pumpWidget(ChangeNotifierProvider<CustomerProvider>.value(
+        value: customerProvider,
+        child: MaterialApp(theme: BalanceDeskTheme.lightTheme(),
+          home: LedgerScreen(customer: customer, autoOpenAddEntry: false,
+            onNavigate: (_) {})),
+      ));
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(find.text('Customers'), findsOneWidget);
+      expect(find.text('Summary'), findsOneWidget);
+      expect(find.text('Daily Logs'), findsOneWidget);
+      expect(find.text('Add Entry'), findsWidgets);
+      expect(find.byTooltip('Refresh ledger'), findsOneWidget);
+      await tester.tap(find.byTooltip('More actions'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Export'), findsOneWidget);
+      expect(find.text('Print'), findsOneWidget);
+      expect(find.text('Edit Customer'), findsOneWidget);
+      expect(find.text('Menu'), findsOneWidget);
+      Navigator.of(tester.element(find.text('Export'))).pop();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      tester.view.physicalSize = const Size(320, 640);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await tester.pump();
+    });
+    customerProvider.dispose();
+  });
+
+  testWidgets('ledger navigation returns to the requested shell destination', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final customerProvider = CustomerProvider();
+    late final Customer customer;
+    var selected = -1;
+    await tester.runAsync(() async {
+      customer = (await customerProvider.addCustomerAndReturn('Navigation Customer'))!;
+      await customerProvider.loadCustomers();
+      await tester.pumpWidget(ChangeNotifierProvider<CustomerProvider>.value(
+        value: customerProvider,
+        child: MaterialApp(theme: BalanceDeskTheme.desktopTheme(),
+          home: HarborNavigationScope(
+            onNavigate: (index) => selected = index,
+            child: Builder(builder: (context) => Scaffold(
+              body: TextButton(onPressed: () {
+                final navigate = HarborNavigationScope.maybeOf(context);
+                Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
+                  LedgerScreen(customer: customer, autoOpenAddEntry: false, onNavigate: navigate)));
+              }, child: const Text('Open ledger')),
+            )),
+          ),
+        ),
+      ));
+      await tester.tap(find.text('Open ledger'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      await tester.pump();
+      await tester.tap(find.text('Summary'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(selected, 1);
+      expect(find.text('Open ledger'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
       await Future<void>.delayed(const Duration(milliseconds: 100));

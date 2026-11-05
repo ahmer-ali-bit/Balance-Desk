@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -23,6 +22,7 @@ import '../widgets/app_empty_state.dart';
 import '../widgets/decimal_text_input_formatter.dart';
 import '../widgets/scale_down_width.dart';
 import '../widgets/harbor_navigation.dart';
+import '../widgets/mobile_premium.dart' show HarborBalanceTile;
 import 'customer_list_screen.dart' show showCreateCustomerDialog;
 
 enum _ExportChoice { pdf, excel }
@@ -235,6 +235,14 @@ class _CustomerSidebarState extends State<_CustomerSidebar> {
                           );
                         },
                       ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+                child: OutlinedButton.icon(
+                  onPressed: widget.onAddCustomer,
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('Add customer'),
+                ),
               ),
             ],
           ),
@@ -2331,17 +2339,14 @@ class _LedgerViewState extends State<_LedgerView> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
               decoration: BoxDecoration(
-                color: balanceAccent.withValues(alpha: 0.09),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: balanceAccent.withValues(alpha: 0.16),
-                ),
+                color: colorScheme.secondary,
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 children: <Widget>[
                   Icon(
                     Icons.account_balance_wallet_outlined,
-                    color: balanceAccent,
+                    color: colorScheme.onSecondary,
                     size: 20,
                   ),
                   const SizedBox(width: 10),
@@ -2349,7 +2354,7 @@ class _LedgerViewState extends State<_LedgerView> {
                     child: Text(
                       'Net Balance',
                       style: theme.textTheme.labelLarge?.copyWith(
-                        color: balanceAccent,
+                        color: colorScheme.onSecondary,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -2363,6 +2368,7 @@ class _LedgerViewState extends State<_LedgerView> {
                         textAlign: TextAlign.end,
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w900,
+                          color: colorScheme.onSecondary,
                         ),
                       ),
                     ),
@@ -2926,7 +2932,10 @@ class _LedgerViewState extends State<_LedgerView> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           for (final item in metricItems) ...<Widget>[
-            buildTile(item, true),
+            if (item.label == 'Balance')
+              HarborBalanceTile(label: item.label, value: item.value)
+            else
+              buildTile(item, true),
             const SizedBox(height: 8),
           ],
         ],
@@ -3377,7 +3386,40 @@ class _LedgerViewState extends State<_LedgerView> {
                   _buildCustomerInfoCard(context, provider),
                 const SizedBox(height: 12),
                 if (isDesktop) ...<Widget>[
+                  Row(children: <Widget>[
+                    Expanded(child: Text('Daybook', style: Theme.of(context).textTheme.titleMedium)),
+                    OutlinedButton.icon(
+                      onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+                      icon: const Icon(Icons.account_balance_wallet_outlined, size: 18),
+                      label: const Text('Opening balance'),
+                    ),
+                  ]),
+                  const SizedBox(height: 8),
                   _buildFilterBar(context: context, provider: provider, compactForDesktop: true),
+                  const SizedBox(height: 12),
+                ] else if (isCompact) ...<Widget>[
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(children: <Widget>[
+                      for (final filter in <({String label, IconData icon, LedgerDateFilter value})>[
+                        (label: 'All', icon: Icons.view_list_rounded, value: LedgerDateFilter.all),
+                        (label: 'Today', icon: Icons.today_rounded, value: LedgerDateFilter.today),
+                        (label: 'This Week', icon: Icons.date_range_rounded, value: LedgerDateFilter.thisWeek),
+                        (label: 'This Month', icon: Icons.calendar_month_rounded, value: LedgerDateFilter.thisMonth),
+                        (label: 'Custom Range', icon: Icons.timeline_rounded, value: LedgerDateFilter.customRange),
+                      ]) ...<Widget>[
+                        _buildFilterChip(
+                          context: context, label: filter.label, icon: filter.icon,
+                          isSelected: provider.activeFilter == filter.value,
+                          onSelected: (_) => filter.value == LedgerDateFilter.customRange
+                              ? _pickCustomRange(provider)
+                              : provider.applyFilter(filter.value),
+                          compact: true,
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                    ]),
+                  ),
                   const SizedBox(height: 12),
                 ],
                 _buildEntriesSectionHeader(context, provider, isCompact: isCompact),
@@ -3440,7 +3482,7 @@ class _LedgerViewState extends State<_LedgerView> {
         Container(
           width: 252,
           decoration: BoxDecoration(
-            color: colors.surface,
+            color: colors.secondaryContainer.withValues(alpha: 0.45),
             border: Border(left: BorderSide(color: colors.outlineVariant)),
           ),
           child: SingleChildScrollView(
@@ -3454,6 +3496,8 @@ class _LedgerViewState extends State<_LedgerView> {
                 const SizedBox(height: 4),
                 FilledButton.icon(onPressed: _showAddEntryDialog,
                   icon: const Icon(Icons.add_rounded), label: const Text('Add Entry')),
+                OutlinedButton.icon(onPressed: provider.isLoading ? null : provider.loadEntries,
+                  icon: const Icon(Icons.refresh_rounded), label: const Text('Refresh')),
                 OutlinedButton.icon(onPressed: entries.isNotEmpty ? _exportWithOptions : null,
                   icon: const Icon(Icons.download_outlined), label: const Text('Export')),
                 OutlinedButton.icon(onPressed: entries.isNotEmpty ? _printPdf : null,
@@ -3494,6 +3538,27 @@ class _LedgerViewState extends State<_LedgerView> {
           remainingBagsLabel: remainingLabel,
         );
       }
+      final details = Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+        Text(entry.displayDescription, style: theme.textTheme.titleSmall),
+        const SizedBox(height: 3),
+        Text('${_formatStoredDate(entry.entryDate)}  •  ${_formatStoredDate(entry.createdAt)}',
+            style: theme.textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant)),
+        Text('Page: ${entry.pageNo.trim().isEmpty ? '-' : entry.pageNo}  •  DL Page: ${entry.dailyLogPageNo.trim().isEmpty ? '-' : entry.dailyLogPageNo}',
+            style: theme.textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant)),
+      ]);
+      final metrics = Wrap(spacing: 18, runSpacing: 8, children: <Widget>[
+        if (provider.isStockLedger) ...<Widget>[
+          metric(provider.useWeight ? 'Buy Weight' : 'Buy Bags', provider.formatBags(double.tryParse(entry.buyBags) ?? 0), AppColors.credit),
+          metric('Buy Amount', provider.formatAmount(entry.debit), AppColors.credit),
+          metric(provider.useWeight ? 'Sell Weight' : 'Sell Bags', provider.formatBags(double.tryParse(entry.sellBags) ?? 0), AppColors.debit),
+          metric('Sell Amount', provider.formatAmount(entry.credit), AppColors.debit),
+          metric(provider.useWeight ? 'Remaining Weight' : 'Remaining Bags', remainingLabel, colors.onSurface),
+        ] else ...<Widget>[
+          metric('Debit', provider.formatAmount(entry.debit), AppColors.debit),
+          metric('Credit', provider.formatAmount(entry.credit), AppColors.credit),
+        ],
+        metric('Balance', balanceLabel, AppColors.balanceColor(values.balance)),
+      ]);
       return Material(
         color: colors.surface,
         shape: RoundedRectangleBorder(
@@ -3509,28 +3574,14 @@ class _LedgerViewState extends State<_LedgerView> {
               child: Icon(Icons.receipt_long_outlined, color: colors.primary, size: 20),
             ),
             const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-              Text(entry.displayDescription, style: theme.textTheme.titleSmall),
-              const SizedBox(height: 3),
-              Text('${_formatStoredDate(entry.entryDate)}  •  ${_formatStoredDate(entry.createdAt)}',
-                  style: theme.textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant)),
-              Text('Page: ${entry.pageNo.trim().isEmpty ? '-' : entry.pageNo}  •  DL Page: ${entry.dailyLogPageNo.trim().isEmpty ? '-' : entry.dailyLogPageNo}',
-                  style: theme.textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant)),
-              const SizedBox(height: 10),
-              Wrap(spacing: 18, runSpacing: 8, children: <Widget>[
-                if (provider.isStockLedger) ...<Widget>[
-                  metric(provider.useWeight ? 'Buy Kgs' : 'Buy Bags', provider.formatBags(double.tryParse(entry.buyBags) ?? 0), AppColors.credit),
-                  metric('Buy Amount', provider.formatAmount(entry.debit), AppColors.credit),
-                  metric(provider.useWeight ? 'Sell Kgs' : 'Sell Bags', provider.formatBags(double.tryParse(entry.sellBags) ?? 0), AppColors.debit),
-                  metric('Sell Amount', provider.formatAmount(entry.credit), AppColors.debit),
-                  metric(provider.useWeight ? 'Remaining Kgs' : 'Remaining Bags', remainingLabel, colors.onSurface),
-                ] else ...<Widget>[
-                  metric('Debit', provider.formatAmount(entry.debit), AppColors.debit),
-                  metric('Credit', provider.formatAmount(entry.credit), AppColors.credit),
-                ],
-                metric('Balance', balanceLabel, AppColors.balanceColor(values.balance)),
-              ]),
-            ])),
+            if (constraints.maxWidth >= 800) ...<Widget>[
+              Expanded(flex: 5, child: details),
+              const SizedBox(width: 12),
+              Expanded(flex: 7, child: metrics),
+            ] else
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+                details, const SizedBox(height: 10), metrics,
+              ])),
             if (values.isOpeningBalanceEntry)
               IconButton(tooltip: 'Clear opening balance', onPressed: () => _clearOpeningBalance(provider),
                   icon: const Icon(Icons.delete_outline_rounded))
@@ -6620,93 +6671,29 @@ class _CustomerInfoTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final borderRadius = BorderRadius.circular(22);
-
     final resolvedBg = backgroundColor ?? colorScheme.surfaceContainerLowest;
-
     return ConstrainedBox(
-      constraints: BoxConstraints(
-        minWidth: 120,
-        maxWidth: maxWidth ?? double.infinity,
-      ),
-      child: ClipRRect(
-        borderRadius: borderRadius,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: isMetric
-                  ? resolvedBg.withValues(alpha: 0.15)
-                  : resolvedBg.withValues(alpha: 0.1),
-              gradient: isMetric
-                  ? LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: <Color>[
-                        resolvedBg.withValues(alpha: 0.25),
-                        resolvedBg.withValues(alpha: 0.15),
-                        resolvedBg.withValues(alpha: 0.2),
-                      ],
-                    )
-                  : LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: <Color>[
-                        colorScheme.surface.withValues(alpha: 0.2),
-                        colorScheme.surfaceContainerLow.withValues(alpha: 0.1),
-                      ],
-                    ),
-              boxShadow: isMetric
-                  ? <BoxShadow>[
-                      BoxShadow(
-                        color: resolvedBg.withValues(alpha: 0.1),
-                        blurRadius: 15,
-                        offset: const Offset(0, 5),
-                      ),
-                    ]
-                  : null,
-              borderRadius: borderRadius,
-              border: Border.all(
-                color: isMetric
-                    ? resolvedBg.withValues(alpha: 0.3)
-                    : borderColor ??
-                          colorScheme.outlineVariant.withValues(alpha: 0.2),
-                width: 1.2,
-              ),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        label.toUpperCase(),
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: labelColor ?? colorScheme.onSurfaceVariant,
-                          fontSize: 9,
-                          letterSpacing: 0.5,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        value,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: valueColor ?? colorScheme.onSurface,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+      constraints: BoxConstraints(minWidth: 120, maxWidth: maxWidth ?? double.infinity),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isMetric ? resolvedBg.withValues(alpha: 0.12) : colorScheme.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: isMetric
+              ? resolvedBg.withValues(alpha: 0.2)
+              : borderColor ?? colorScheme.outlineVariant),
         ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+          Text(label.toUpperCase(), style: theme.textTheme.labelMedium?.copyWith(
+            color: labelColor ?? colorScheme.onSurfaceVariant,
+            fontSize: 9, letterSpacing: 0.5, fontWeight: FontWeight.w800,
+          )),
+          const SizedBox(height: 4),
+          Text(value, style: theme.textTheme.bodyMedium?.copyWith(
+            color: valueColor ?? colorScheme.onSurface,
+            fontWeight: FontWeight.w700, fontSize: 13,
+          )),
+        ]),
       ),
     );
   }

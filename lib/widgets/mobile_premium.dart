@@ -16,18 +16,8 @@ class MobilePremiumPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: <Color>[
-            colorScheme.surfaceContainerLowest,
-            colorScheme.surface,
-          ],
-        ),
-      ),
+    return ColoredBox(
+      color: colorScheme.surfaceContainerHighest,
       child: Padding(padding: padding, child: child),
     );
   }
@@ -52,21 +42,12 @@ class MobilePremiumPanel extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final accent = accentColor ?? colorScheme.primary;
     final decoration = BoxDecoration(
-      color: colorScheme.surfaceContainer,
+      color: colorScheme.surface,
       borderRadius: BorderRadius.circular(kMobilePremiumRadius),
       border: Border.all(color: colorScheme.outlineVariant),
-      boxShadow: <BoxShadow>[
-        BoxShadow(
-          color: Colors.black.withValues(alpha: 0.045),
-          blurRadius: 10,
-          offset: const Offset(0, 3),
-        ),
-      ],
     );
 
-    final panel = AnimatedContainer(
-      duration: const Duration(milliseconds: 160),
-      curve: Curves.easeOut,
+    final panel = Container(
       padding: padding,
       decoration: decoration.copyWith(
         border: Border.all(
@@ -370,6 +351,34 @@ class MobileStatusPill extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Emphasizes the same balance value on Harbor's mobile screens.
+class HarborBalanceTile extends StatelessWidget {
+  const HarborBalanceTile({super.key, required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.secondary,
+        borderRadius: BorderRadius.circular(kMobilePremiumRadius),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+        Text(label, style: theme.textTheme.labelMedium?.copyWith(color: colors.onSecondary)),
+        const SizedBox(height: 4),
+        Text(value, style: theme.textTheme.titleLarge?.copyWith(
+          color: colors.onSecondary, fontWeight: FontWeight.w800,
+        )),
+      ]),
     );
   }
 }
