@@ -92,37 +92,37 @@ void main() {
       await provider.addCustomerAndReturn('Beta Traders');
       await provider.loadCustomers();
     });
-    await tester.pumpWidget(
-      ChangeNotifierProvider<CustomerProvider>.value(
-        value: provider,
-        child: MaterialApp(
-          theme: BalanceDeskTheme.desktopTheme(),
-          home: LedgerScreen(customer: first, autoOpenAddEntry: false),
+    await tester.runAsync(() async {
+      await tester.pumpWidget(
+        ChangeNotifierProvider<CustomerProvider>.value(
+          value: provider,
+          child: MaterialApp(
+            theme: BalanceDeskTheme.desktopTheme(),
+            home: LedgerScreen(customer: first, autoOpenAddEntry: false),
+          ),
         ),
-      ),
-    );
-    await tester.pump();
-    // Allow the FFI database's real async work to finish outside fake time.
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 500)));
-    await tester.pump();
-    expect(find.text('Beta Traders'), findsOneWidget);
-    expect(find.byTooltip('Add customer'), findsOneWidget);
-    expect(find.text('Refresh'), findsWidgets);
-    expect(find.text('Export'), findsWidgets);
-    expect(find.text('Print'), findsWidgets);
-    expect(find.text('Menu'), findsWidgets);
-    expect(find.text('Add Entry'), findsWidgets);
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(find.text('Beta Traders'), findsOneWidget);
+      expect(find.byTooltip('Add customer'), findsOneWidget);
+      expect(find.text('Refresh'), findsWidgets);
+      expect(find.text('Export'), findsWidgets);
+      expect(find.text('Print'), findsWidgets);
+      expect(find.text('Menu'), findsWidgets);
+      expect(find.text('Add Entry'), findsWidgets);
 
-    await tester.tap(find.text('Beta Traders'));
-    await tester.pump();
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 500)));
-    await tester.pumpAndSettle();
-    expect(find.text('Beta Traders Ledger'), findsOneWidget);
-    expect(find.text('Save Entry'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
-    await tester.pump();
+      await tester.tap(find.text('Beta Traders'));
+      await tester.pump();
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Beta Traders Ledger'), findsOneWidget);
+      expect(find.text('Save Entry'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await tester.pump();
+    });
     provider.dispose();
   });
 
