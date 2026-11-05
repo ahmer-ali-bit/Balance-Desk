@@ -93,3 +93,13 @@ jobs:
           name: Balance-Desk-Android-UI-preview
           path: build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
+      # An optimized preview is useful for assessing UI responsiveness; this
+      # repository's release variant is still signed with a debug key.
+      - name: Build Android release preview
+        run: flutter build apk --release
+      - name: Save Android release preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: Balance-Desk-Android-release-preview
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
