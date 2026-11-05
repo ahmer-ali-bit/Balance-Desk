@@ -322,7 +322,17 @@ void main() {
       expect(find.text('Summary'), findsOneWidget);
       expect(find.text('Daily Logs'), findsOneWidget);
       expect(find.text('Add Entry'), findsWidgets);
+      expect(find.text('Phone Entry'), findsOneWidget);
+      expect(find.byTooltip('Entry Options'), findsOneWidget);
       expect(find.byTooltip('Refresh ledger'), findsOneWidget);
+      await tester.tap(find.text('Add Entry').last);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Save Entry'), findsOneWidget);
+      expect(find.text('Page No'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(find.byTooltip('More actions'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
@@ -464,6 +474,7 @@ void main() {
 
       await open(const SummaryScreen());
       expect(find.text('Overview'), findsOneWidget);
+      expect(find.byKey(const ValueKey<String>('harbor-summary-list')), findsOneWidget);
       expect(find.text('Harbor Test'), findsOneWidget);
       expect(find.text('120'), findsWidgets);
       expect(find.text('20'), findsWidgets);

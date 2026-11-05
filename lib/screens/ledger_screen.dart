@@ -22,6 +22,7 @@ import '../widgets/app_empty_state.dart';
 import '../widgets/decimal_text_input_formatter.dart';
 import '../widgets/scale_down_width.dart';
 import '../widgets/harbor_navigation.dart';
+import '../widgets/harbor_workspace.dart';
 import '../widgets/mobile_premium.dart' show HarborBalanceTile;
 import 'customer_list_screen.dart' show showCreateCustomerDialog;
 
@@ -3468,15 +3469,7 @@ class _LedgerViewState extends State<_LedgerView> {
                   padding: const EdgeInsets.only(bottom: 8),
                   child: isDesktop
                       ? _buildHarborDesktopEntry(context, provider, entry, values, balanceLabel, remainingLabel)
-                      : _buildLedgerEntryCard(
-                          context,
-                          provider,
-                          entry: entry,
-                          isOpeningBalanceEntry: values.isOpeningBalanceEntry,
-                          balanceLabel: balanceLabel,
-                          balance: values.balance,
-                          remainingBagsLabel: remainingLabel,
-                        ),
+                      : _buildHarborMobileEntry(context, provider, entry, values, balanceLabel, remainingLabel),
                 );
               }, childCount: visibleCount),
             ),
@@ -3521,6 +3514,56 @@ class _LedgerViewState extends State<_LedgerView> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildHarborMobileEntry(BuildContext context, LedgerProvider provider, Entry entry,
+      _HarborEntryBalance values, String balanceLabel, String remainingLabel) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    Widget detail(String label, String value) => Text('$label $value', style: theme.textTheme.labelSmall?.copyWith(
+      color: colors.onSurfaceVariant));
+    return Material(
+      color: colors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: colors.outlineVariant)),
+      child: Padding(padding: const EdgeInsets.fromLTRB(12, 10, 6, 10), child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+          Row(children: <Widget>[
+            Expanded(child: Text(values.isOpeningBalanceEntry ? 'Opening Balance' : entry.displayDescription,
+              maxLines: 2, overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800))),
+            const SizedBox(width: 8),
+            if (values.isOpeningBalanceEntry)
+              IconButton(tooltip: 'Clear opening balance', onPressed: () => _clearOpeningBalance(provider),
+                icon: const Icon(Icons.delete_outline_rounded))
+            else
+              IconButton(tooltip: 'Entry Options', onPressed: () => _showEntryMenu(context, provider, entry),
+                icon: const Icon(Icons.more_vert_rounded)),
+          ]),
+          Wrap(spacing: 10, runSpacing: 3, children: <Widget>[
+            detail('Entry', _formatStoredDate(entry.entryDate)),
+            detail('Created', _formatStoredDate(entry.createdAt)),
+            if (entry.pageNo.trim().isNotEmpty) detail('Pg', entry.pageNo),
+            if (entry.dailyLogPageNo.trim().isNotEmpty) detail('DL Pg', entry.dailyLogPageNo),
+          ]),
+          const SizedBox(height: 8),
+          Wrap(spacing: 14, runSpacing: 4, children: <Widget>[
+            if (provider.isStockLedger) ...<Widget>[
+              detail(provider.useWeight ? 'Buy Weight' : 'Buy Qty', provider.formatBags(double.tryParse(entry.buyBags) ?? 0)),
+              detail('Buy Amount', provider.formatAmount(entry.debit)),
+              detail(provider.useWeight ? 'Sell Weight' : 'Sell Qty', provider.formatBags(double.tryParse(entry.sellBags) ?? 0)),
+              detail('Sell Amount', provider.formatAmount(entry.credit)),
+              detail(provider.useWeight ? 'Rem. Weight' : 'Remaining', remainingLabel.isEmpty ? '-' : remainingLabel),
+            ] else ...<Widget>[
+              detail('Debit', provider.formatAmount(entry.debit)),
+              detail('Credit', provider.formatAmount(entry.credit)),
+            ],
+            Text('Balance ${balanceLabel.isEmpty ? 'No change' : balanceLabel}',
+              style: theme.textTheme.labelSmall?.copyWith(color: AppColors.balanceColor(values.balance), fontWeight: FontWeight.w800)),
+          ]),
+        ],
+      )),
     );
   }
 
@@ -3586,7 +3629,7 @@ class _LedgerViewState extends State<_LedgerView> {
               child: Icon(Icons.receipt_long_outlined, color: colors.primary, size: 20),
             ),
             const SizedBox(width: 12),
-            if (constraints.maxWidth >= 800) ...<Widget>[
+            if (constraints.maxWidth >= 800 || (!provider.isStockLedger && constraints.maxWidth >= 620)) ...<Widget>[
               Expanded(flex: 5, child: details),
               const SizedBox(width: 12),
               Expanded(flex: 7, child: metrics),
@@ -5252,163 +5295,40 @@ class _ResponsiveFormDialogShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final colors = Theme.of(context).colorScheme;
     final size = MediaQuery.sizeOf(context);
     final isCompact = size.width < 640;
-    final useDenseCompactLayout = isCompact && compactDense;
-    final headerPadding = useDenseCompactLayout
-        ? const EdgeInsets.fromLTRB(16, 14, 16, 10)
-        : const EdgeInsets.fromLTRB(18, 18, 18, 12);
-    final bodyPadding = useDenseCompactLayout
-        ? const EdgeInsets.fromLTRB(16, 0, 16, 0)
-        : const EdgeInsets.fromLTRB(18, 0, 18, 0);
-    final actionPadding = useDenseCompactLayout
-        ? const EdgeInsets.fromLTRB(16, 10, 16, 16)
-        : const EdgeInsets.fromLTRB(18, 12, 18, 18);
-    final compactRadius = useDenseCompactLayout ? 24.0 : 28.0;
-    final iconSize = useDenseCompactLayout ? 42.0 : 46.0;
-    final iconRadius = useDenseCompactLayout ? 15.0 : 16.0;
-    final iconDecoration = useDenseCompactLayout
-        ? BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: <Color>[
-                colorScheme.primary.withValues(alpha: 0.24),
-                colorScheme.primaryContainer.withValues(alpha: 0.9),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(iconRadius),
-            border: Border.all(
-              color: colorScheme.primary.withValues(alpha: 0.18),
-            ),
-          )
-        : BoxDecoration(
-            color: colorScheme.primary.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(iconRadius),
-          );
-    final iconColor = useDenseCompactLayout
-        ? colorScheme.onPrimaryContainer
-        : colorScheme.primary;
-    final handleTopSpacing = useDenseCompactLayout ? 8.0 : 10.0;
-    final handleWidth = useDenseCompactLayout ? 42.0 : 46.0;
-    final handleHeight = useDenseCompactLayout ? 4.0 : 5.0;
-    final dialogGradient = useDenseCompactLayout
-        ? LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: <Color>[
-              colorScheme.surfaceContainerHigh.withValues(alpha: 0.98),
-              colorScheme.surface,
-            ],
-          )
-        : null;
-
+    final padding = isCompact && compactDense ? 16.0 : 20.0;
     return Dialog(
-      alignment: isCompact ? Alignment.bottomCenter : Alignment.center,
-      insetPadding: EdgeInsets.fromLTRB(16, isCompact ? 12 : 24, 16, 16),
-      backgroundColor: Colors.transparent,
-      elevation: 0,
+      alignment: Alignment.center,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      backgroundColor: colors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: colors.outlineVariant)),
       child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: math.min(maxWidth, size.width - 32),
-          maxHeight: size.height * (isCompact ? compactMaxHeightFactor : 0.84),
-        ),
-        child: Container(
-          decoration: BoxDecoration(
-            color: dialogGradient == null ? colorScheme.surface : null,
-            gradient: dialogGradient,
-            borderRadius: BorderRadius.circular(isCompact ? compactRadius : 30),
-            border: Border.all(
-              color: useDenseCompactLayout
-                  ? colorScheme.outline
-                  : colorScheme.outlineVariant,
-            ),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: Colors.black.withValues(
-                  alpha: useDenseCompactLayout ? 0.18 : 0.12,
-                ),
-                blurRadius: useDenseCompactLayout ? 32 : 28,
-                offset: Offset(0, useDenseCompactLayout ? 14 : 18),
-              ),
+        constraints: BoxConstraints(maxWidth: math.min(maxWidth, size.width - 32),
+          maxHeight: size.height * (isCompact ? compactMaxHeightFactor : 0.84)),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+          Padding(padding: EdgeInsets.all(padding), child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Icon(icon, color: colors.primary),
+              const SizedBox(width: 12),
+              Expanded(child: HarborPageHeading(eyebrow: 'Balance Desk', title: title, subtitle: subtitle)),
             ],
-          ),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                if (isCompact) ...<Widget>[
-                  SizedBox(height: handleTopSpacing),
-                  Container(
-                    width: handleWidth,
-                    height: handleHeight,
-                    decoration: BoxDecoration(
-                      color: colorScheme.outlineVariant,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                ],
-                Padding(
-                  padding: headerPadding,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Container(
-                        width: iconSize,
-                        height: iconSize,
-                        decoration: iconDecoration,
-                        child: Icon(icon, color: iconColor),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              title,
-                              style: theme.textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              subtitle,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                                height: 1.35,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Flexible(
-                  child: SingleChildScrollView(
-                    padding: bodyPadding,
-                    child: child,
-                  ),
-                ),
-                Padding(
-                  padding: actionPadding,
-                  child: Wrap(
-                    alignment: WrapAlignment.end,
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: actions,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+          )),
+          const Divider(height: 1),
+          Flexible(child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(padding, padding, padding, 0),
+            child: child,
+          )),
+          Padding(padding: EdgeInsets.all(padding), child: Wrap(
+            alignment: WrapAlignment.end, spacing: 10, runSpacing: 10, children: actions)),
+        ]),
       ),
     );
   }
+
 }
 
 class _LedgerEntryDateCard extends StatelessWidget {
@@ -5900,7 +5820,7 @@ class _AddEntryDialogState extends State<_AddEntryDialog> {
       icon: Icons.add_chart_rounded,
       title: 'Add Entry',
       subtitle:
-          'Capture a new debit or credit transaction with a mobile-safe form.',
+          'Record a debit or credit transaction.',
       compactMaxHeightFactor: 0.86,
       compactDense: true,
       actions: <Widget>[

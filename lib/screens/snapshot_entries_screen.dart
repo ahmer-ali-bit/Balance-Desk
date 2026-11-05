@@ -1153,6 +1153,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
             const SizedBox(height: 12),
             HarborBalanceTile(label: 'Opening Balance', value: openingLabel),
             const SizedBox(height: 12),
+            _buildPremiumMobileDailyActions(context, canEdit: canEdit),
+            const SizedBox(height: 12),
             IntrinsicHeight(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1216,8 +1218,6 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            _buildPremiumMobileDailyActions(context, canEdit: canEdit),
             if (_snapshots.isNotEmpty) ...<Widget>[
               const SizedBox(height: 12),
               _buildSearchBar(compact: true),

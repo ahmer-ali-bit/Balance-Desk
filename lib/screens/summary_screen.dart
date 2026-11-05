@@ -477,14 +477,22 @@ class _SummaryScreenState extends State<SummaryScreen> {
   Widget _buildHarborDesktopSummary(BuildContext context) {
     final customers = _filteredCustomers();
     _totalCustomerCount = customers.length;
-    final body = _isLoading || _errorMessage != null
-        ? _buildMainContent(context, compactLayout: true)
-        : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
-            _buildSummarySectionHeader(context, count: customers.length),
-            const SizedBox(height: 12),
-            customers.isEmpty ? _buildEmptyState(context) : _buildSummaryCardList(context, customers),
-            _buildSummaryLoadMoreFooter(context, customers.length),
-          ]);
+    final count = customers.length > _visibleCustomerLimit ? _visibleCustomerLimit : customers.length;
+    final Widget list;
+    if (_isLoading || _errorMessage != null) {
+      list = SingleChildScrollView(child: _buildMainContent(context, compactLayout: true));
+    } else if (customers.isEmpty) {
+      list = _buildEmptyState(context);
+    } else {
+      list = ListView.builder(
+        key: const ValueKey<String>('harbor-summary-list'),
+        controller: _tableVerticalController,
+        itemCount: count + (count < customers.length ? 1 : 0),
+        itemBuilder: (context, index) => index == count
+            ? _buildSummaryLoadMoreFooter(context, customers.length)
+            : _buildHarborSummaryRow(context, customers[index]),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 20, 22, 16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
@@ -492,11 +500,12 @@ class _SummaryScreenState extends State<SummaryScreen> {
           subtitle: 'Customer balances and totals'),
         const SizedBox(height: 18),
         Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
-          Expanded(child: SingleChildScrollView(
-            controller: _tableVerticalController,
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            child: HarborPanel(child: body),
-          )),
+          Expanded(child: HarborPanel(padding: EdgeInsets.zero,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+              Padding(padding: const EdgeInsets.all(16), child: _buildSummarySectionHeader(context, count: customers.length)),
+              const Divider(height: 1),
+              Expanded(child: list),
+            ]))),
           const SizedBox(width: 16),
           SizedBox(width: 300, child: SingleChildScrollView(child: HarborPanel(
             tint: true,
@@ -511,6 +520,30 @@ class _SummaryScreenState extends State<SummaryScreen> {
         ])),
       ]),
     );
+  }
+
+  Widget _buildHarborSummaryRow(BuildContext context, _CustomerSummary item) {
+    final theme = Theme.of(context);
+    return Material(color: theme.colorScheme.surface, child: InkWell(
+      onTap: () => _navigateToCustomerLedger(item.customer),
+      onLongPress: () => _navigateToCustomerLedger(item.customer),
+      child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
+          Row(children: <Widget>[
+            Expanded(child: Text(item.customer.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700))),
+            const SizedBox(width: 10),
+            Text(_formatBalance(item.balance), style: theme.textTheme.titleSmall?.copyWith(
+              color: AppColors.balanceColor(item.balance), fontWeight: FontWeight.w800)),
+          ]),
+          const SizedBox(height: 4),
+          Wrap(spacing: 16, runSpacing: 3, children: <Widget>[
+            Text('Page ${item.pageNo.isEmpty ? '-' : item.pageNo}', style: theme.textTheme.bodySmall),
+            Text('${item.customer.isStockLedger ? 'Buy' : 'Debit'} ${_formatAmount(item.totalDebit)}', style: theme.textTheme.bodySmall),
+            Text('${item.customer.isStockLedger ? 'Sell' : 'Credit'} ${_formatAmount(item.totalCredit)}', style: theme.textTheme.bodySmall),
+          ]),
+        ])),
+    ));
   }
 
   Widget _buildSummaryToolbar({required bool isCompact}) {
@@ -592,48 +625,20 @@ class _SummaryScreenState extends State<SummaryScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            MobilePremiumHeader(
-              icon: Icons.analytics_rounded,
-              title: 'Summary',
+            HarborPageHeading(eyebrow: 'Accounts overview', title: 'Summary',
               subtitle: '${filteredCustomers.length} active customer totals',
-              trailing: _isLoading
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2.2),
-                    )
-                  : null,
-              children: <Widget>[
-                Column(
-                  children: <Widget>[
-                    HarborBalanceTile(label: 'Overall Balance', value: _formatBalance(overallBalance)),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: MobileMetricTile(
-                            label: 'Debit',
-                            value: _formatAmount(_summaryData.overallDebit),
-                            icon: Icons.south_west_rounded,
-                            color: AppColors.debit,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: MobileMetricTile(
-                            label: 'Credit',
-                            value: _formatAmount(_summaryData.overallCredit),
-                            icon: Icons.north_east_rounded,
-                            color: AppColors.credit,
-                          ),
-                        ),
-                      ],
-                    ),
-
-                  ],
-                ),
-              ],
-            ),
+              trailing: _isLoading ? const SizedBox(width: 18, height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2.2)) : null),
+            const SizedBox(height: 12),
+            HarborBalanceTile(label: 'Overall Balance', value: _formatBalance(overallBalance)),
+            const SizedBox(height: 8),
+            Row(children: <Widget>[
+              Expanded(child: MobileMetricTile(label: 'Debit', value: _formatAmount(_summaryData.overallDebit),
+                icon: Icons.south_west_rounded, color: AppColors.debit)),
+              const SizedBox(width: 8),
+              Expanded(child: MobileMetricTile(label: 'Credit', value: _formatAmount(_summaryData.overallCredit),
+                icon: Icons.north_east_rounded, color: AppColors.credit)),
+            ]),
             const SizedBox(height: 12),
             _buildPremiumMobileSummaryControls(context),
             const SizedBox(height: 16),
