@@ -863,18 +863,15 @@ class AppShellSidebar extends StatelessWidget {
             _buildBrand(context),
             Container(height: 1, color: _Rail.hairline),
             Expanded(
-              child: Scrollbar(
+              child: _RailScrollView(
                 controller: scrollController,
-                thickness: 5,
-                child: SingleChildScrollView(
-                  controller: scrollController,
-                  padding: EdgeInsets.fromLTRB(
-                    compact ? 6 : 14,
-                    14,
-                    compact ? 6 : 14,
-                    10,
-                  ),
-                  child: Column(
+                padding: EdgeInsets.fromLTRB(
+                  compact ? 6 : 14,
+                  14,
+                  compact ? 6 : 14,
+                  10,
+                ),
+                child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
                       if (showNavEntries && navEntries.isNotEmpty) ...<Widget>[
@@ -928,7 +925,6 @@ class AppShellSidebar extends StatelessWidget {
                       ],
                     ],
                   ),
-                ),
               ),
             ),
             if (!compact && appearanceControl != null) ...<Widget>[
@@ -1129,6 +1125,50 @@ class ShellMinHeight extends StatelessWidget {
             : minHeight;
         return SizedBox(height: height, child: child);
       },
+    );
+  }
+}
+
+/// Owns the rail's scroll controller when the caller does not supply one —
+/// keeps [Scrollbar] and [SingleChildScrollView] on the same position.
+class _RailScrollView extends StatefulWidget {
+  const _RailScrollView({
+    this.controller,
+    required this.padding,
+    required this.child,
+  });
+
+  final ScrollController? controller;
+  final EdgeInsetsGeometry padding;
+  final Widget child;
+
+  @override
+  State<_RailScrollView> createState() => _RailScrollViewState();
+}
+
+class _RailScrollViewState extends State<_RailScrollView> {
+  ScrollController? _internal;
+
+  ScrollController get _effective =>
+      widget.controller ?? (_internal ??= ScrollController());
+
+  @override
+  void dispose() {
+    _internal?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scrollbar(
+      controller: _effective,
+      thickness: 5,
+      radius: const Radius.circular(999),
+      child: SingleChildScrollView(
+        controller: _effective,
+        padding: widget.padding,
+        child: widget.child,
+      ),
     );
   }
 }
