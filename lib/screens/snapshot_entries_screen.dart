@@ -830,8 +830,9 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     }
 
     try {
-      await _pdfService.exportSnapshotPdf(
-        title: 'Snapshot Export',
+      final pdfResult = await _pdfService.exportSnapshotPdf(
+        title: 'Daily Log Snapshot',
+        subtitle: 'Daily Log',
         headers: const <String>[
           'Sr #',
           'Customer',
@@ -843,7 +844,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           'Page No',
         ],
         rows: rows,
-        fileName: _buildExportFileName('export', 'pdf'),
+        fileName: 'daily_log_snapshot.pdf',
         summaryItems: _buildSnapshotPdfSummaryItems(),
         openingBalanceRow: _hasOpeningBalance
             ? <String>[
@@ -860,6 +861,18 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 '-',
               ]
             : null,
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            pdfResult.isSaved
+                ? 'Saved to ${pdfResult.locationLabel}'
+                : 'Export cancelled.',
+          ),
+        ),
       );
     } catch (_) {
       if (!mounted) {
@@ -881,8 +894,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     }
 
     try {
-      await _exportService.saveCsv(
-        dialogTitle: 'Export Snapshot (Excel)',
+      final csvResult = await _exportService.saveCsv(
         fileName: _buildExportFileName('export', 'csv'),
         headers: const <String>[
           'Sr #',
@@ -895,6 +907,18 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           'Page No',
         ],
         rows: rows,
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            csvResult.isSaved
+                ? 'Saved to ${csvResult.locationLabel}'
+                : 'Export cancelled.',
+          ),
+        ),
       );
     } catch (_) {
       if (!mounted) {

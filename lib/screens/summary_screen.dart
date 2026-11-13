@@ -186,8 +186,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
     }
 
     try {
-      await _pdfService.exportSnapshotPdf(
+      final pdfResult = await _pdfService.exportSnapshotPdf(
         title: 'Customer Summary',
+        subtitle: 'All Customers',
         headers: const <String>[
           'Sr #',
           'Customer',
@@ -217,6 +218,18 @@ class _SummaryScreenState extends State<SummaryScreen> {
           ),
         ],
       );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            pdfResult.isSaved
+                ? 'Saved to ${pdfResult.locationLabel}'
+                : 'Export cancelled.',
+          ),
+        ),
+      );
     } catch (e, stack) {
       debugPrint('SummaryScreen._exportSummaryPdf failed: $e');
       debugPrint('$stack');
@@ -239,8 +252,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
     }
 
     try {
-      await _exportService.saveCsv(
-        dialogTitle: 'Export Summary (Excel)',
+      final csvResult = await _exportService.saveCsv(
         fileName: 'customer_summary.csv',
         headers: const <String>[
           'Customer',
@@ -250,6 +262,18 @@ class _SummaryScreenState extends State<SummaryScreen> {
           'Balance',
         ],
         rows: rows,
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            csvResult.isSaved
+                ? 'Saved to ${csvResult.locationLabel}'
+                : 'Export cancelled.',
+          ),
+        ),
       );
     } catch (_) {
       if (!mounted) {

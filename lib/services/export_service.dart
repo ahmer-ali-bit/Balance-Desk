@@ -1,65 +1,33 @@
-import 'dart:io';
+import 'dart:convert';
+import 'dart:typed_data';
 
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
-import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
+import 'export_file_service.dart';
 
+/// CSV export built on the shared direct-save pipeline
+/// (see [ExportFileService]). Files always land on the device — Downloads on
+/// desktop, Files app on iOS, Downloads (or the system save dialog) on Android.
 class ExportService {
   const ExportService();
 
-  Future<String?> saveCsv({
-    required String dialogTitle,
+  static const ExportFileService _fileService = ExportFileService();
+
+  Future<ExportFileResult> saveCsv({
     required String fileName,
     required List<String> headers,
     required List<List<String>> rows,
   }) async {
-    String? savePath;
-    try {
-      savePath = await FilePicker.saveFile(
-        dialogTitle: dialogTitle,
-        fileName: fileName,
-        type: FileType.custom,
-        allowedExtensions: const <String>['csv'],
-      );
-    } catch (error, stackTrace) {
-      debugPrint('ExportService.saveCsv failed: $error');
-      debugPrint('$stackTrace');
-      savePath = await _resolveAndroidFallbackPath('exports', fileName);
-    }
-
-    if (savePath == null || savePath.isEmpty) {
-      return null;
-    }
-
     final buffer = StringBuffer('\ufeff');
     buffer.writeln(_toCsvLine(headers));
     for (final row in rows) {
       buffer.writeln(_toCsvLine(row));
     }
 
-    final file = File(savePath);
-    if (!await file.parent.exists()) {
-      await file.parent.create(recursive: true);
-    }
-    await file.writeAsString(buffer.toString(), flush: true);
-    return savePath;
-  }
-
-  Future<String> _resolveAndroidFallbackPath(
-    String directoryName,
-    String fileName,
-  ) async {
-    final documentsDirectory = await getApplicationDocumentsDirectory();
-    final exportDirectory = Directory(
-      path.join(documentsDirectory.path, 'shop_ledger', directoryName),
+    final bytes = Uint8List.fromList(utf8.encode(buffer.toString()));
+    return _fileService.saveBytes(
+      fileName: fileName,
+      bytes: bytes,
+      dialogTitle: 'Save CSV',
     );
-
-    if (!await exportDirectory.exists()) {
-      await exportDirectory.create(recursive: true);
-    }
-
-    return path.join(exportDirectory.path, fileName);
   }
 
   String _toCsvLine(List<String> values) {

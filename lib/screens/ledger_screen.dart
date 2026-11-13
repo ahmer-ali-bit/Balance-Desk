@@ -677,9 +677,21 @@ class _LedgerViewState extends State<_LedgerView> {
     }
 
     try {
-      await _pdfService.exportCustomerLedgerPdf(
+      final result = await _pdfService.exportCustomerLedgerPdf(
         customer: provider.customer,
         entries: provider.entries,
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.isSaved
+                ? 'Saved to ${result.locationLabel}'
+                : 'Export cancelled.',
+          ),
+        ),
       );
     } catch (_) {
       if (!mounted) {
@@ -731,8 +743,7 @@ class _LedgerViewState extends State<_LedgerView> {
     );
 
     try {
-      await _exportService.saveCsv(
-        dialogTitle: 'Export Ledger (Excel)',
+      final csvResult = await _exportService.saveCsv(
         fileName: fileName,
         headers: const <String>[
           'Entry Date',
@@ -743,6 +754,18 @@ class _LedgerViewState extends State<_LedgerView> {
           'Balance',
         ],
         rows: rows,
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            csvResult.isSaved
+                ? 'Saved to ${csvResult.locationLabel}'
+                : 'Export cancelled.',
+          ),
+        ),
       );
     } catch (_) {
       if (!mounted) {
