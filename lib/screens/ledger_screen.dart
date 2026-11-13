@@ -693,7 +693,9 @@ class _LedgerViewState extends State<_LedgerView> {
           ),
         ),
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      debugPrint('PDF export failed: $error');
+      debugPrint('$stackTrace');
       if (!mounted) {
         return;
       }

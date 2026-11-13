@@ -50,31 +50,48 @@ class ExportFileService {
     if (PlatformHelper.isMacOS ||
         PlatformHelper.isWindows ||
         PlatformHelper.isLinux) {
-      final directory = await getDownloadsDirectory();
-      if (directory != null) {
-        final file = await _writeUnique(directory, fileName, bytes);
+      try {
+        final directory = await getDownloadsDirectory();
+        if (directory != null) {
+          final file = await _writeUnique(directory, fileName, bytes);
+          if (openAfterSave) {
+            await _openSavedFile(file.path);
+          }
+          return ExportFileResult(
+            savedPath: file.path,
+            locationLabel: 'Downloads/${path.basename(file.path)}',
+          );
+        }
+      } catch (error, stackTrace) {
+        debugPrint(
+          'ExportFileService: direct Downloads save failed; '
+          'opening the system save dialog: $error',
+        );
+        debugPrint('$stackTrace');
+      }
+    } else if (PlatformHelper.isIOS) {
+      try {
+        final documents = await getApplicationDocumentsDirectory();
+        final exportsDirectory = Directory(path.join(documents.path, 'Exports'));
+        if (!await exportsDirectory.exists()) {
+          await exportsDirectory.create(recursive: true);
+        }
+        final file = await _writeUnique(exportsDirectory, fileName, bytes);
         if (openAfterSave) {
-          await OpenFilex.open(file.path);
+          await _openSavedFile(file.path);
         }
         return ExportFileResult(
           savedPath: file.path,
-          locationLabel: 'Downloads/${path.basename(file.path)}',
+          locationLabel:
+              'Files app › Balance Desk › Exports/${path.basename(file.path)}',
         );
+      } catch (error, stackTrace) {
+        debugPrint(
+          'ExportFileService: direct iOS save failed; '
+          'opening the system save dialog: $error',
+        );
+        debugPrint('$stackTrace');
       }
-    } else if (PlatformHelper.isIOS) {
-      final documents = await getApplicationDocumentsDirectory();
-      final exportsDirectory = Directory(path.join(documents.path, 'Exports'));
-      if (!await exportsDirectory.exists()) {
-        await exportsDirectory.create(recursive: true);
-      }
-      final file = await _writeUnique(exportsDirectory, fileName, bytes);
-      if (openAfterSave) {
-        await OpenFilex.open(file.path);
-      }
-      return ExportFileResult(
-        savedPath: file.path,
-        locationLabel: 'Files app › Balance Desk › Exports/${path.basename(file.path)}',
-      );
     } else if (PlatformHelper.isAndroid) {
       try {
         final directory = await getDownloadsDirectory();
@@ -85,11 +102,12 @@ class ExportFileService {
             locationLabel: 'Downloads/${path.basename(file.path)}',
           );
         }
-      } catch (error) {
+      } catch (error, stackTrace) {
         debugPrint(
           'ExportFileService: direct Downloads write not allowed ($error), '
           'using system save dialog',
         );
+        debugPrint('$stackTrace');
       }
     }
 
@@ -102,6 +120,17 @@ class ExportFileService {
       savedPath: uri,
       locationLabel: 'the chosen location',
     );
+  }
+
+  Future<void> _openSavedFile(String filePath) async {
+    try {
+      await OpenFilex.open(filePath);
+    } catch (error, stackTrace) {
+      // Opening is a convenience; a successfully written export must still
+      // count as saved even if this platform cannot preview that file type.
+      debugPrint('ExportFileService: could not open saved file: $error');
+      debugPrint('$stackTrace');
+    }
   }
 
   Future<String?> _saveWithSystemDialog({

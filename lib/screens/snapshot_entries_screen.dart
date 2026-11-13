@@ -874,7 +874,9 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           ),
         ),
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      debugPrint('PDF export failed: $error');
+      debugPrint('$stackTrace');
       if (!mounted) {
         return;
       }
