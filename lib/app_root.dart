@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'providers/customer_provider.dart';
 import 'providers/ledger_year_provider.dart';
+import 'providers/linked_devices_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/workspace_provider.dart';
 
@@ -28,6 +29,14 @@ class AppRoot extends StatelessWidget {
         ),
         ChangeNotifierProvider(
           create: (_) => ThemeProvider(),
+        ),
+        ChangeNotifierProxyProvider<WorkspaceProvider, LinkedDevicesProvider>(
+          create: (_) => LinkedDevicesProvider(),
+          update: (_, workspace, linkedDevices) {
+            final provider = linkedDevices ?? LinkedDevicesProvider();
+            provider.bindWorkspaceProvider(workspace);
+            return provider;
+          },
         ),
       ],
       child: child,

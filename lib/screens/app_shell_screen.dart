@@ -21,6 +21,7 @@ import '../utils/platform_helper.dart';
 import '../widgets/app_pin_dialogs.dart';
 import '../widgets/app_shell_chrome.dart';
 import 'customer_list_screen.dart';
+import 'linked_devices_screen.dart';
 import 'snapshot_entries_screen.dart';
 import 'summary_screen.dart';
 import 'backup_restore_screen.dart';
@@ -349,6 +350,14 @@ class _AppShellScreenState extends State<AppShellScreen> {
           onTap: () => _runDrawerAction(
             closeDrawerOnAction: closeDrawerOnAction,
             action: _openNotesEditor,
+          ),
+        ),
+        ShellToolEntry(
+          icon: Icons.devices_rounded,
+          label: 'Linked Devices',
+          onTap: () => _runDrawerAction(
+            closeDrawerOnAction: closeDrawerOnAction,
+            action: _openLinkedDevicesScreen,
           ),
         ),
         ShellToolEntry(
@@ -909,6 +918,13 @@ class _AppShellScreenState extends State<AppShellScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _openLinkedDevicesScreen() async {
+    if (!mounted) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (_) => const LinkedDevicesScreen()),
+    );
   }
 
   Future<void> _openBackupRestoreScreen() async {

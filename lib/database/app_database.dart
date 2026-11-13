@@ -21,6 +21,14 @@ import 'package:flutter/foundation.dart';
 import '../models/snapshot_opening_balance.dart';
 import '../services/workspace_service.dart';
 
+/// Raised by the database boundary when a linked device has read-only access.
+class ReadOnlyWorkspaceException implements Exception {
+  const ReadOnlyWorkspaceException();
+
+  @override
+  String toString() => 'This linked device is read-only.';
+}
+
 class DatabaseHelper {
   DatabaseHelper._();
 
@@ -33,7 +41,12 @@ class DatabaseHelper {
   static const String ledgerYearsTable = 'ledger_years';
   static const String appSettingsTable = 'app_settings';
   static const String _activeYearSettingKey = 'activeYear';
-  static const int _databaseVersion = 6;
+  static const int _databaseVersion = 7;
+
+  /// Set by the linked-device layer. The database wrapper invokes it before
+  /// every data mutation; permissions are never enforced by UI visibility only.
+  bool Function()? writeGuard;
+  bool _isApplyingRemoteChanges = false;
 
   Database? _database;
   int _activeYear = DateTime.now().year;
@@ -87,22 +100,28 @@ class DatabaseHelper {
           onCreate: (db, version) async {
             await _createTables(db);
             await _ensureYearInfrastructure(db);
+            await _ensureSyncInfrastructure(db);
             await _ensureIndexes(db);
           },
           onUpgrade: (db, oldVersion, newVersion) async {
             await _createTables(db);
             await _ensureYearInfrastructure(db);
+            await _ensureSyncInfrastructure(db);
             await _ensureIndexes(db);
           },
           onOpen: (db) async {
             await _createTables(db);
             await _ensureYearInfrastructure(db);
+            await _ensureSyncInfrastructure(db);
             await _ensureIndexes(db);
             await _loadActiveYear(db);
           },
         ),
       );
-      _database = _ChangeReportingDatabase(_rawDatabase!);
+      _database = _ChangeReportingDatabase(
+        _rawDatabase!,
+        beforeWrite: _assertWritable,
+      );
     } catch (error) {
       debugPrint('Database open failed: $error');
       rethrow;
@@ -341,6 +360,75 @@ class DatabaseHelper {
     );
   }
 
+  Future<void> _ensureSyncInfrastructure(Database db) async {
+    // Stable cross-device IDs are separate from local SQLite integer IDs.
+    // These columns are metadata only and do not participate in calculations.
+    for (final table in <String>[
+      customersTable,
+      entriesTable,
+      summarySnapshotsTable,
+    ]) {
+      await _ensureColumn(
+        db: db,
+        tableName: table,
+        columnName: 'syncId',
+        definition: 'TEXT',
+      );
+    }
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS sync_shadow(
+        entity TEXT NOT NULL,
+        recordId TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        revision INTEGER NOT NULL DEFAULT 0,
+        isDeleted INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY(entity, recordId)
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS sync_state(
+        stateKey TEXT PRIMARY KEY,
+        stateValue TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS sync_conflicts(
+        entity TEXT NOT NULL,
+        recordId TEXT NOT NULL,
+        localPayload TEXT NOT NULL,
+        cloudPayload TEXT NOT NULL,
+        cloudRevision INTEGER NOT NULL,
+        cloudDeleted INTEGER NOT NULL DEFAULT 0,
+        detectedAt TEXT NOT NULL,
+        PRIMARY KEY(entity, recordId)
+      )
+    ''');
+    await _ensureColumn(
+      db: db,
+      tableName: 'sync_conflicts',
+      columnName: 'cloudDeleted',
+      definition: 'INTEGER NOT NULL DEFAULT 0',
+    );
+  }
+
+  void _assertWritable() {
+    if (_isApplyingRemoteChanges) return;
+    if (writeGuard != null && !writeGuard!()) {
+      throw const ReadOnlyWorkspaceException();
+    }
+  }
+
+  /// Applies server changes without tripping the local permission check.
+  Future<T> runAsRemoteApply<T>(Future<T> Function() action) async {
+    final previous = _isApplyingRemoteChanges;
+    _isApplyingRemoteChanges = true;
+    try {
+      return await action();
+    } finally {
+      _isApplyingRemoteChanges = previous;
+    }
+  }
+
   Future<void> _ensureIndexes(Database db) async {
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_customers_ledger_year ON $customersTable(ledgerYear)',
@@ -353,6 +441,15 @@ class DatabaseHelper {
     );
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_entries_created_at ON $entriesTable(createdAt)',
+    );
+    await db.execute(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_sync_id ON $customersTable(syncId)',
+    );
+    await db.execute(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_entries_sync_id ON $entriesTable(syncId)',
+    );
+    await db.execute(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_snapshots_sync_id ON $summarySnapshotsTable(syncId)',
     );
   }
 
@@ -1880,9 +1977,10 @@ class DatabaseHelper {
 /// every mutating method having to raise the signal. Reads pass straight
 /// through, and schema statements never count as a change.
 class _ChangeReportingDatabase implements Database {
-  _ChangeReportingDatabase(this._inner);
+  _ChangeReportingDatabase(this._inner, {required this.beforeWrite});
 
   final Database _inner;
+  final void Function() beforeWrite;
 
   static const Set<String> _contentTables = <String>{
     DatabaseHelper.ledgerYearsTable,
@@ -1893,6 +1991,11 @@ class _ChangeReportingDatabase implements Database {
   };
 
   bool _isWatched(String table) => _contentTables.contains(table);
+
+  bool _isMutatingSql(String sql) => RegExp(
+    r'^\s*(INSERT|UPDATE|DELETE|REPLACE)\b',
+    caseSensitive: false,
+  ).hasMatch(sql);
 
   void _report() => AppDatabase.instance.notifyDataChanged();
 
@@ -1939,6 +2042,7 @@ class _ChangeReportingDatabase implements Database {
     String sql, [
     List<Object?>? arguments,
   ]) {
+    if (_isMutatingSql(sql)) beforeWrite();
     return _inner.rawQuery(sql, arguments);
   }
 
@@ -1984,6 +2088,7 @@ class _ChangeReportingDatabase implements Database {
 
   @override
   Future<void> execute(String sql, [List<Object?>? arguments]) {
+    if (_isMutatingSql(sql)) beforeWrite();
     return _inner.execute(sql, arguments);
   }
 
@@ -1996,6 +2101,7 @@ class _ChangeReportingDatabase implements Database {
     String? nullColumnHack,
     ConflictAlgorithm? conflictAlgorithm,
   }) async {
+    beforeWrite();
     try {
       return await _inner.insert(
         table,
@@ -2016,6 +2122,7 @@ class _ChangeReportingDatabase implements Database {
     List<Object?>? whereArgs,
     ConflictAlgorithm? conflictAlgorithm,
   }) async {
+    beforeWrite();
     try {
       return await _inner.update(
         table,
@@ -2035,6 +2142,7 @@ class _ChangeReportingDatabase implements Database {
     String? where,
     List<Object?>? whereArgs,
   }) async {
+    beforeWrite();
     try {
       return await _inner.delete(table, where: where, whereArgs: whereArgs);
     } finally {
@@ -2044,6 +2152,7 @@ class _ChangeReportingDatabase implements Database {
 
   @override
   Future<int> rawInsert(String sql, [List<Object?>? arguments]) async {
+    beforeWrite();
     try {
       return await _inner.rawInsert(sql, arguments);
     } finally {
@@ -2053,6 +2162,7 @@ class _ChangeReportingDatabase implements Database {
 
   @override
   Future<int> rawUpdate(String sql, [List<Object?>? arguments]) async {
+    beforeWrite();
     try {
       return await _inner.rawUpdate(sql, arguments);
     } finally {
@@ -2062,6 +2172,7 @@ class _ChangeReportingDatabase implements Database {
 
   @override
   Future<int> rawDelete(String sql, [List<Object?>? arguments]) async {
+    beforeWrite();
     try {
       return await _inner.rawDelete(sql, arguments);
     } finally {
@@ -2076,6 +2187,7 @@ class _ChangeReportingDatabase implements Database {
     Future<T> Function(Transaction txn) action, {
     bool? exclusive,
   }) async {
+    beforeWrite();
     try {
       return await _inner.transaction(
         (Transaction txn) => action(txn),
@@ -2092,7 +2204,10 @@ class _ChangeReportingDatabase implements Database {
   }
 
   @override
-  Batch batch() => _inner.batch();
+  Batch batch() {
+    beforeWrite();
+    return _inner.batch();
+  }
 
   // -- Lifecycle -------------------------------------------------------------
 

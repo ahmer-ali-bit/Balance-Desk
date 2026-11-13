@@ -24,6 +24,11 @@ dependencies:
   intl: ^0.20.2
   shared_preferences: ^2.5.5
   local_auth: ^2.3.0
+  http: ^1.6.0
+  qr_flutter: ^4.1.0
+  device_info_plus: 12.3.0
+  flutter_secure_storage: ^9.2.4
+  mobile_scanner: ^7.4.0
 
 dev_dependencies:
   flutter_test:
