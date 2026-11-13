@@ -37,6 +37,9 @@ flutter:
   assets:
     - assets/logo.png
     - assets/branding/balance-desk-app-icon-1024.png
+    # PdfService loads these font files directly through rootBundle. Declaring
+    # them as assets as well as app fonts ensures that works in release builds.
+    - assets/fonts/
   fonts:
     - family: Lato
       fonts:

@@ -701,7 +701,7 @@ class _LedgerViewState extends State<_LedgerView> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to export PDF right now.')),
+        SnackBar(content: Text('PDF export failed: $error')),
       );
     }
   }

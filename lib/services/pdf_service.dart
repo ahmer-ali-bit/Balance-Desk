@@ -318,6 +318,7 @@ class PdfService {
 
     pdf.addPage(
       pw.MultiPage(
+        maxPages: 1000,
         pageTheme: pw.PageTheme(
           pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.fromLTRB(24, 20, 24, 16),
@@ -463,6 +464,7 @@ class PdfService {
 
     pdf.addPage(
       pw.MultiPage(
+        maxPages: 1000,
         pageTheme: pw.PageTheme(
           pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.fromLTRB(24, 20, 24, 16),

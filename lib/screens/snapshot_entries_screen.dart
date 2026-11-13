@@ -881,7 +881,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to export PDF right now.')),
+        SnackBar(content: Text('PDF export failed: $error')),
       );
     }
   }
