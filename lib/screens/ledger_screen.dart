@@ -8,11 +8,12 @@ import 'package:provider/provider.dart';
 
 import '../database/app_database.dart';
 import '../models/customer.dart';
-import '../models/entry.dart'
+import '../models/entry.dart';
 import '../models/snapshot_opening_balance.dart';
 import '../models/summary_snapshot.dart';
 import '../providers/customer_provider.dart';
 import '../providers/ledger_provider.dart';
+import '../providers/ledger_provider_cache.dart';
 import '../services/export_service.dart';
 import '../services/pdf_service.dart';
 import '../utils/app_colors.dart';
@@ -20,7 +21,8 @@ import '../utils/number_format_utils.dart' as number_format_utils;
 import '../utils/platform_helper.dart';
 import '../widgets/amount_input_field.dart';
 import '../widgets/app_empty_state.dart';
-import '../widgets/decimal_text_input_formatter.dart';
+import '../widgets/forms/opening_balance_field.dart';
+import '../widgets/mobile/hero_balance_card.dart';
 import '../widgets/scale_down_width.dart';
 
 enum _ExportChoice { pdf, excel }
@@ -53,8 +55,11 @@ class LedgerScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider<LedgerProvider>(
-      create: (_) => LedgerProvider(customer: customer)..loadEntries(),
+    final ledgerProvider = LedgerProviderCache.instance
+        .providerFor(customer: customer);
+
+    return ChangeNotifierProvider<LedgerProvider>.value(
+      value: ledgerProvider,
       child: _LedgerView(
         customer: customer,
         autoOpenAddEntry: autoOpenAddEntry,
@@ -1874,70 +1879,16 @@ class _LedgerViewState extends State<_LedgerView> {
     bool compact = false,
     bool isWeight = false,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return TextField(
+    return OpeningBalanceField(
       controller: controller,
       focusNode: focusNode,
-      keyboardType: isWeight
-          ? const TextInputType.numberWithOptions(decimal: true, signed: true)
-          : const TextInputType.numberWithOptions(decimal: true),
-      scrollPadding: const EdgeInsets.only(bottom: 180),
+      label: label,
+      icon: icon,
+      accentColor: accentColor,
       readOnly: readOnly,
-      inputFormatters: <TextInputFormatter>[
-        if (isWeight)
-          FilteringTextInputFormatter.allow(RegExp(r'[0-9\-]'))
-        else
-          DecimalTextInputFormatter(decimalRange: 2),
-      ],
-      onChanged: readOnly
-          ? null
-          : (_) {
-              _debounceOpeningBalanceUpdate();
-            },
-      decoration: InputDecoration(
-        isDense: compact,
-        labelText: label,
-        hintText: '0',
-        filled: true,
-        fillColor: colorScheme.surface.withValues(alpha: 0.88),
-        contentPadding: EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: compact ? 10 : 14,
-        ),
-        prefixIcon: Padding(
-          padding: EdgeInsets.all(compact ? 6 : 7),
-          child: Container(
-            decoration: BoxDecoration(
-              color: accentColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(compact ? 10 : 12),
-            ),
-            child: Icon(icon, size: 18, color: accentColor),
-          ),
-        ),
-        prefixIconConstraints: BoxConstraints(
-          minWidth: compact ? 42 : 48,
-          minHeight: compact ? 42 : 48,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(compact ? 14 : 16),
-          borderSide: BorderSide(color: colorScheme.outlineVariant),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(compact ? 14 : 16),
-          borderSide: BorderSide(color: colorScheme.outlineVariant),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(compact ? 14 : 16),
-          borderSide: BorderSide(color: accentColor, width: 1.3),
-        ),
-        disabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(compact ? 14 : 16),
-          borderSide: BorderSide(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.75),
-          ),
-        ),
-      ),
+      isWeight: isWeight,
+      onChanged: readOnly ? null : _debounceOpeningBalanceUpdate,
+      compact: compact,
     );
   }
 
@@ -2792,67 +2743,11 @@ class _LedgerViewState extends State<_LedgerView> {
     String label = 'Total Balance',
     IconData icon = Icons.account_balance_wallet_outlined,
   }) {
-    final theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: accentColor,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[
-            accentColor.withValues(alpha: 0.85),
-            accentColor,
-            accentColor.withValues(alpha: 0.95),
-          ],
-        ),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: accentColor.withValues(alpha: 0.3),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(icon, color: Colors.white),
-          ),
-          const SizedBox(height: 14),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              label,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: Colors.white70,
-              ),
-            ),
-          ),
-          const SizedBox(height: 4),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value,
-              style: theme.textTheme.titleLarge?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
+    return HeroBalanceCard(
+      value: value,
+      accentColor: accentColor,
+      label: label,
+      icon: icon,
     );
   }
 

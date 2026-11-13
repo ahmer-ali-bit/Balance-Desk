@@ -3,15 +3,14 @@ import 'package:flutter/services.dart';
 
 import '../database/app_database.dart';
 import '../models/customer.dart';
-import '../models/entry.dart';
 import '../models/snapshot_opening_balance.dart';
 import '../services/export_service.dart';
 import '../services/pdf_service.dart';
 import '../utils/app_colors.dart';
 import '../utils/number_format_utils.dart';
 import '../utils/platform_helper.dart';
+import '../widgets/premium/premium_mobile.dart';
 import '../widgets/customer_search_field.dart';
-import '../widgets/mobile_premium.dart';
 import '../widgets/summary_stat_card.dart';
 import '../providers/customer_provider.dart';
 import 'ledger_screen.dart';
@@ -67,6 +66,16 @@ class _SummaryScreenState extends State<SummaryScreen> {
           .map<Customer>((Map<String, Object?> row) => Customer.fromMap(row))
           .toList(growable: false);
 
+      // Single JOIN query to compute per-customer totals instead of N+1 queries
+      final totalsRows = await _database.getCustomerEntryTotalsSince();
+      final totalsByCustomer = <int, Map<String, Object?>>{};
+      for (final row in totalsRows) {
+        final id = row['customerId'] as int?;
+        if (id != null) {
+          totalsByCustomer[id] = row;
+        }
+      }
+
       final summaries = <_CustomerSummary>[];
 
       for (final customer in customers) {
@@ -75,36 +84,27 @@ class _SummaryScreenState extends State<SummaryScreen> {
           continue;
         }
 
-        final entryRows = await _database.getEntriesByCustomer(customerId);
         final openingBalance =
             await _database.getCustomerLedgerOpeningBalance(customerId) ??
             const SnapshotOpeningBalance(debit: 0, credit: 0);
-        final entries = entryRows
-            .map<Entry>((Map<String, Object?> row) => Entry.fromMap(row))
-            .toList(growable: false);
-        if (entries.isEmpty && !openingBalance.hasValue) {
+
+        final totals = totalsByCustomer[customerId];
+        final totalDebit =
+            ((totals?['totalDebit'] as num?)?.toDouble() ?? 0) + openingBalance.debit;
+        final totalCredit =
+            ((totals?['totalCredit'] as num?)?.toDouble() ?? 0) + openingBalance.credit;
+        final totalBuyBags =
+            ((totals?['totalBuyBags'] as num?)?.toDouble() ?? 0) + openingBalance.buyBags;
+        final totalSellBags =
+            ((totals?['totalSellBags'] as num?)?.toDouble() ?? 0) + openingBalance.sellBags;
+        final latestPageNo = (totals?['latestPageNo'] as String?) ?? '';
+
+        if (totalDebit == 0 &&
+            totalCredit == 0 &&
+            totalBuyBags == 0 &&
+            totalSellBags == 0) {
           continue;
         }
-
-        final totalDebit = entries.fold<double>(
-          openingBalance.debit,
-          (double sum, Entry entry) => sum + entry.debit,
-        );
-        final totalCredit = entries.fold<double>(
-          openingBalance.credit,
-          (double sum, Entry entry) => sum + entry.credit,
-        );
-        final totalBuyBags = entries.fold<double>(
-          0,
-          (double sum, Entry entry) =>
-              sum + (double.tryParse(entry.buyBags) ?? 0),
-        );
-        final totalSellBags = entries.fold<double>(
-          0,
-          (double sum, Entry entry) =>
-              sum + (double.tryParse(entry.sellBags) ?? 0),
-        );
-        final latestPageNo = entries.isEmpty ? '' : entries.last.pageNo;
 
         summaries.add(
           _CustomerSummary(
@@ -506,108 +506,91 @@ class _SummaryScreenState extends State<SummaryScreen> {
     final overallBalance = _summaryData.finalBalance;
     final balanceColor = AppColors.balanceColor(overallBalance);
 
-    return SingleChildScrollView(
-      controller: _tableVerticalController,
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      child: MobilePremiumPage(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 112),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            MobilePremiumHeader(
-              icon: Icons.analytics_rounded,
-              title: 'Summary',
-              subtitle: '${filteredCustomers.length} active customer totals',
-              trailing: _isLoading
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2.2),
-                    )
-                  : null,
-              children: <Widget>[
-                Column(
-                  children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: MobileMetricTile(
-                            label: 'Debit',
-                            value: _formatAmount(_summaryData.overallDebit),
-                            icon: Icons.south_west_rounded,
-                            color: AppColors.debit,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: MobileMetricTile(
-                            label: 'Credit',
-                            value: _formatAmount(_summaryData.overallCredit),
-                            icon: Icons.north_east_rounded,
-                            color: AppColors.credit,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    MobileMetricTile(
-                      label: 'Balance',
-                      value: _formatBalance(overallBalance),
-                      icon: Icons.account_balance_wallet_outlined,
-                      color: balanceColor,
-                    ),
-                  ],
+    return PremiumPage(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          PremiumHeader(
+            icon: Icons.analytics_rounded,
+            title: 'Summary',
+            subtitle: '${filteredCustomers.length} active customer totals',
+            trailing: _isLoading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2.2),
+                  )
+                : null,
+            children: <Widget>[
+              PremiumMetricGrid(children: <Widget>[
+                PremiumMetricTile(
+                  label: 'Debit',
+                  value: _formatAmount(_summaryData.overallDebit),
+                  icon: Icons.south_west_rounded,
+                  color: AppColors.debit,
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildPremiumMobileSummaryControls(context),
-            const SizedBox(height: 16),
-            if (_isLoading)
-              const MobilePremiumPanel(
-                child: SizedBox(
-                  height: 180,
-                  child: Center(child: CircularProgressIndicator()),
+                PremiumMetricTile(
+                  label: 'Credit',
+                  value: _formatAmount(_summaryData.overallCredit),
+                  icon: Icons.north_east_rounded,
+                  color: AppColors.credit,
                 ),
-              )
-            else if (_errorMessage != null)
-              MobilePremiumPanel(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    const Icon(Icons.error_outline_rounded, size: 40),
-                    const SizedBox(height: 10),
-                    Text(_errorMessage!, textAlign: TextAlign.center),
-                    const SizedBox(height: 12),
-                    FilledButton(
-                      onPressed: _loadSummary,
-                      child: const Text('Retry'),
-                    ),
-                  ],
+                PremiumMetricTile(
+                  label: 'Balance',
+                  value: _formatBalance(overallBalance),
+                  icon: Icons.account_balance_wallet_outlined,
+                  color: balanceColor,
                 ),
-              )
-            else ...<Widget>[
-              MobileSectionHeader(
-                title: 'Customer Balances',
-                count: '${filteredCustomers.length}',
+              ]),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildPremiumMobileSummaryControls(context),
+          const SizedBox(height: 16),
+          if (_isLoading)
+            PremiumPanel(
+              child: const SizedBox(
+                height: 180,
+                child: Center(child: CircularProgressIndicator()),
               ),
-              const SizedBox(height: 10),
-              if (filteredCustomers.isEmpty)
-                MobilePremiumPanel(child: _buildEmptyState(context))
-              else
-                _buildPremiumMobileSummaryCards(context, filteredCustomers),
+            )
+          else if (_errorMessage != null)
+            PremiumPanel(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  const Icon(Icons.error_outline_rounded, size: 40),
+                  const SizedBox(height: 10),
+                  Text(_errorMessage!, textAlign: TextAlign.center),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: _loadSummary,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            )
+          else ...<Widget>[
+            PremiumSectionHeader(
+              title: 'Customer Balances',
+              count: '${filteredCustomers.length}',
+            ),
+            const SizedBox(height: 10),
+            if (filteredCustomers.isEmpty)
+              PremiumPanel(child: _buildEmptyState(context))
+            else
+              _buildPremiumMobileSummaryCards(context, filteredCustomers),
             ],
           ],
         ),
-      ),
     );
   }
 
   Widget _buildPremiumMobileSummaryControls(BuildContext context) {
     final canExport = !_isLoading && _summaryData.customers.isNotEmpty;
 
-    return MobilePremiumPanel(
-      padding: const EdgeInsets.all(12),
+    return PremiumPanel(
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -652,35 +635,37 @@ class _SummaryScreenState extends State<SummaryScreen> {
     );
   }
 
-  Widget _buildPremiumMobileSummaryCards(
-    BuildContext context,
-    List<_CustomerSummary> customers,
-  ) {
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: customers.length,
-      itemBuilder: (context, index) {
-        return Padding(
-          padding: EdgeInsets.only(top: index == 0 ? 0 : 10),
-          child: _buildPremiumMobileSummaryCard(context, customers[index]),
-        );
-      },
-    );
-  }
+Widget _buildPremiumMobileSummaryCards(
+      BuildContext context,
+      List<_CustomerSummary> customers,
+    ) {
+      return ListView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: customers.length,
+        itemBuilder: (context, index) {
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: index == customers.length - 1 ? 12 : 10,
+            ),
+            child: _buildPremiumMobileSummaryCard(context, customers[index]),
+          );
+        },
+      );
+    }
 
   Widget _buildPremiumMobileSummaryCard(
-    BuildContext context,
-    _CustomerSummary item,
-  ) {
+      BuildContext context,
+      _CustomerSummary item,
+    ) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final balanceColor = AppColors.balanceColor(item.balance);
 
-    return MobilePremiumPanel(
+    return PremiumPanel(
       onTap: () => _navigateToCustomerLedger(item.customer),
-      padding: const EdgeInsets.all(12),
-      accentColor: balanceColor,
+      padding: const EdgeInsets.all(14),
+      accent: balanceColor,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -726,7 +711,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
               Row(
                 children: <Widget>[
                   Expanded(
-                    child: MobileMetricTile(
+                    child: PremiumMetricTile(
                       label: item.customer.isStockLedger ? 'Buy' : 'Debit',
                       value: _formatAmount(item.totalDebit),
                       icon: Icons.south_west_rounded,
@@ -737,7 +722,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: MobileMetricTile(
+                    child: PremiumMetricTile(
                       label: item.customer.isStockLedger ? 'Sell' : 'Credit',
                       value: _formatAmount(item.totalCredit),
                       icon: Icons.north_east_rounded,
@@ -749,7 +734,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              MobileMetricTile(
+              PremiumMetricTile(
                 label: 'Balance',
                 value: _formatBalance(item.balance),
                 icon: Icons.account_balance_wallet_outlined,
@@ -1221,14 +1206,20 @@ class _SummaryScreenState extends State<SummaryScreen> {
     BuildContext context,
     List<_CustomerSummary> customers,
   ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        for (var index = 0; index < customers.length; index++) ...<Widget>[
-          if (index != 0) const SizedBox(height: 10),
-          _buildSummaryListCard(context, customers[index]),
-        ],
-      ],
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: customers.length,
+      itemBuilder: (context, index) {
+        final item = customers[index];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            if (index != 0) const SizedBox(height: 10),
+            _buildSummaryListCard(context, item),
+          ],
+        );
+      },
     );
   }
 
@@ -1381,7 +1372,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
     return _summaryData.customers
         .where(
           (_CustomerSummary item) =>
-              item.customer.name.trim().toLowerCase().contains(query),
+              item.customer.name.trim().toLowerCase().contains(query) ||
+              item.pageNo.toLowerCase().contains(query),
         )
         .toList(growable: false);
   }

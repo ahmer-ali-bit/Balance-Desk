@@ -22,6 +22,7 @@ class PdfService {
   const PdfService();
 
   static const List<String> _ledgerHeaders = <String>[
+    'Sr #',
     'Entry Date',
     'Created Date',
     'Page No',
@@ -32,6 +33,7 @@ class PdfService {
   ];
 
   static const List<String> _stockLedgerHeaders = <String>[
+    'Sr #',
     'Entry Date',
     'Page No',
     'Buy',
@@ -42,46 +44,87 @@ class PdfService {
     'Balance',
   ];
 
+  static const List<String> _stockLedgerWeightHeaders = <String>[
+    'Sr #',
+    'Entry Date',
+    'Page No',
+    'Buy Weight',
+    'Buy Amount',
+    'Sell Weight',
+    'Sell Amount',
+    'Rem. Weight',
+    'Balance',
+  ];
+
   static const Map<int, pw.Alignment> _ledgerCellAlignments =
       <int, pw.Alignment>{
-        2: pw.Alignment.center,
-        4: pw.Alignment.centerRight,
-        5: pw.Alignment.centerRight,
-        6: pw.Alignment.centerRight,
-      };
-
-  static const Map<int, pw.Alignment> _stockLedgerCellAlignments =
-      <int, pw.Alignment>{
-        1: pw.Alignment.center,
-        2: pw.Alignment.centerRight,
-        3: pw.Alignment.centerRight,
-        4: pw.Alignment.centerRight,
+        0: pw.Alignment.center,
+        3: pw.Alignment.center,
         5: pw.Alignment.centerRight,
         6: pw.Alignment.centerRight,
         7: pw.Alignment.centerRight,
       };
 
+  static const Map<int, pw.Alignment> _stockLedgerCellAlignments =
+      <int, pw.Alignment>{
+        0: pw.Alignment.center,
+        2: pw.Alignment.center,
+        3: pw.Alignment.centerRight,
+        4: pw.Alignment.centerRight,
+        5: pw.Alignment.centerRight,
+        6: pw.Alignment.centerRight,
+        7: pw.Alignment.centerRight,
+        8: pw.Alignment.centerRight,
+      };
+
   static final Map<int, pw.TableColumnWidth> _ledgerColumnWidths =
       <int, pw.TableColumnWidth>{
-        0: const pw.FlexColumnWidth(1.45),
-        1: const pw.FlexColumnWidth(1.45),
-        2: const pw.FlexColumnWidth(0.95),
-        3: const pw.FlexColumnWidth(2.7),
-        4: const pw.FlexColumnWidth(1.1),
-        5: const pw.FlexColumnWidth(1.1),
-        6: const pw.FlexColumnWidth(1.45),
+        0: const pw.FlexColumnWidth(0.5),
+        1: const pw.FlexColumnWidth(1.35),
+        2: const pw.FlexColumnWidth(1.35),
+        3: const pw.FlexColumnWidth(0.9),
+        4: const pw.FlexColumnWidth(2.5),
+        5: const pw.FlexColumnWidth(1.0),
+        6: const pw.FlexColumnWidth(1.0),
+        7: const pw.FlexColumnWidth(1.35),
       };
 
   static final Map<int, pw.TableColumnWidth> _stockLedgerColumnWidths =
       <int, pw.TableColumnWidth>{
-        0: const pw.FlexColumnWidth(1.2), // Date
-        1: const pw.FlexColumnWidth(0.8), // Page No
-        2: const pw.FlexColumnWidth(0.9), // Buy Bags
-        3: const pw.FlexColumnWidth(1.1), // Buy Amt
-        4: const pw.FlexColumnWidth(0.9), // Sell Bags
-        5: const pw.FlexColumnWidth(1.1), // Sell Amt
-        6: const pw.FlexColumnWidth(1.0), // Rem Bags
-        7: const pw.FlexColumnWidth(1.2), // Balance
+        0: const pw.FlexColumnWidth(0.5), // Sr #
+        1: const pw.FlexColumnWidth(1.1), // Date
+        2: const pw.FlexColumnWidth(0.7), // Page No
+        3: const pw.FlexColumnWidth(0.8), // Buy Bags
+        4: const pw.FlexColumnWidth(1.0), // Buy Amt
+        5: const pw.FlexColumnWidth(0.8), // Sell Bags
+        6: const pw.FlexColumnWidth(1.0), // Sell Amt
+        7: const pw.FlexColumnWidth(0.9), // Rem Bags
+        8: const pw.FlexColumnWidth(1.1), // Balance
+      };
+
+  static final Map<int, pw.TableColumnWidth> _stockLedgerWeightColumnWidths =
+      <int, pw.TableColumnWidth>{
+        0: const pw.FlexColumnWidth(0.5), // Sr #
+        1: const pw.FlexColumnWidth(1.0), // Date
+        2: const pw.FlexColumnWidth(0.7), // Page No
+        3: const pw.FlexColumnWidth(0.8), // Buy Weight
+        4: const pw.FlexColumnWidth(1.0), // Buy Amt
+        5: const pw.FlexColumnWidth(0.8), // Sell Weight
+        6: const pw.FlexColumnWidth(1.0), // Sell Amt
+        7: const pw.FlexColumnWidth(0.9), // Rem Weight
+        8: const pw.FlexColumnWidth(1.1), // Balance
+      };
+
+  static final Map<int, pw.Alignment> _stockLedgerWeightCellAlignments =
+      <int, pw.Alignment>{
+        0: pw.Alignment.center,
+        2: pw.Alignment.center,
+        3: pw.Alignment.centerRight,
+        4: pw.Alignment.centerRight,
+        5: pw.Alignment.centerRight,
+        6: pw.Alignment.centerRight,
+        7: pw.Alignment.centerRight,
+        8: pw.Alignment.centerRight,
       };
 
   Future<Uint8List> generateCustomerLedgerPdf({
@@ -102,14 +145,18 @@ class PdfService {
     final rows = _buildLedgerRows(entries, isStockLedger: isStock, useWeight: useWeight);
     final headers = isStock 
         ? (useWeight 
-            ? ['Entry Date', 'Page No', 'Buy Weight', 'Buy Amount', 'Sell Weight', 'Sell Amount', 'Rem. Weight', 'Balance']
+            ? _stockLedgerWeightHeaders
             : _stockLedgerHeaders)
         : _ledgerHeaders;
     final cellAlignments = isStock
-        ? _stockLedgerCellAlignments
+        ? (useWeight 
+            ? _stockLedgerWeightCellAlignments
+            : _stockLedgerCellAlignments)
         : _ledgerCellAlignments;
     final columnWidths = isStock
-        ? _stockLedgerColumnWidths
+        ? (useWeight 
+            ? _stockLedgerWeightColumnWidths
+            : _stockLedgerColumnWidths)
         : _ledgerColumnWidths;
 
     final totalDebit = entries.fold<double>(
@@ -157,6 +204,21 @@ class PdfService {
             entryCount: entryCount,
             isStockLedger: isStock,
             useWeight: useWeight,
+            headers: isStock
+                ? (useWeight
+                    ? _stockLedgerWeightHeaders
+                    : _stockLedgerHeaders)
+                : _ledgerHeaders,
+            cellAlignments: isStock
+                ? (useWeight
+                    ? _stockLedgerWeightCellAlignments
+                    : _stockLedgerCellAlignments)
+                : _ledgerCellAlignments,
+            columnWidths: isStock
+                ? (useWeight
+                    ? _stockLedgerWeightColumnWidths
+                    : _stockLedgerColumnWidths)
+                : _ledgerColumnWidths,
           );
         },
         build: (pw.Context context) {
@@ -181,8 +243,15 @@ class PdfService {
   Future<void> _handlePdfOutput(Uint8List bytes, String filename) async {
     if (PlatformHelper.isMacOS || PlatformHelper.isWindows) {
       try {
-        final tempDir = await getTemporaryDirectory();
-        final file = File('${tempDir.path}/$filename');
+        final downloadDir = await getDownloadsDirectory();
+        if (downloadDir == null) {
+          await Printing.sharePdf(bytes: bytes, filename: filename);
+          return;
+        }
+        final file = File('${downloadDir.path}/$filename');
+        if (!await file.parent.exists()) {
+          await file.parent.create(recursive: true);
+        }
         await file.writeAsBytes(bytes);
         await OpenFilex.open(file.path);
       } catch (e) {
@@ -316,6 +385,9 @@ class PdfService {
     required int entryCount,
     required bool isStockLedger,
     required bool useWeight,
+    required List<String> headers,
+    required Map<int, pw.Alignment> cellAlignments,
+    required Map<int, pw.TableColumnWidth> columnWidths,
   }) {
     final titleBlock = _buildDocumentTitle(
       title: isStockLedger ? 'Stock Ledger' : 'Customer Ledger',
@@ -327,6 +399,8 @@ class PdfService {
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: <pw.Widget>[
           titleBlock,
+          pw.SizedBox(height: 6),
+          _buildPageMetaLine('Page ${context.pageNumber}'),
           pw.SizedBox(height: 10),
           _buildLedgerSummaryCard(
             customer: customer,
@@ -342,13 +416,9 @@ class PdfService {
           ),
           pw.SizedBox(height: 12),
           _buildCompactTextTableHeader(
-            headers: isStockLedger ? _stockLedgerHeaders : _ledgerHeaders,
-            cellAlignments: isStockLedger
-                ? _stockLedgerCellAlignments
-                : _ledgerCellAlignments,
-            columnWidths: isStockLedger
-                ? _stockLedgerColumnWidths
-                : _ledgerColumnWidths,
+            headers: headers,
+            cellAlignments: cellAlignments,
+            columnWidths: columnWidths,
           ),
         ],
       );
@@ -361,18 +431,14 @@ class PdfService {
         pw.SizedBox(height: 6),
         _buildPageMetaLine(
           isStockLedger
-              ? 'Entries: $entryCount | Remaining: ${useWeight ? formatWeight(remainingBags) : _formatBags(remainingBags)} | Balance: ${_formatBalance(finalBalance)}'
-              : 'Entries: $entryCount | Balance: ${_formatBalance(finalBalance)}',
+              ? 'Entries: $entryCount | Remaining: ${useWeight ? formatWeight(remainingBags) : _formatBags(remainingBags)} | Balance: ${_formatBalance(finalBalance)} | Page ${context.pageNumber}'
+              : 'Entries: $entryCount | Balance: ${_formatBalance(finalBalance)} | Page ${context.pageNumber}',
         ),
         pw.SizedBox(height: 8),
         _buildCompactTextTableHeader(
-          headers: isStockLedger ? _stockLedgerHeaders : _ledgerHeaders,
-          cellAlignments: isStockLedger
-              ? _stockLedgerCellAlignments
-              : _ledgerCellAlignments,
-          columnWidths: isStockLedger
-              ? _stockLedgerColumnWidths
-              : _ledgerColumnWidths,
+          headers: headers,
+          cellAlignments: cellAlignments,
+          columnWidths: columnWidths,
         ),
       ],
     );
@@ -390,6 +456,13 @@ class PdfService {
     final children = <pw.Widget>[
       if (context.pageNumber == 1) _buildDocumentTitle(title: title),
     ];
+
+    // Show page meta line on every page (for page number consistency)
+    children.addAll(<pw.Widget>[
+      pw.SizedBox(height: 4),
+      _buildPageMetaLine('Page ${context.pageNumber}'),
+      pw.SizedBox(height: 8),
+    ]);
 
     // Show Total Debit, Total Credit, Total Balance as cards at top (page 1 only)
     if (context.pageNumber == 1 && summaryItems.isNotEmpty) {
@@ -1027,6 +1100,7 @@ List<List<String>> _buildLedgerRows(
 }) {
   final reversedEntries = entries.reversed.toList();
   final rows = <List<String>>[];
+  int srNo = 1;
   double? runningBalance;
   double? runningBags;
 
@@ -1064,6 +1138,7 @@ List<List<String>> _buildLedgerRows(
             ].join(' | ');
 
       rows.add(<String>[
+        srNo.toString(),
         _formatDate(entry.entryDate),
         combinedPageNo.isEmpty ? '-' : combinedPageNo,
         useWeight ? formatWeight(double.tryParse(entry.buyBags) ?? 0) : _formatBagsString(entry.buyBags),
@@ -1077,6 +1152,7 @@ List<List<String>> _buildLedgerRows(
       ]);
     } else {
       rows.add(<String>[
+        srNo.toString(),
         _formatDate(entry.entryDate),
         _formatDate(entry.createdAt),
         isFirstEntry ? '-' : (entry.pageNo.isEmpty ? '-' : entry.pageNo),
@@ -1086,6 +1162,8 @@ List<List<String>> _buildLedgerRows(
         balanceLabel,
       ]);
     }
+
+    srNo++;
   }
 
   return rows;
@@ -1270,6 +1348,7 @@ Map<int, pw.TableColumnWidth> _resolveSnapshotColumnWidths(
   ];
 
   const snapshotHeaders = <String>[
+    'sr #',
     'customer',
     'entry date',
     'description',
@@ -1280,6 +1359,7 @@ Map<int, pw.TableColumnWidth> _resolveSnapshotColumnWidths(
   ];
 
   const stockSnapshotHeaders = <String>[
+    'sr #',
     'customer',
     'entry date',
     'description',
@@ -1294,39 +1374,41 @@ Map<int, pw.TableColumnWidth> _resolveSnapshotColumnWidths(
 
   if (_sameHeaderShape(normalizedHeaders, summaryHeaders)) {
     return <int, pw.TableColumnWidth>{
-      0: const pw.FlexColumnWidth(0.7),
-      1: const pw.FlexColumnWidth(2.35),
-      2: const pw.FlexColumnWidth(0.95),
-      3: const pw.FlexColumnWidth(1.15),
-      4: const pw.FlexColumnWidth(1.15),
-      5: const pw.FlexColumnWidth(1.3),
+      0: const pw.FlexColumnWidth(0.5), // Sr #
+      1: const pw.FlexColumnWidth(2.35), // Customer
+      2: const pw.FlexColumnWidth(0.95), // Page No
+      3: const pw.FlexColumnWidth(1.15), // Total Debit
+      4: const pw.FlexColumnWidth(1.15), // Total Credit
+      5: const pw.FlexColumnWidth(1.3), // Balance
     };
   }
 
   if (_sameHeaderShape(normalizedHeaders, snapshotHeaders)) {
     return <int, pw.TableColumnWidth>{
-      0: const pw.FlexColumnWidth(1.65),
-      1: const pw.FlexColumnWidth(1.2),
-      2: const pw.FlexColumnWidth(2.45),
-      3: const pw.FlexColumnWidth(1.0),
-      4: const pw.FlexColumnWidth(1.0),
-      5: const pw.FlexColumnWidth(1.2),
-      6: const pw.FlexColumnWidth(0.9),
+      0: const pw.FlexColumnWidth(0.5), // Sr #
+      1: const pw.FlexColumnWidth(1.65), // Customer
+      2: const pw.FlexColumnWidth(1.2), // Entry Date
+      3: const pw.FlexColumnWidth(2.45), // Description
+      4: const pw.FlexColumnWidth(1.0), // Debit
+      5: const pw.FlexColumnWidth(1.0), // Credit
+      6: const pw.FlexColumnWidth(1.2), // Balance
+      7: const pw.FlexColumnWidth(0.9), // Page No
     };
   }
 
   if (_sameHeaderShape(normalizedHeaders, stockSnapshotHeaders)) {
     return <int, pw.TableColumnWidth>{
-      0: const pw.FlexColumnWidth(1.15), // Customer
-      1: const pw.FlexColumnWidth(0.75), // Date
-      2: const pw.FlexColumnWidth(1.1),  // Description
-      3: const pw.FlexColumnWidth(0.6),  // Page No
-      4: const pw.FlexColumnWidth(0.55), // Buy Bags
-      5: const pw.FlexColumnWidth(0.8),  // Buy Amt
-      6: const pw.FlexColumnWidth(0.55), // Sell Bags
-      7: const pw.FlexColumnWidth(0.8),  // Sell Amt
-      8: const pw.FlexColumnWidth(0.7),  // Rem. Bags
-      9: const pw.FlexColumnWidth(1.0),  // Balance
+      0: const pw.FlexColumnWidth(0.5), // Sr #
+      1: const pw.FlexColumnWidth(1.15), // Customer
+      2: const pw.FlexColumnWidth(0.75), // Date
+      3: const pw.FlexColumnWidth(1.1),  // Description
+      4: const pw.FlexColumnWidth(0.6),  // Page No
+      5: const pw.FlexColumnWidth(0.55), // Buy Bags
+      6: const pw.FlexColumnWidth(0.8),  // Buy Amt
+      7: const pw.FlexColumnWidth(0.55), // Sell Bags
+      8: const pw.FlexColumnWidth(0.8),  // Sell Amt
+      9: const pw.FlexColumnWidth(0.7),  // Rem. Bags
+      10: const pw.FlexColumnWidth(1.0),  // Balance
     };
   }
 

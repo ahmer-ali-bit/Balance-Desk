@@ -4,11 +4,14 @@ import 'package:provider/provider.dart';
 
 import '../models/customer.dart';
 import '../providers/customer_provider.dart';
+import '../providers/linked_workspace_provider.dart';
+import '../screens/linked_device_management_screen.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/customer_search_field.dart';
-import '../widgets/mobile_premium.dart';
+import '../widgets/premium/premium_mobile.dart';
 import '../widgets/scale_down_width.dart';
+import '../widgets/timeline/timeline_cards.dart';
 import 'ledger_screen.dart';
 
 class CustomerListScreen extends StatefulWidget {
@@ -280,68 +283,48 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     );
   }
 
-  /// Always returns true since linked devices feature is removed.
   bool _canEdit(BuildContext context, {bool listen = true}) {
-    return true;
+    final provider = context.read<LinkedWorkspaceProvider>();
+    return provider.isAdmin;
   }
 
-  Widget _buildPremiumMobileCustomerLayout({
+Widget _buildPremiumMobileCustomerLayout({
     required BuildContext context,
     required CustomerProvider provider,
     required List<Customer> customers,
   }) {
     final canEdit = _canEdit(context);
     final state = _buildCustomerState(provider: provider, customers: customers);
+    final isLoading = provider.isLoading;
 
-    return SingleChildScrollView(
-      controller: _tableVerticalController,
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      child: MobilePremiumPage(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 112),
+    return PremiumPage(
+      child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            MobilePremiumPanel(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  _buildSearchField(provider),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: provider.isLoading
-                              ? null
-                              : provider.loadCustomers,
-                          icon: const Icon(Icons.refresh_rounded),
-                          label: const Text('Refresh'),
-                        ),
-                      ),
-                      if (canEdit) ...[
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: FilledButton.icon(
-                            onPressed: _showAddCustomerDialog,
-                            icon: const Icon(Icons.person_add_alt_1_rounded),
-                            label: const Text('Add'),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
+            PremiumHeader(
+              icon: Icons.people_alt_outlined,
+              title: 'Customers',
+              subtitle: '${provider.customers.length} account${provider.customers.length == 1 ? '' : 's'}',
+              trailing: isLoading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2.2),
+                    )
+                  : null,
+              children: <Widget>[
+                _buildCustomerToolbar(context: context, provider: provider, isCompact: false),
+              ],
             ),
             const SizedBox(height: 16),
-            MobileSectionHeader(
+            PremiumSectionHeader(
               title: 'Directory',
               count: '${provider.customers.length}',
             ),
             const SizedBox(height: 10),
             if (state != null)
-              MobilePremiumPanel(child: state)
+              PremiumPanel(child: state)
             else
               _buildPremiumMobileCustomerCards(
                 context: context,
@@ -359,9 +342,6 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     required List<Customer> customers,
     required bool canEdit,
   }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -369,84 +349,16 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       itemBuilder: (context, index) {
         final customer = customers[index];
         return Padding(
-          padding: EdgeInsets.only(top: index == 0 ? 0 : 10),
-          child: MobilePremiumPanel(
+          padding: EdgeInsets.only(
+            bottom: index == customers.length - 1 ? 12 : 10,
+          ),
+          child: MobilePremiumCustomerCard(
+            name: customer.name,
+            id: customer.id?.toString() ?? '-',
+            isStockLedger: customer.isStockLedger,
             onTap: () => _openLedger(customer),
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: <Widget>[
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(kMobilePremiumRadius),
-                    border: Border.all(
-                      color: colorScheme.primary.withValues(alpha: 0.2),
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      customer.name.trim().isEmpty
-                          ? '?'
-                          : customer.name.trim()[0].toUpperCase(),
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: colorScheme.primary,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          customer.name,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: <Widget>[
-                          MobileStatusPill(
-                            icon: Icons.tag_rounded,
-                            label: '${customer.id ?? '-'}',
-                            color: colorScheme.tertiary,
-                          ),
-                          if (customer.isStockLedger)
-                            MobileStatusPill(
-                              icon: Icons.inventory_2_outlined,
-                              label: 'Stock',
-                              color: colorScheme.secondary,
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  tooltip: 'Open ledger',
-                  onPressed: () => _openLedger(customer),
-                  icon: const Icon(Icons.arrow_forward_rounded),
-                ),
-                if (canEdit)
-                  IconButton(
-                    tooltip: 'Delete customer',
-                    onPressed: () => _confirmDelete(customer),
-                    icon: const Icon(Icons.delete_outline_rounded),
-                  ),
-              ],
-            ),
+            onDelete: () => _confirmDelete(customer),
+            canEdit: canEdit,
           ),
         );
       },
@@ -513,6 +425,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
             icon: const Icon(Icons.person_add_alt_1_rounded),
             label: const Text('Add Customer'),
           ),
+        _LinkedDevicesButton(),
       ],
     );
 
@@ -696,27 +609,30 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                                           if (customer.isStockLedger) ...[
                                             const SizedBox(width: 6),
                                             Container(
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 6,
-                                                vertical: 2,
-                                              ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 6,
+                                                    vertical: 2,
+                                                  ),
                                               decoration: BoxDecoration(
-                                                color: Theme.of(
-                                                  context,
-                                                ).colorScheme.secondaryContainer,
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .secondaryContainer,
                                                 borderRadius:
                                                     BorderRadius.circular(6),
                                               ),
                                               child: Text(
                                                 'Stock',
-                                                style: Theme.of(
-                                                  context,
-                                                ).textTheme.labelSmall?.copyWith(
-                                                  color: Theme.of(
-                                                    context,
-                                                  ).colorScheme.secondary,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .labelSmall
+                                                    ?.copyWith(
+                                                      color: Theme.of(
+                                                        context,
+                                                      ).colorScheme.secondary,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
                                               ),
                                             ),
                                           ],
@@ -763,9 +679,6 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     required List<Customer> customers,
     required bool embedInParentScroll,
   }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
     return ListView.separated(
       controller: embedInParentScroll ? null : _tableVerticalController,
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -776,76 +689,13 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       padding: const EdgeInsets.only(bottom: 12),
       itemBuilder: (BuildContext context, int index) {
         final customer = customers[index];
-        final initial = customer.name.trim().isEmpty
-            ? '?'
-            : customer.name.trim()[0].toUpperCase();
 
-        return Material(
-          color: colorScheme.surface,
-          borderRadius: BorderRadius.circular(22),
-          child: InkWell(
-            onTap: () => _openLedger(customer),
-            borderRadius: BorderRadius.circular(22),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: colorScheme.outlineVariant),
-              ),
-              child: Row(
-                children: <Widget>[
-                  CircleAvatar(
-                    radius: 23,
-                    backgroundColor: colorScheme.primaryContainer,
-                    foregroundColor: colorScheme.primary,
-                    child: Text(
-                      initial,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: colorScheme.primary,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            customer.name,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Customer ID: ${customer.id ?? '-'}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Open ledger',
-                    onPressed: () => _openLedger(customer),
-                    icon: const Icon(Icons.chevron_right_rounded),
-                  ),
-                  if (_canEdit(context))
-                    IconButton(
-                      tooltip: 'Delete customer',
-                      onPressed: () => _confirmDelete(customer),
-                      icon: const Icon(Icons.delete_outline_rounded),
-                    ),
-                ],
-              ),
-            ),
-          ),
+        return CustomerCompactCard(
+          name: customer.name,
+          id: customer.id?.toString() ?? '-',
+          onTap: () => _openLedger(customer),
+          onDelete: () => _confirmDelete(customer),
+          canEdit: _canEdit(context),
         );
       },
       separatorBuilder: (_, _) => const SizedBox(height: 10),
@@ -937,6 +787,30 @@ class _CustomerIntent extends Intent {
 
 class _ScrollIntent extends Intent {
   const _ScrollIntent(this.delta);
-
   final double delta;
+}
+
+class _LinkedDevicesButton extends StatelessWidget {
+  const _LinkedDevicesButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<LinkedWorkspaceProvider>(
+      builder: (context, provider, child) {
+        if (!provider.isLinked) return const SizedBox.shrink();
+        
+        return TextButton.icon(
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => const LinkedDeviceManagementScreen(),
+              ),
+            );
+          },
+          icon: const Icon(Icons.link_rounded),
+          label: const Text('Linked Devices'),
+        );
+      },
+    );
+  }
 }

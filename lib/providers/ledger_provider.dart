@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../database/app_database.dart';
 import '../models/customer.dart';
+
 import '../models/entry.dart';
 import '../models/snapshot_opening_balance.dart';
 import '../utils/number_format_utils.dart' as number_format_utils;
@@ -56,6 +57,15 @@ class LedgerProvider extends ChangeNotifier {
     isStockLedger: _isStockLedger,
     useWeight: _useWeight,
   );
+
+  set customer(Customer value) {
+    _customerName = value.name;
+    _customerAddress = value.address;
+    _customerPhone = value.phone;
+    _isStockLedger = value.isStockLedger;
+    _useWeight = value.useWeight;
+    notifyListeners();
+  }
   String get customerName => _customerName;
   String get customerAddress => _customerAddress;
   String get customerPhone => _customerPhone;

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'app_root.dart';
 import 'database/app_database.dart';
 import 'services/app_deep_link_service.dart';
+import 'services/linked_workspace_service.dart';
 import 'services/workspace_service.dart';
 import 'screens/app_pin_gate_screen.dart';
 import 'screens/splash_screen.dart';
@@ -17,6 +18,7 @@ Future<void> main() async {
   await WorkspaceService.instance.initialize();
   await AppDatabase.instance.initialize();
   await AppDeepLinkService.instance.initialize();
+  await LinkedWorkspaceService.instance.initialize();
   runApp(const ShopDesktopApp());
 }
 

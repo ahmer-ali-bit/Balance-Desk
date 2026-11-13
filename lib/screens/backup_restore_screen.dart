@@ -3,7 +3,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:provider/provider.dart';
 import '../services/csv_backup_service.dart';
 import '../widgets/mobile_premium.dart';
 
@@ -21,7 +20,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
 
   bool _canEdit = true;
 
-  bool _readCanEdit(BuildContext context, {bool listen = true}) {
+  bool _readCanEdit(BuildContext context) {
     return true;
   }
 

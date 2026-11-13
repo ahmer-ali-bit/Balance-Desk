@@ -1,0 +1,16 @@
+ACTUAL SNAP at bytes near "AnimatedSwitcher" and import region:
+lib/screens/ledger_screen.dart:
+first 40 non-blank lines:
+(line content)
+
+ACTUAL CONTENT NEAR AnimatedSwitcher:
+(there are 0 occurrences of AnimatedSwitcher)
+
+ACTUAL IMPORT REGION (lines 1-35):
+(import content)
+
+ACTUAL build() start region (around line 59):
+(build content)
+
+ACTUAL _buildMobileScaffold / dashboard sidebar region (around lines 2960-3075):
+(drawer/endDrawer/build content)

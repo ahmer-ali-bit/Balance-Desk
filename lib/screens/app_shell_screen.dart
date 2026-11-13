@@ -9,18 +9,16 @@ import 'package:provider/provider.dart';
 import '../database/app_database.dart';
 import '../models/workspace.dart';
 import '../providers/customer_provider.dart';
+import '../providers/ledger_provider_cache.dart';
 import '../providers/ledger_year_provider.dart';
 import '../providers/workspace_provider.dart';
-import '../services/app_deep_link_service.dart';
 import '../services/app_pin_service.dart';
 import '../services/biometric_auth_service.dart';
 import '../services/company_profile_service.dart';
 import '../services/manual_update_service.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/app_pin_dialogs.dart';
-import '../widgets/mobile_premium.dart';
-import '../widgets/platform_shell_layouts.dart';
-import '../widgets/scale_down_width.dart';
+import '../widgets/app_shell_chrome.dart';
 import 'customer_list_screen.dart';
 import 'snapshot_entries_screen.dart';
 import 'summary_screen.dart';
@@ -40,7 +38,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
   final BiometricAuthService _biometricService = BiometricAuthService();
   final CompanyProfileService _companyProfileService = CompanyProfileService();
   final ManualUpdateService _manualUpdateService = ManualUpdateService.instance;
-  final AppDeepLinkService _deepLinkService = AppDeepLinkService.instance;
   int _selectedIndex = 0;
   int _reloadRevision = 0;
   bool _isPinEnabled = false;
@@ -53,7 +50,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
   );
   bool _didPromptCompanyProfile = false;
   String _sidebarNotes = '';
-  bool _isOpeningJoinScreen = false;
 
   static const List<_ShellDestination> _destinations = <_ShellDestination>[
     _ShellDestination(
@@ -61,18 +57,21 @@ class _AppShellScreenState extends State<AppShellScreen> {
       icon: Icons.people_alt_outlined,
       selectedIcon: Icons.people_alt,
       child: CustomerListScreen(),
+      description: 'Accounts, balances and statements',
     ),
     _ShellDestination(
       label: 'Summary',
       icon: Icons.assessment_outlined,
       selectedIcon: Icons.assessment,
       child: SummaryScreen(),
+      description: 'Your ledger year at a glance',
     ),
     _ShellDestination(
       label: 'Daily Logs',
       icon: Icons.history_outlined,
       selectedIcon: Icons.history,
       child: SnapshotEntriesScreen(),
+      description: 'Daily snapshot history',
     ),
   ];
 
@@ -101,6 +100,9 @@ class _AppShellScreenState extends State<AppShellScreen> {
 
     // Close and reopen database for new workspace
     await AppDatabase.instance.switchDatabase();
+
+    // Clear cached ledger providers so they re-query against the new database
+    LedgerProviderCache.instance.disposeAll();
 
     if (!mounted) return;
 
@@ -140,51 +142,170 @@ class _AppShellScreenState extends State<AppShellScreen> {
       child: _buildActivePage(),
     );
 
-    if (PlatformHelper.isDesktop) {
-      return ScaleDownWidth(
-        designWidth: 1100,
-        child: DesktopDrawerLayout(
-          title: _destinations[_selectedIndex].label,
-          drawerChild: _buildSidebarContent(
-            dark: true,
-            subtitle: 'Accounting command center',
-            closeDrawerOnAction: true,
-            showDestinations: false,
-          ),
-          content: _buildDesktopMain(content),
-        ),
-      );
+    final width = MediaQuery.sizeOf(context).width;
+    final useDesktopLayout =
+        PlatformHelper.isDesktop && width >= ShellMetrics.desktopBreakpoint;
+
+    if (useDesktopLayout) {
+      return _buildDesktopScaffold(content);
     }
 
-    if (PlatformHelper.isAndroid) {
-      return _buildMobileScaffold(
-        content: content,
-        drawerChild: _buildSidebarContent(
-          dark: true,
-          subtitle: 'Mobile workspace',
-          closeDrawerOnAction: true,
-          showDestinations: false,
-        ),
-      );
-    }
+    return _buildMobileScaffold(content);
+  }
 
-    return _buildMobileScaffold(
-      content: content,
-      drawerChild: _buildSidebarContent(
-        dark: true,
-        subtitle: 'Mobile workspace',
-        closeDrawerOnAction: true,
-        showDestinations: false,
+  Widget _buildDesktopScaffold(Widget content) {
+    final destination = _destinations[_selectedIndex];
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Scaffold(
+      backgroundColor: colorScheme.surfaceContainerLowest,
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            _buildDesktopTopBar(),
+            const SizedBox(height: 12),
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  SizedBox(
+                    width: ShellMetrics.sidebarWidth,
+                    child: _buildSidebar(closeDrawerOnAction: false),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        _buildDesktopHeader(destination),
+                        const SizedBox(height: 14),
+                        Expanded(child: ShellContentSheet(child: content)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildMobileScaffold({
-    required Widget content,
-    required Widget drawerChild,
-  }) {
+  Widget _buildDesktopTopBar() {
     final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final activeYear = context.watch<LedgerYearProvider>().activeYear;
+    final workspaceName = context
+        .watch<WorkspaceProvider>()
+        .activeWorkspace
+        .name;
+    final logo = _buildCompanyLogo();
+
+    return Container(
+      height: 64,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        border: Border(
+          bottom: BorderSide(color: colorScheme.outlineVariant),
+        ),
+      ),
+      child: Row(
+        children: <Widget>[
+          if (logo != null) ...[logo, const SizedBox(width: 12)],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  _companyName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'FY $activeYear  •  $workspaceName',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          ShellChip(
+            icon: Icons.calendar_month_outlined,
+            label: 'FY $activeYear',
+          ),
+          const SizedBox(width: 10),
+          ShellChip(
+            icon: Icons.workspaces_outlined,
+            label: workspaceName,
+            color: colorScheme.tertiary,
+          ),
+          const SizedBox(width: 16),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopHeader(_ShellDestination destination) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            'Balance Desk'.toUpperCase(),
+            style: textTheme.labelSmall?.copyWith(
+              color: colorScheme.primary.withValues(alpha: 0.9),
+              letterSpacing: 1.6,
+              fontWeight: FontWeight.w800,
+              fontSize: 10,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            destination.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.headlineMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.6,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            destination.description,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileScaffold(Widget content) {
     final destination = _destinations[_selectedIndex];
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
     return PopScope(
       canPop: false,
@@ -212,136 +333,304 @@ class _AppShellScreenState extends State<AppShellScreen> {
         }
       },
       child: Scaffold(
-      resizeToAvoidBottomInset: true,
-      backgroundColor: colorScheme.surface,
-      extendBody: true,
-      drawerScrimColor: Colors.black.withValues(alpha: 0.58),
-      drawer: Drawer(
-        width: math.min(MediaQuery.sizeOf(context).width * 0.88, 356),
-        backgroundColor: colorScheme.surfaceContainerLow,
-        elevation: 0,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.horizontal(right: Radius.circular(12)),
-        ),
-        child: SafeArea(top: false, child: drawerChild),
-      ),
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(MediaQuery.of(context).size.height * 0.096),
-        child: SafeArea(
-          bottom: false,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              MediaQuery.of(context).size.width * 0.037,
-              MediaQuery.of(context).size.height * 0.012,
-              MediaQuery.of(context).size.width * 0.037,
-              MediaQuery.of(context).size.height * 0.01,
+        resizeToAvoidBottomInset: true,
+        backgroundColor: colorScheme.surface,
+        drawerScrimColor: Colors.black.withValues(alpha: 0.55),
+        drawer: Drawer(
+          width: math.min(MediaQuery.sizeOf(context).width * 0.88, 340),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+              child: _buildSidebar(closeDrawerOnAction: true),
             ),
-            child: _MobileTopBar(destination: destination),
           ),
         ),
-      ),
-      body: _buildMobileMain(content),
-      bottomNavigationBar: _MobileBottomNav(
-        selectedIndex: _selectedIndex,
-        destinations: _destinations,
-        onSelected: _selectIndex,
-      ),
-      ),
-    );
-  }
-
-  Widget _buildMobileMain(Widget content) {
-    return DecoratedBox(
-      key: const ValueKey<String>('mobile-content'),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: <Color>[
-            Theme.of(context).colorScheme.surfaceContainerLowest,
-            Theme.of(context).colorScheme.surface,
+        appBar: AppBar(
+          toolbarHeight: 64,
+          backgroundColor: colorScheme.surface,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          leadingWidth: 56,
+          leading: Builder(
+            builder: (BuildContext headerContext) {
+              return Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: IconButton(
+                  tooltip: 'Open menu',
+                  onPressed: () => Scaffold.of(headerContext).openDrawer(),
+                  icon: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: colorScheme.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: colorScheme.outlineVariant),
+                    ),
+                    child: const Icon(Icons.menu_rounded, size: 20),
+                  ),
+                ),
+              );
+            },
+          ),
+          titleSpacing: 4,
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(
+                _companyName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.labelSmall?.copyWith(
+                  color: colorScheme.primary,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.3,
+                ),
+              ),
+              Text(
+                destination.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
+                ),
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: colorScheme.outlineVariant),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: _buildCompanyLogo() ??
+                    Icon(destination.selectedIcon,
+                        color: colorScheme.primary, size: 20),
+              ),
+            ),
+          ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Divider(height: 1, color: colorScheme.outlineVariant),
+          ),
+        ),
+        body: SafeArea(
+          top: false,
+          child: Container(
+            color: colorScheme.surface,
+            child: content,
+          ),
+        ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _selectedIndex,
+          onDestinationSelected: _selectIndex,
+          destinations: <NavigationDestination>[
+            for (final _ShellDestination d in _destinations)
+              NavigationDestination(
+                icon: Icon(d.icon),
+                selectedIcon: Icon(d.selectedIcon),
+                label: d.label,
+              ),
           ],
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[Expanded(child: content)],
-      ),
     );
   }
 
-  Widget _buildDesktopMain(Widget content) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(6, 8, 6, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          _ShellNavigationHeader(
-            selectedIndex: _selectedIndex,
-            destinations: _destinations,
-            onSelected: _selectIndex,
-          ),
-          const SizedBox(height: 14),
-          Expanded(child: content),
-        ],
-      ),
-    );
+  String get _companyName {
+    final name = _companyProfile.name.trim();
+    return name.isEmpty ? 'Balance Desk' : name;
   }
 
-  Widget _buildSidebarContent({
-    required bool dark,
-    required String subtitle,
-    required bool closeDrawerOnAction,
-    bool showDestinations = true,
-  }) {
-    return _SidebarContent(
+  List<ShellNavEntry> get _shellNavEntries {
+    return <ShellNavEntry>[
+      for (final _ShellDestination destination in _destinations)
+        ShellNavEntry(
+          label: destination.label,
+          icon: destination.icon,
+          selectedIcon: destination.selectedIcon,
+          description: destination.description,
+        ),
+    ];
+  }
+
+  /// Company logo image, or null when no readable logo is configured.
+  Widget? _buildCompanyLogo() {
+    final path = _companyProfile.logoPath;
+    if (path == null || path.trim().isEmpty) {
+      return null;
+    }
+
+    final file = File(path);
+    if (!file.existsSync()) {
+      return null;
+    }
+
+    return Image.file(file, fit: BoxFit.cover);
+  }
+
+  Widget _buildSidebar({required bool closeDrawerOnAction}) {
+    return AppShellSidebar(
+      companyName: _companyName,
+      subtitle: PlatformHelper.isDesktop
+          ? 'Accounting command center'
+          : 'Mobile workspace',
+      logo: _buildCompanyLogo(),
+      yearControl: _buildYearControl(closeDrawerOnAction: closeDrawerOnAction),
+      workspaceControl: _WorkspaceSwitcher(
+        onWorkspaceSwitched: () {
+          _closeDrawerIfNeeded(closeDrawerOnAction);
+        },
+      ),
+      navEntries: _shellNavEntries,
       selectedIndex: _selectedIndex,
-      destinations: _destinations,
-      subtitle: subtitle,
-      onSelected: (int index) {
+      onSelectIndex: (int index) {
         _closeDrawerIfNeeded(closeDrawerOnAction);
         _selectIndex(index);
       },
-      onYearSelected: (int year) {
-        _closeDrawerIfNeeded(closeDrawerOnAction);
-        _openLedgerYear(year);
-      },
-      onAddYearRequested: () {
-        _closeDrawerIfNeeded(closeDrawerOnAction);
-        _showAddYearDialog();
-      },
-      onDeleteYearRequested: () {
-        _closeDrawerIfNeeded(closeDrawerOnAction);
-        _confirmDeleteYear();
-      },
-      onWorkspaceSwitched: () {
-        _closeDrawerIfNeeded(closeDrawerOnAction);
-      },
-      onCompanyProfileRequested: () => _runDrawerAction(
-        closeDrawerOnAction: closeDrawerOnAction,
-        action: _openCompanyProfileEditor,
-      ),
-      onNotesRequested: () => _runDrawerAction(
-        closeDrawerOnAction: closeDrawerOnAction,
-        action: _openNotesEditor,
-      ),
-      onCheckUpdateRequested: () => _runDrawerAction(
-        closeDrawerOnAction: closeDrawerOnAction,
-        action: _openManualUpdateDialog,
-      ),
-      onWorkspaceSwitched: () {
-        _closeDrawerIfNeeded(closeDrawerOnAction);
-      },
-      pinButtonLabel: _isPinEnabled ? 'Manage App PIN' : 'Set App PIN',
-      companyName: _companyProfile.name.trim().isEmpty
-          ? 'Balance Desk'
-          : _companyProfile.name.trim(),
-      companyLogoPath: _companyProfile.logoPath,
-      hasNotes: _sidebarNotes.trim().isNotEmpty,
-      showDestinations: showDestinations,
-      dark: dark,
+      tools: <ShellToolEntry>[
+        ShellToolEntry(
+          icon: Icons.business_outlined,
+          label: 'Company Profile',
+          onTap: () => _runDrawerAction(
+            closeDrawerOnAction: closeDrawerOnAction,
+            action: _openCompanyProfileEditor,
+          ),
+        ),
+        ShellToolEntry(
+          icon: Icons.edit_note_outlined,
+          label: 'Notes',
+          badge: _sidebarNotes.trim().isNotEmpty,
+          onTap: () => _runDrawerAction(
+            closeDrawerOnAction: closeDrawerOnAction,
+            action: _openNotesEditor,
+          ),
+        ),
+        ShellToolEntry(
+          icon: Icons.backup_rounded,
+          label: 'Backup & Restore',
+          onTap: () => _runDrawerAction(
+            closeDrawerOnAction: closeDrawerOnAction,
+            action: _openBackupRestoreScreen,
+          ),
+        ),
+        ShellToolEntry(
+          icon: Icons.lock_outline_rounded,
+          label: _isPinEnabled ? 'Manage App PIN' : 'Set App PIN',
+          onTap: () => _runDrawerAction(
+            closeDrawerOnAction: closeDrawerOnAction,
+            action: _openPinSettings,
+          ),
+        ),
+        ShellToolEntry(
+          icon: Icons.system_update_alt_outlined,
+          label: 'Check for Update',
+          onTap: () => _runDrawerAction(
+            closeDrawerOnAction: closeDrawerOnAction,
+            action: _openManualUpdateDialog,
+          ),
+        ),
+      ],
+      showNavEntries: true,
     );
+  }
+
+  Widget _buildYearControl({required bool closeDrawerOnAction}) {
+    return Consumer<LedgerYearProvider>(
+      builder: (BuildContext context, LedgerYearProvider provider, Widget? _) {
+        final theme = Theme.of(context);
+        final colorScheme = theme.colorScheme;
+        final years = provider.years.isEmpty
+            ? <int>[provider.activeYear]
+            : provider.years;
+        final canEdit = _canEdit(context);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: PopupMenuButton<int>(
+                    enabled: !provider.isLoading,
+                    tooltip: 'Switch ledger year',
+                    onSelected: (int year) {
+                      _closeDrawerIfNeeded(closeDrawerOnAction);
+                      _openLedgerYear(year);
+                    },
+                    itemBuilder: (BuildContext context) {
+                      return years
+                          .map<PopupMenuEntry<int>>(
+                            (int year) => PopupMenuItem<int>(
+                              value: year,
+                              child: Text('$year'),
+                            ),
+                          )
+                          .toList(growable: false);
+                    },
+                    child: ShellSelectField(
+                      icon: Icons.calendar_month_outlined,
+                      value: '${provider.activeYear}',
+                      isBusy: provider.isLoading,
+                    ),
+                  ),
+                ),
+                if (canEdit) ...<Widget>[
+                  const SizedBox(width: 6),
+                  ShellIconAction(
+                    icon: Icons.add_rounded,
+                    tooltip: 'Add year',
+                    onPressed: provider.isLoading
+                        ? null
+                        : () {
+                            _closeDrawerIfNeeded(closeDrawerOnAction);
+                            _showAddYearDialog();
+                          },
+                  ),
+                  const SizedBox(width: 6),
+                  ShellIconAction(
+                    icon: Icons.delete_outline_rounded,
+                    tooltip: 'Delete year',
+                    destructive: true,
+                    onPressed: provider.isLoading || provider.years.length <= 1
+                        ? null
+                        : () {
+                            _closeDrawerIfNeeded(closeDrawerOnAction);
+                            _confirmDeleteYear();
+                          },
+                  ),
+                ],
+              ],
+            ),
+            if (provider.errorMessage != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6, left: 4),
+                child: Text(
+                  provider.errorMessage!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.error,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Always returns true since linked devices feature is removed.
+  bool _canEdit(BuildContext context) {
+    return true;
   }
 
   void _closeDrawerIfNeeded(bool closeDrawerOnAction) {
@@ -636,9 +925,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
       key: ValueKey<String>(
         '$_selectedIndex-$_reloadRevision-$activeYear-$workspaceId',
       ),
-      child: PlatformHelper.isDesktop
-          ? _PageSurface(child: _destinations[_selectedIndex].child)
-          : _destinations[_selectedIndex].child,
+      child: _destinations[_selectedIndex].child,
     );
   }
 
@@ -780,6 +1067,14 @@ class _AppShellScreenState extends State<AppShellScreen> {
   }
 
   Future<void> _openBackupRestoreScreen() async {
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const BackupRestoreScreen()),
+    );
+  }
+
+  Future<void> _openCompanyProfileEditor({bool isInitial = false}) async {
     final nameController = TextEditingController(text: _companyProfile.name);
     String? pickedLogoPath = _companyProfile.logoPath;
     bool removeLogo = false;
@@ -945,668 +1240,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
   }
 }
 
-class _ShellNavigationHeader extends StatelessWidget {
-  const _ShellNavigationHeader({
-    required this.selectedIndex,
-    required this.destinations,
-    required this.onSelected,
-  });
-
-  final int selectedIndex;
-  final List<_ShellDestination> destinations;
-  final ValueChanged<int> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: ScaleDownWidth(
-        designWidth: 960,
-        child: Row(
-          children: <Widget>[
-            for (
-              var index = 0;
-              index < destinations.length;
-              index++
-            ) ...<Widget>[
-              Expanded(
-                child: _ShellNavigationPill(
-                  label: destinations[index].label,
-                  icon: index == selectedIndex
-                      ? destinations[index].selectedIcon
-                      : destinations[index].icon,
-                  selected: index == selectedIndex,
-                  onTap: () => onSelected(index),
-                ),
-              ),
-              if (index != destinations.length - 1) const SizedBox(width: 10),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SidebarContent extends StatefulWidget {
-  const _SidebarContent({
-    required this.selectedIndex,
-    required this.destinations,
-    required this.subtitle,
-    required this.onSelected,
-    required this.onYearSelected,
-    required this.onAddYearRequested,
-    required this.onDeleteYearRequested,
-    required this.onBackupRequested,
-    required this.onPinRequested,
-    required this.onCompanyProfileRequested,
-    required this.onNotesRequested,
-    required this.onCheckUpdateRequested,
-    required this.onWorkspaceSwitched,
-    required this.pinButtonLabel,
-    required this.companyName,
-    required this.companyLogoPath,
-    required this.hasNotes,
-    this.showDestinations = true,
-    this.dark = false,
-  });
-
-  final int selectedIndex;
-  final List<_ShellDestination> destinations;
-  final String subtitle;
-  final ValueChanged<int> onSelected;
-  final ValueChanged<int> onYearSelected;
-  final VoidCallback onAddYearRequested;
-  final VoidCallback onDeleteYearRequested;
-  final Future<void> Function() onBackupRequested;
-  final Future<void> Function() onPinRequested;
-  final Future<void> Function() onCompanyProfileRequested;
-  final Future<void> Function() onNotesRequested;
-  final Future<void> Function() onCheckUpdateRequested;
-  final VoidCallback onWorkspaceSwitched;
-  final String pinButtonLabel;
-  final String companyName;
-  final String? companyLogoPath;
-  final bool hasNotes;
-  final bool showDestinations;
-  final bool dark;
-
-  @override
-  State<_SidebarContent> createState() => _SidebarContentState();
-}
-
-class _SidebarContentState extends State<_SidebarContent> {
-  final ScrollController _scrollController = ScrollController();
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    if (!PlatformHelper.isDesktop) {
-      return _buildMobileDrawer(context);
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Header with Gradient
-        Container(
-          padding: const EdgeInsets.fromLTRB(20, 60, 20, 24),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [colorScheme.primaryContainer, colorScheme.surface],
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: colorScheme.primary,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: colorScheme.primary.withValues(alpha: 0.3),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.account_balance_wallet_rounded,
-                      color: Colors.white,
-                      size: 28,
-                    ),
-                  ),
-                  const Spacer(),
-
-                ],
-              ),
-              const SizedBox(height: 20),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  widget.companyName,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              Text(
-                'Professional Accounting Command',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-        // Year Switcher
-        Consumer<LedgerYearProvider>(
-          builder: (BuildContext context, LedgerYearProvider provider, _) {
-            return _buildYearSwitcher(
-              context: context,
-              provider: provider,
-              onDeleteRequested: widget.onDeleteYearRequested,
-            );
-          },
-        ),
-        Divider(height: 1, color: colorScheme.outlineVariant),
-        // Workspace Switcher
-        _WorkspaceSwitcher(onWorkspaceSwitched: widget.onWorkspaceSwitched),
-        Divider(height: 1, color: colorScheme.outlineVariant),
-        // Menu items
-        Expanded(
-          child: Scrollbar(
-            controller: _scrollController,
-            child: SingleChildScrollView(
-              controller: _scrollController,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _DrawerSectionLabel('Settings'),
-                  _DrawerListTile(
-                    icon: Icons.business_outlined,
-                    label: 'Company Profile',
-                    onTap: widget.onCompanyProfileRequested,
-                  ),
-                  _DrawerListTile(
-                    icon: Icons.edit_note_outlined,
-                    label: 'Notes',
-                    trailing: widget.hasNotes ? '●' : null,
-                    onTap: widget.onNotesRequested,
-                  ),
-                  Divider(
-                    height: 1,
-                    color: colorScheme.outlineVariant,
-                    indent: 16,
-                    endIndent: 16,
-                  ),
-                  _DrawerSectionLabel('Data'),
-                  _DrawerListTile(
-                    icon: Icons.backup_rounded,
-                    label: 'Backup & Restore',
-                    onTap: widget.onBackupRequested,
-                  ),
-                  _DrawerSectionLabel('Security'),
-                  _DrawerListTile(
-                    icon: Icons.lock_outline_rounded,
-                    label: widget.pinButtonLabel,
-                    onTap: widget.onPinRequested,
-                  ),
-                  Divider(
-                    height: 1,
-                    color: colorScheme.outlineVariant,
-                    indent: 16,
-                    endIndent: 16,
-                  ),
-                  _DrawerSectionLabel('App'),
-                  _DrawerListTile(
-                    icon: Icons.system_update_alt_outlined,
-                    label: 'Check for Update',
-                    onTap: widget.onCheckUpdateRequested,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        // Footer
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            border: Border(top: BorderSide(color: colorScheme.outlineVariant)),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Balance Desk',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Developer: Ahmer Abid',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant.withValues(
-                          alpha: 0.8,
-                        ),
-                        fontSize: 10,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMobileDrawer(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return DecoratedBox(
-      decoration: BoxDecoration(color: colorScheme.surfaceContainerLow),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Container(
-            padding: const EdgeInsets.fromLTRB(18, 54, 18, 16),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainer,
-              border: Border(
-                bottom: BorderSide(color: colorScheme.outlineVariant),
-              ),
-            ),
-            child: Row(
-              children: <Widget>[
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary.withValues(alpha: 0.16),
-                    borderRadius: BorderRadius.circular(kMobilePremiumRadius),
-                    border: Border.all(
-                      color: colorScheme.primary.withValues(alpha: 0.22),
-                    ),
-                  ),
-                  child:
-                      widget.companyLogoPath == null ||
-                          widget.companyLogoPath!.trim().isEmpty
-                      ? Icon(
-                          Icons.account_balance_wallet_rounded,
-                          color: colorScheme.primary,
-                        )
-                      : ClipRRect(
-                          borderRadius: BorderRadius.circular(
-                            kMobilePremiumRadius,
-                          ),
-                          child: Image.file(
-                            File(widget.companyLogoPath!),
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => Icon(
-                              Icons.account_balance_wallet_rounded,
-                              color: colorScheme.primary,
-                            ),
-                          ),
-                        ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          widget.companyName,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          widget.subtitle,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Renders nothing on a standalone workspace.
-              ],
-            ),
-          ),
-          Expanded(
-            child: Scrollbar(
-              controller: _scrollController,
-              child: SingleChildScrollView(
-                controller: _scrollController,
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    _buildYearSwitcher(
-                      context: context,
-                      provider: context.watch<LedgerYearProvider>(),
-                      onDeleteRequested: widget.onDeleteYearRequested,
-                    ),
-                    const SizedBox(height: 10),
-                    _WorkspaceSwitcher(
-                      onWorkspaceSwitched: widget.onWorkspaceSwitched,
-                    ),
-                    const SizedBox(height: 14),
-                    MobileSectionHeader(title: 'Workspace Tools'),
-                    const SizedBox(height: 8),
-                    _MobileDrawerAction(
-                      icon: Icons.business_outlined,
-                      label: 'Company Profile',
-                      onTap: widget.onCompanyProfileRequested,
-                    ),
-                    _MobileDrawerAction(
-                      icon: Icons.edit_note_outlined,
-                      label: 'Notes',
-                      trailing: widget.hasNotes
-                          ? MobileStatusPill(
-                              icon: Icons.check_rounded,
-                              label: 'Saved',
-                              color: colorScheme.secondary,
-                            )
-                          : null,
-                      onTap: widget.onNotesRequested,
-                    ),
-                    const SizedBox(height: 12),
-                    MobileSectionHeader(title: 'Data & Security'),
-                    const SizedBox(height: 8),
-                    _MobileDrawerAction(
-                      icon: Icons.backup_rounded,
-                      label: 'Backup & Restore',
-                      onTap: widget.onBackupRequested,
-                    ),
-                    _MobileDrawerAction(
-                      icon: Icons.lock_outline_rounded,
-                      label: widget.pinButtonLabel,
-                      onTap: widget.onPinRequested,
-                    ),
-                    const SizedBox(height: 12),
-                    _MobileDrawerAction(
-                      icon: Icons.system_update_alt_outlined,
-                      label: 'Check for Update',
-                      onTap: widget.onCheckUpdateRequested,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-            child: Text(
-              'Balance Desk',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildYearSwitcher({
-    required BuildContext context,
-    required LedgerYearProvider provider,
-    required VoidCallback onDeleteRequested,
-  }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final years = provider.years.isEmpty
-        ? <int>[provider.activeYear]
-        : provider.years;
-    final canEdit = _canEdit(context);
-
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text(
-              'LEDGER YEAR',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                letterSpacing: 1.0,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          Row(
-            children: [
-              Expanded(
-                child: PopupMenuButton<int>(
-                  enabled: !provider.isLoading,
-                  onSelected: widget.onYearSelected,
-                  itemBuilder: (BuildContext context) {
-                    return years
-                        .map<PopupMenuEntry<int>>(
-                          (int year) => PopupMenuItem<int>(
-                            value: year,
-                            child: Text('$year'),
-                          ),
-                        )
-                        .toList(growable: false);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: colorScheme.outlineVariant),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.calendar_month_outlined,
-                          size: 18,
-                          color: colorScheme.primary,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            '${provider.activeYear}',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        if (provider.isLoading)
-                          SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: colorScheme.primary,
-                            ),
-                          )
-                        else
-                          Icon(
-                            Icons.unfold_more_rounded,
-                            size: 18,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              if (canEdit) ...[
-                const SizedBox(width: 8),
-                IconButton(
-                  tooltip: 'Add year',
-                  onPressed: provider.isLoading
-                      ? null
-                      : widget.onAddYearRequested,
-                  style: IconButton.styleFrom(
-                    backgroundColor: colorScheme.surfaceContainerHigh,
-                    foregroundColor: colorScheme.primary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    side: BorderSide(color: colorScheme.outlineVariant),
-                  ),
-                  icon: const Icon(Icons.add_rounded, size: 20),
-                ),
-                const SizedBox(width: 4),
-                IconButton(
-                  tooltip: 'Delete year',
-                  onPressed:
-                      provider.isLoading || provider.years.length <= 1
-                      ? null
-                      : onDeleteRequested,
-                  style: IconButton.styleFrom(
-                    backgroundColor: colorScheme.surfaceContainerHigh,
-                    foregroundColor: colorScheme.error,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    side: BorderSide(color: colorScheme.outlineVariant),
-                  ),
-                  icon: const Icon(Icons.delete_outline_rounded, size: 20),
-                ),
-              ],
-            ],
-          ),
-          if (provider.errorMessage != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                provider.errorMessage!,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.error,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DrawerSectionLabel extends StatelessWidget {
-  const _DrawerSectionLabel(this.label);
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-      child: Text(
-        label.toUpperCase(),
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-          letterSpacing: 1.0,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
-
-class _DrawerListTile extends StatelessWidget {
-  const _DrawerListTile({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.trailing,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-  final String? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return ListTile(
-      leading: Icon(
-        icon,
-        size: 22,
-        color: onTap != null
-            ? colorScheme.onSurface
-            : colorScheme.onSurfaceVariant,
-      ),
-      title: Text(
-        label,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: onTap != null
-              ? colorScheme.onSurface
-              : colorScheme.onSurfaceVariant,
-        ),
-      ),
-      trailing: trailing != null
-          ? Text(
-              trailing!,
-              style: Theme.of(
-                context,
-              ).textTheme.labelSmall?.copyWith(color: colorScheme.primary),
-            )
-          : null,
-      onTap: onTap,
-      enabled: onTap != null,
-      dense: true,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    );
-  }
-}
-
 enum _PinAction { change, disable }
 
 /// Dialog that shows PIN management options along with a biometric toggle.
@@ -1765,279 +1398,6 @@ class _AddYearDialogState extends State<_AddYearDialog> {
         ),
         FilledButton(onPressed: _submit, child: const Text('Open Year')),
       ],
-    );
-  }
-}
-
-class _PageSurface extends StatelessWidget {
-  const _PageSurface({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        if (!PlatformHelper.isDesktop) {
-          return child;
-        }
-
-        final compact =
-            constraints.maxWidth < 720 || constraints.maxHeight < 560;
-        final colorScheme = Theme.of(context).colorScheme;
-        final borderRadius = BorderRadius.circular(compact ? 22 : 28);
-
-        return Padding(
-          padding: EdgeInsets.zero,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: colorScheme.surface,
-              borderRadius: borderRadius,
-              border: Border.all(color: colorScheme.outlineVariant),
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.18),
-                  blurRadius: compact ? 16 : 22,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: ClipRRect(borderRadius: borderRadius, child: child),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _ShellNavigationPill extends StatelessWidget {
-  const _ShellNavigationPill({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Ink(
-          height: 32,
-          decoration: BoxDecoration(
-            color: selected
-                ? colorScheme.primary
-                : colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              Icon(
-                icon,
-                size: 16,
-                color: selected
-                    ? colorScheme.onPrimary
-                    : colorScheme.primary.withValues(alpha: 0.86),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: selected
-                      ? colorScheme.onPrimary
-                      : colorScheme.primary.withValues(alpha: 0.86),
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SidebarNavItem extends StatefulWidget {
-  const _SidebarNavItem({
-    required this.icon,
-    required this.label,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  @override
-  State<_SidebarNavItem> createState() => _SidebarNavItemState();
-}
-
-class _SidebarNavItemState extends State<_SidebarNavItem> {
-  bool _isHovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final backgroundColor = widget.isSelected
-        ? const Color(0xFF22C55E).withValues(alpha: 0.16)
-        : _isHovered
-        ? Colors.white.withValues(alpha: 0.06)
-        : Colors.transparent;
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(16),
-          hoverColor: Colors.transparent,
-          splashColor: const Color(0xFF22C55E).withValues(alpha: 0.18),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 170),
-            curve: Curves.easeOutCubic,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: backgroundColor,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              children: <Widget>[
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 170),
-                  width: 3,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: widget.isSelected
-                        ? const Color(0xFF22C55E)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: widget.isSelected
-                        ? Colors.white.withValues(alpha: 0.06)
-                        : Colors.white.withValues(alpha: 0.04),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    widget.icon,
-                    size: 18,
-                    color: widget.isSelected
-                        ? const Color(0xFF86EFAC)
-                        : const Color(0xFFE5E7EB),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    widget.label,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: widget.isSelected
-                          ? FontWeight.w700
-                          : FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SidebarActionItem extends StatefulWidget {
-  const _SidebarActionItem({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-
-  @override
-  State<_SidebarActionItem> createState() => _SidebarActionItemState();
-}
-
-class _SidebarActionItemState extends State<_SidebarActionItem> {
-  bool _isHovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final bool isEnabled = widget.onTap != null;
-    const baseOpacity = 0.05;
-    const hoverOpacity = 0.08;
-
-    return MouseRegion(
-      onEnter: isEnabled ? (_) => setState(() => _isHovered = true) : null,
-      onExit: isEnabled ? (_) => setState(() => _isHovered = false) : null,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(16),
-          hoverColor: Colors.transparent,
-          splashColor: isEnabled
-              ? const Color(0xFF22C55E).withValues(alpha: 0.14)
-              : Colors.transparent,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 170),
-            curve: Curves.easeOutCubic,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(
-                alpha: isEnabled
-                    ? (_isHovered ? hoverOpacity : baseOpacity)
-                    : 0.02,
-              ),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Opacity(
-              opacity: isEnabled ? 1.0 : 0.4,
-              child: Row(
-                children: <Widget>[
-                  Icon(widget.icon, size: 18, color: const Color(0xFFE5E7EB)),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      widget.label,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -2210,271 +1570,20 @@ class _ManualUpdateDialogState extends State<_ManualUpdateDialog> {
   }
 }
 
-class _MobileTopBar extends StatelessWidget {
-  const _MobileTopBar({required this.destination});
-
-  final _ShellDestination destination;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final w = MediaQuery.of(context).size.width;
-    final h = MediaQuery.of(context).size.height;
-
-    return MobilePremiumPanel(
-      padding: EdgeInsets.symmetric(horizontal: w * 0.027, vertical: h * 0.01),
-      child: Row(
-        children: <Widget>[
-          Builder(
-            builder: (BuildContext context) {
-              return IconButton(
-                tooltip: 'Open menu',
-                onPressed: () => Scaffold.of(context).openDrawer(),
-                style: IconButton.styleFrom(
-                  backgroundColor: colorScheme.surfaceContainerHigh,
-                  foregroundColor: colorScheme.onSurface,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(kMobilePremiumRadius),
-                  ),
-                ),
-                icon: const Icon(Icons.menu_rounded),
-              );
-            },
-          ),
-          SizedBox(width: w * 0.027),
-          Expanded(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    'Balance Desk',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: colorScheme.primary,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  SizedBox(height: h * 0.0025),
-                  Text(
-                    destination.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Container(
-            width: w * 0.112,
-            height: w * 0.112,
-            decoration: BoxDecoration(
-              color: colorScheme.primary.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(kMobilePremiumRadius),
-              border: Border.all(
-                color: colorScheme.primary.withValues(alpha: 0.2),
-              ),
-            ),
-            child: Icon(destination.selectedIcon, color: colorScheme.primary),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MobileDrawerAction extends StatelessWidget {
-  const _MobileDrawerAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.trailing,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final enabled = onTap != null;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: MobilePremiumPanel(
-        onTap: onTap,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-        child: Opacity(
-          opacity: enabled ? 1 : 0.42,
-          child: Row(
-            children: <Widget>[
-              Icon(
-                icon,
-                size: 19,
-                color: enabled
-                    ? colorScheme.primary
-                    : colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    label,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ),
-              if (trailing != null)
-                trailing!
-              else
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 18,
-                  color: colorScheme.onSurfaceVariant,
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MobileBottomNav extends StatelessWidget {
-  const _MobileBottomNav({
-    required this.selectedIndex,
-    required this.destinations,
-    required this.onSelected,
-  });
-
-  final int selectedIndex;
-  final List<_ShellDestination> destinations;
-  final ValueChanged<int> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
-        child: MobilePremiumPanel(
-          padding: const EdgeInsets.all(6),
-          child: Row(
-            children: <Widget>[
-              for (var i = 0; i < destinations.length; i++) ...<Widget>[
-                Expanded(
-                  child: _MobileBottomNavItem(
-                    label: destinations[i].label,
-                    icon: selectedIndex == i
-                        ? destinations[i].selectedIcon
-                        : destinations[i].icon,
-                    selected: selectedIndex == i,
-                    colorScheme: colorScheme,
-                    onTap: () => onSelected(i),
-                  ),
-                ),
-                if (i < destinations.length - 1) const SizedBox(width: 4),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MobileBottomNavItem extends StatelessWidget {
-  const _MobileBottomNavItem({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.colorScheme,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final ColorScheme colorScheme;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(kMobilePremiumRadius),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
-        decoration: BoxDecoration(
-          color: selected
-              ? colorScheme.primary.withValues(alpha: 0.16)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(kMobilePremiumRadius),
-          border: selected
-              ? Border.all(color: colorScheme.primary.withValues(alpha: 0.22))
-              : null,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(
-              icon,
-              size: 22,
-              color: selected
-                  ? colorScheme.primary
-                  : colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected
-                    ? colorScheme.primary
-                    : colorScheme.onSurfaceVariant,
-                fontSize: 10,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _ShellDestination {
   const _ShellDestination({
     required this.label,
     required this.icon,
     required this.selectedIcon,
     required this.child,
+    required this.description,
   });
 
   final String label;
   final IconData icon;
   final IconData selectedIcon;
   final Widget child;
+  final String description;
 }
 
 class _WorkspaceSwitcher extends StatelessWidget {
@@ -2492,49 +1601,10 @@ class _WorkspaceSwitcher extends StatelessWidget {
         final workspaces = provider.workspaces;
         final active = provider.activeWorkspace;
 
-        return Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(left: 4, bottom: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'WORKSPACE',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          letterSpacing: 1.0,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 28,
-                      height: 28,
-                      child: IconButton(
-                        padding: EdgeInsets.zero,
-                        tooltip: 'Add Workspace',
-                        onPressed: () =>
-                            _showAddWorkspaceDialog(context, provider),
-                        style: IconButton.styleFrom(
-                          backgroundColor: colorScheme.surfaceContainerHigh,
-                          foregroundColor: colorScheme.primary,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          side: BorderSide(color: colorScheme.outlineVariant),
-                        ),
-                        icon: const Icon(Icons.add_rounded, size: 16),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Active workspace chip
-              PopupMenuButton<String>(
+        return Row(
+          children: [
+            Expanded(
+              child: PopupMenuButton<String>(
                 enabled: !provider.isSwitching,
                 onSelected: (String workspaceId) async {
                   if (workspaceId == active.id) return;
@@ -2618,57 +1688,20 @@ class _WorkspaceSwitcher extends StatelessWidget {
                       })
                       .toList(growable: false);
                 },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: colorScheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: colorScheme.outlineVariant),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.workspaces_outlined,
-                        size: 18,
-                        color: colorScheme.primary,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            active.name,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (provider.isSwitching)
-                        SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: colorScheme.primary,
-                          ),
-                        )
-                      else
-                        Icon(
-                          Icons.unfold_more_rounded,
-                          size: 18,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                    ],
-                  ),
+                child: ShellSelectField(
+                  icon: Icons.workspaces_outlined,
+                  value: active.name,
+                  isBusy: provider.isSwitching,
                 ),
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 6),
+            ShellIconAction(
+              icon: Icons.add_rounded,
+              tooltip: 'Add Workspace',
+              onPressed: () => _showAddWorkspaceDialog(context, provider),
+            ),
+          ],
         );
       },
     );

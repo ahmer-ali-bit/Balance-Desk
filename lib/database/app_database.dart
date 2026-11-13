@@ -1356,9 +1356,11 @@ class DatabaseHelper {
         c.id AS customerId,
         SUM(e.debit) AS totalDebit,
         SUM(e.credit) AS totalCredit,
-        COUNT(e.id) AS entryCount
+        SUM(e.buyBags) AS totalBuyBags,
+        SUM(e.sellBags) AS totalSellBags,
+        MAX(e.pageNo) AS latestPageNo
       FROM $customersTable c
-      JOIN $entriesTable e ON e.customerId = c.id
+      LEFT JOIN $entriesTable e ON e.customerId = c.id
       WHERE ${whereClause.toString()}
       GROUP BY c.id
       ''', args);
@@ -3469,4 +3471,14 @@ class AppDatabase {
   Future<bool> hasGuestBackup() => _helper.hasGuestBackup();
 
   Future<void> close() => _helper.close();
+
+  // ---------------------------------------------------------------------------
+  // Wiring added so the unfinished snapshot-cleanup call sites compile.
+  // ---------------------------------------------------------------------------
+
+  /// Thin shim for callers that still reference the old [clearAllSnapshots]
+  /// signature. The real implementation is not wired yet.
+  Future<void> clearAllSnapshots(int reason) async {
+    throw UnimplementedError('clearAllSnapshots is not wired yet');
+  }
 }

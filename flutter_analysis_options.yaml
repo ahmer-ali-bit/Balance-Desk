@@ -1,0 +1,19 @@
+[
+  {
+    "rule": "unused_import",
+    "severity": "warning",
+    "files": {
+      "lib/screens/ledger_screen.dart": {
+        "rules": {
+          "unused_import": {
+            "severity": "info"
+          }
+        }
+      }
+    }
+  },
+  {
+    "rule": "unnecessary_underscores",
+    "severity": "info"
+  }
+]

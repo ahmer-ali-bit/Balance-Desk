@@ -3,87 +3,53 @@ import 'package:flutter/material.dart';
 class BalanceDeskTheme {
   BalanceDeskTheme._();
 
-  static const ColorScheme _desktopColorScheme = ColorScheme(
+  /// New premium color scheme — deep ink canvas, emerald primary, gold secondary,
+  /// and warm credit signals for a sophisticated financial aesthetic.
+  static const ColorScheme _colorScheme = ColorScheme(
     brightness: Brightness.dark,
-    primary: Color(0xFF56C48D),
-    onPrimary: Color(0xFF071B12),
-    primaryContainer: Color(0xFF153728),
-    onPrimaryContainer: Color(0xFFD5F5E2),
-    secondary: Color(0xFF3F8D69),
-    onSecondary: Color(0xFFF2FBF5),
-    secondaryContainer: Color(0xFF183C2D),
-    onSecondaryContainer: Color(0xFFD6F0E1),
-    tertiary: Color(0xFF4DB889),
-    onTertiary: Color(0xFF071B12),
-    tertiaryContainer: Color(0xFF133427),
-    onTertiaryContainer: Color(0xFFD5F5E2),
-    error: Color(0xFFFF8A80),
-    onError: Color(0xFF3A0A07),
-    errorContainer: Color(0xFF5F1914),
-    onErrorContainer: Color(0xFFFFDAD4),
-    surface: Color(0xFF0C241B),
-    onSurface: Color(0xFFF1F7F3),
-    onSurfaceVariant: Color(0xFF92B3A1),
-    outline: Color(0xFF194233),
-    outlineVariant: Color(0xFF15362A),
-    surfaceContainerLowest: Color(0xFF06110D),
-    surfaceContainerLow: Color(0xFF0A1B15),
-    surfaceContainer: Color(0xFF0E2219),
-    surfaceContainerHigh: Color(0xFF133126),
-    surfaceContainerHighest: Color(0xFF214438),
-    inverseSurface: Color(0xFFE7F2EB),
-    onInverseSurface: Color(0xFF10221A),
-    inversePrimary: Color(0xFF1E5D45),
+    primary: Color(0xFF10B981),
+    onPrimary: Color(0xFF03261D),
+    primaryContainer: Color(0xFF0E3B31),
+    onPrimaryContainer: Color(0xFFB7F3C6),
+    secondary: Color(0xFFD4A44E),
+    onSecondary: Color(0xFF2A1A04),
+    secondaryContainer: Color(0xFF3B2A10),
+    onSecondaryContainer: Color(0xFFF5DEB3),
+    tertiary: Color(0xFFF59E0B),
+    onTertiary: Color(0xFF2A1800),
+    tertiaryContainer: Color(0xFF4A3410),
+    onTertiaryContainer: Color(0xFFFEF3C7),
+    error: Color(0xFFF87171),
+    onError: Color(0xFF450A0A),
+    errorContainer: Color(0xFF5C1F1F),
+    onErrorContainer: Color(0xFFFEE2E2),
+    surface: Color(0xFF0D1117),
+    onSurface: Color(0xFFE8EEF8),
+    onSurfaceVariant: Color(0xFF94A3B8),
+    outline: Color(0xFF334155),
+    outlineVariant: Color(0xFF1E293B),
+    surfaceContainerLowest: Color(0xFF07090D),
+    surfaceContainerLow: Color(0xFF0D1117),
+    surfaceContainer: Color(0xFF131A23),
+    surfaceContainerHigh: Color(0xFF182235),
+    surfaceContainerHighest: Color(0xFF223049),
+    inverseSurface: Color(0xFFE2E8F0),
+    onInverseSurface: Color(0xFF0F172A),
+    inversePrimary: Color(0xFF0F766E),
     scrim: Colors.black,
     shadow: Colors.black,
   );
-  static const Color _desktopScaffoldBackgroundColor = Color(0xFF071611);
-  static const Color _desktopCanvasColor = Color(0xFF081610);
-  static const Color _desktopAppBarBackgroundColor = Color(0xFF0A1D16);
-  static const Color _desktopDrawerBackgroundColor = Color(0xFF081911);
-  static const Color _desktopInputFillColor = Color(0xFF05100C);
 
-  static const ColorScheme _mobileColorScheme = ColorScheme(
-    brightness: Brightness.dark,
-    primary: Color(0xFF39D98A),
-    onPrimary: Color(0xFF062016),
-    primaryContainer: Color(0xFF0F3B2B),
-    onPrimaryContainer: Color(0xFFCFF8E0),
-    secondary: Color(0xFFF2B84B),
-    onSecondary: Color(0xFF291B00),
-    secondaryContainer: Color(0xFF49350E),
-    onSecondaryContainer: Color(0xFFFFE8B8),
-    tertiary: Color(0xFF63B3FF),
-    onTertiary: Color(0xFF071C2F),
-    tertiaryContainer: Color(0xFF123A5B),
-    onTertiaryContainer: Color(0xFFD5EBFF),
-    error: Color(0xFFFF6F61),
-    onError: Color(0xFFFFFFFF),
-    errorContainer: Color(0xFF5A1E18),
-    onErrorContainer: Color(0xFFFFD8D2),
-    surface: Color(0xFF08110F),
-    onSurface: Color(0xFFF3F7F2),
-    onSurfaceVariant: Color(0xFF9AA8A1),
-    outline: Color(0xFF243631),
-    outlineVariant: Color(0xFF1B2A26),
-    surfaceContainerLowest: Color(0xFF050907),
-    surfaceContainerLow: Color(0xFF0B1714),
-    surfaceContainer: Color(0xFF10211D),
-    surfaceContainerHigh: Color(0xFF172D28),
-    surfaceContainerHighest: Color(0xFF203A34),
-    inverseSurface: Color(0xFFE8F1EC),
-    onInverseSurface: Color(0xFF0A1512),
-    inversePrimary: Color(0xFF176B48),
-    scrim: Colors.black,
-    shadow: Colors.black,
-  );
+  static const Color _scaffoldBackgroundColor = Color(0xFF07090D);
+  static const Color _canvasColor = Color(0xFF080A0C);
+  static const Color _appBarBackgroundColor = Color(0xFF0A0D10);
 
   static ThemeData lightTheme() => _buildMobileTheme();
 
   static ThemeData darkTheme() => _buildMobileTheme();
 
   static ThemeData desktopTheme() {
-    final colorScheme = _desktopColorScheme;
+    final colorScheme = _colorScheme;
 
     final baseText = Typography.material2021().white;
     final textTheme = baseText
@@ -125,12 +91,12 @@ class BalanceDeskTheme {
       useMaterial3: true,
       brightness: Brightness.dark,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: _desktopScaffoldBackgroundColor,
-      canvasColor: _desktopCanvasColor,
+      scaffoldBackgroundColor: _scaffoldBackgroundColor,
+      canvasColor: _canvasColor,
       splashFactory: InkRipple.splashFactory,
       textTheme: textTheme,
       appBarTheme: AppBarTheme(
-        backgroundColor: _desktopAppBarBackgroundColor,
+        backgroundColor: _appBarBackgroundColor,
         foregroundColor: colorScheme.onSurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
@@ -152,7 +118,7 @@ class BalanceDeskTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: _desktopInputFillColor,
+        fillColor: Color(0xFF0A0F16),
         hintStyle: textTheme.bodyLarge?.copyWith(
           color: colorScheme.onSurfaceVariant,
         ),
@@ -166,15 +132,15 @@ class BalanceDeskTheme {
           vertical: 16,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: colorScheme.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: colorScheme.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: colorScheme.primary, width: 1.5),
         ),
       ),
@@ -222,7 +188,7 @@ class BalanceDeskTheme {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       ),
       drawerTheme: const DrawerThemeData(
-        backgroundColor: _desktopDrawerBackgroundColor,
+        backgroundColor: Color(0xFF0B1110),
         surfaceTintColor: Colors.transparent,
       ),
       dialogTheme: DialogThemeData(
@@ -277,7 +243,7 @@ class BalanceDeskTheme {
   }
 
   static ThemeData _buildMobileTheme() {
-    final colorScheme = _mobileColorScheme;
+    final colorScheme = _colorScheme;
     final textBase = Typography.material2021().white;
 
     final textTheme = textBase
@@ -286,62 +252,54 @@ class BalanceDeskTheme {
           displayColor: colorScheme.onSurface,
         )
         .copyWith(
-          displayLarge: textBase.displayLarge?.copyWith(
-            fontWeight: FontWeight.w300,
-            letterSpacing: 0,
-          ),
-          displayMedium: textBase.displayMedium?.copyWith(
-            fontWeight: FontWeight.w300,
-            letterSpacing: 0,
-          ),
           headlineLarge: textBase.headlineLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.5,
           ),
           headlineMedium: textBase.headlineMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.4,
           ),
           headlineSmall: textBase.headlineSmall?.copyWith(
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.3,
             color: colorScheme.onSurface,
           ),
           titleLarge: textBase.titleLarge?.copyWith(
             fontWeight: FontWeight.w700,
-            letterSpacing: 0,
+            letterSpacing: -0.2,
           ),
           titleMedium: textBase.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.1,
           ),
           titleSmall: textBase.titleSmall?.copyWith(
             fontWeight: FontWeight.w600,
             letterSpacing: 0,
           ),
           bodyLarge: textBase.bodyLarge?.copyWith(
-            fontWeight: FontWeight.w400,
-            height: 1.6,
+            fontWeight: FontWeight.w500,
+            height: 1.45,
           ),
           bodyMedium: textBase.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w400,
-            height: 1.6,
+            fontWeight: FontWeight.w500,
+            height: 1.45,
           ),
           bodySmall: textBase.bodySmall?.copyWith(
-            fontWeight: FontWeight.w400,
-            height: 1.5,
+            fontWeight: FontWeight.w500,
+            height: 1.4,
           ),
           labelLarge: textBase.labelLarge?.copyWith(
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.1,
           ),
           labelMedium: textBase.labelMedium?.copyWith(
-            fontWeight: FontWeight.w500,
-            letterSpacing: 0,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.2,
           ),
           labelSmall: textBase.labelSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.3,
           ),
         );
 
@@ -354,31 +312,34 @@ class BalanceDeskTheme {
       splashFactory: InkRipple.splashFactory,
       textTheme: textTheme,
       appBarTheme: AppBarTheme(
-        backgroundColor: Colors.transparent,
+        backgroundColor: colorScheme.surface,
         foregroundColor: colorScheme.onSurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
-        centerTitle: true,
-        titleTextStyle: textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w700,
+        centerTitle: false,
+        titleTextStyle: textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.w800,
           color: colorScheme.onSurface,
-          letterSpacing: 0,
+          letterSpacing: -0.3,
         ),
         iconTheme: IconThemeData(color: colorScheme.onSurface),
       ),
       cardTheme: CardThemeData(
-        color: colorScheme.surfaceContainer,
+        color: colorScheme.surfaceContainerLow,
         elevation: 0,
         margin: EdgeInsets.zero,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: colorScheme.outlineVariant),
+        ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: colorScheme.surfaceContainerHigh,
+        fillColor: Color(0xFF0A0F16),
         hintStyle: textTheme.bodyMedium?.copyWith(
-          color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+          color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
         ),
         labelStyle: textTheme.bodyMedium?.copyWith(
           color: colorScheme.onSurfaceVariant,
@@ -390,16 +351,16 @@ class BalanceDeskTheme {
           vertical: 14,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: colorScheme.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: colorScheme.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: colorScheme.primary, width: 1.5),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: colorScheme.primary, width: 1.6),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
@@ -408,8 +369,8 @@ class BalanceDeskTheme {
           foregroundColor: colorScheme.onPrimary,
           disabledBackgroundColor: colorScheme.surfaceContainerHighest,
           disabledForegroundColor: colorScheme.onSurfaceVariant,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
           textStyle: textTheme.labelLarge?.copyWith(
             fontWeight: FontWeight.w700,
           ),
@@ -421,17 +382,17 @@ class BalanceDeskTheme {
           backgroundColor: colorScheme.primary,
           foregroundColor: colorScheme.onPrimary,
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: colorScheme.primary,
-          side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.4)),
-          backgroundColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          foregroundColor: colorScheme.onSurface,
+          side: BorderSide(color: colorScheme.outline),
+          backgroundColor: colorScheme.surfaceContainerHigh.withValues(alpha: 0.4),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           textStyle: textTheme.labelLarge?.copyWith(
             fontWeight: FontWeight.w600,
           ),
@@ -440,62 +401,63 @@ class BalanceDeskTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: colorScheme.primary,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           textStyle: textTheme.labelLarge,
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: colorScheme.primary,
         foregroundColor: colorScheme.onPrimary,
-        elevation: 8,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        elevation: 6,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       ),
       drawerTheme: DrawerThemeData(
-        backgroundColor: colorScheme.surface,
+        backgroundColor: colorScheme.surfaceContainerLow,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.horizontal(right: Radius.circular(12)),
+          borderRadius: BorderRadius.horizontal(right: Radius.circular(20)),
         ),
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: colorScheme.surfaceContainer,
+        backgroundColor: colorScheme.surfaceContainerLow,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: colorScheme.surfaceContainer,
+        backgroundColor: colorScheme.surfaceContainerLow,
         surfaceTintColor: Colors.transparent,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
         ),
       ),
       chipTheme: ChipThemeData(
         backgroundColor: colorScheme.surfaceContainerHigh,
-        side: BorderSide.none,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        labelStyle: textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600),
+        side: BorderSide(color: colorScheme.outlineVariant),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        labelStyle: textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700),
         selectedColor: colorScheme.primaryContainer,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       ),
       navigationBarTheme: NavigationBarThemeData(
         elevation: 0,
-        backgroundColor: Colors.transparent,
+        height: 72,
+        backgroundColor: colorScheme.surfaceContainerLow,
         surfaceTintColor: Colors.transparent,
-        indicatorColor: colorScheme.primary.withValues(alpha: 0.15),
+        indicatorColor: colorScheme.primary.withValues(alpha: 0.16),
         indicatorShape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(14),
         ),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w800,
               color: colorScheme.primary,
             );
           }
           return textTheme.labelSmall?.copyWith(
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w600,
             color: colorScheme.onSurfaceVariant,
           );
         }),
@@ -503,12 +465,12 @@ class BalanceDeskTheme {
           if (states.contains(WidgetState.selected)) {
             return IconThemeData(color: colorScheme.primary, size: 24);
           }
-          return IconThemeData(color: colorScheme.onSurfaceVariant, size: 22);
+          return IconThemeData(color: colorScheme.onSurfaceVariant, size: 23);
         }),
       ),
       dividerTheme: DividerThemeData(
-        color: colorScheme.outline.withValues(alpha: 0.3),
-        thickness: 0.5,
+        color: colorScheme.outlineVariant,
+        thickness: 1,
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(
         color: colorScheme.primary,
@@ -516,18 +478,18 @@ class BalanceDeskTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: colorScheme.surfaceContainerHigh,
+        backgroundColor: colorScheme.surfaceContainerHighest,
         contentTextStyle: textTheme.bodyMedium?.copyWith(
           color: colorScheme.onSurface,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
         ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
       popupMenuTheme: PopupMenuThemeData(
         color: colorScheme.surfaceContainerHigh,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         elevation: 8,
       ),
       switchTheme: SwitchThemeData(
@@ -539,7 +501,7 @@ class BalanceDeskTheme {
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return colorScheme.primary.withValues(alpha: 0.3);
+            return colorScheme.primary.withValues(alpha: 0.35);
           }
           return colorScheme.surfaceContainerHighest;
         }),

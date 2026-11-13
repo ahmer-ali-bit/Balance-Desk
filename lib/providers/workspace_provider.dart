@@ -5,12 +5,18 @@ import '../services/workspace_service.dart';
 import '../database/app_database.dart';
 
 class WorkspaceProvider extends ChangeNotifier {
+  static WorkspaceProvider? _instance;
+
   final WorkspaceService _service;
   bool _isDisposed = false;
 
   WorkspaceProvider({
     WorkspaceService? service,
-  }) : _service = service ?? WorkspaceService.instance;
+  }) : _service = service ?? WorkspaceService.instance {
+    _instance = this;
+  }
+
+  static WorkspaceProvider get instance => _instance!;
 
   List<Workspace> get workspaces => _service.workspaces;
   Workspace get activeWorkspace => _service.activeWorkspace;
