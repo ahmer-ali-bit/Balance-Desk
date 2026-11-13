@@ -7,7 +7,7 @@ import '../providers/customer_provider.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/customer_search_field.dart';
-import '../widgets/mobile_premium.dart';
+import '../widgets/mobile/mobile_premium.dart';
 import '../widgets/scale_down_width.dart';
 import '../widgets/timeline/timeline_cards.dart';
 import 'ledger_screen.dart';

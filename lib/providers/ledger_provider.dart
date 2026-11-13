@@ -34,12 +34,14 @@ class LedgerProvider extends ChangeNotifier {
        _useWeight = customer.useWeight,
        _database = database ?? AppDatabase.instance {
     _dbSub = _database.onDataChanged.listen((_) {
-      if (!_isDisposed) loadEntries();
+      _scheduleReload();
     });
   }
 
   List<Entry> _entries = <Entry>[];
   List<Entry> _visibleEntries = <Entry>[];
+  List<Entry>? _entriesView;
+  Timer? _reloadDebounce;
   SnapshotOpeningBalance _openingBalance = SnapshotOpeningBalance(
     debit: 0,
     credit: 0,
@@ -71,7 +73,8 @@ class LedgerProvider extends ChangeNotifier {
   String get customerPhone => _customerPhone;
   LedgerDateFilter get activeFilter => _activeFilter;
   DateTimeRange? get customRange => _customRange;
-  List<Entry> get entries => List<Entry>.unmodifiable(_visibleEntries);
+  List<Entry> get entries =>
+      _entriesView ??= List<Entry>.unmodifiable(_visibleEntries);
   SnapshotOpeningBalance get openingBalance => _openingBalance;
   bool get hasOpeningBalance => _openingBalance.hasValue;
   bool get isStockLedger => _isStockLedger;
@@ -130,6 +133,18 @@ class LedgerProvider extends ChangeNotifier {
     }
 
     return '$label (${_formatDate(range.start)} - ${_formatDate(range.end)})';
+  }
+
+  void _scheduleReload() {
+    if (_isDisposed) {
+      return;
+    }
+    _reloadDebounce?.cancel();
+    _reloadDebounce = Timer(const Duration(milliseconds: 150), () {
+      if (!_isDisposed) {
+        loadEntries();
+      }
+    });
   }
 
   Future<void> loadEntries() async {
@@ -646,9 +661,11 @@ class LedgerProvider extends ChangeNotifier {
   void _rebuildVisibleEntries() {
     if (!_openingBalance.hasValue) {
       _visibleEntries = List<Entry>.from(_entries, growable: false);
+      _entriesView = null;
       return;
     }
 
+    _entriesView = null;
     _visibleEntries = <Entry>[
       ..._entries,
       Entry(
@@ -683,6 +700,7 @@ class LedgerProvider extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _reloadDebounce?.cancel();
     _dbSub?.cancel();
     super.dispose();
   }

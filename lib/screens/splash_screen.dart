@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../services/company_profile_service.dart';
 import '../utils/platform_helper.dart';
-import '../widgets/mobile_premium.dart';
+import '../widgets/mobile/mobile_premium.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key, required this.child});
@@ -18,6 +18,8 @@ class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
   final CompanyProfileService _companyProfileService = CompanyProfileService();
   CompanyProfile _profile = const CompanyProfile(name: '', logoPath: null);
+  File? _logoFile;
+  bool _hasLogo = false;
 
   late AnimationController _mainController;
   late Animation<double> _scaleAnimation;
@@ -67,8 +69,15 @@ class _SplashScreenState extends State<SplashScreen>
     final profile = await _companyProfileService.loadProfile();
     if (!mounted) return;
 
+    final logoPath = profile.logoPath?.trim();
+    final logoFile =
+        logoPath == null || logoPath.isEmpty ? null : File(logoPath);
+    final hasLogo = logoFile != null && logoFile.existsSync();
+
     setState(() {
       _profile = profile;
+      _logoFile = logoFile;
+      _hasLogo = hasLogo;
     });
 
     await Future.delayed(const Duration(milliseconds: 3200));
@@ -100,11 +109,8 @@ class _SplashScreenState extends State<SplashScreen>
     final displayName = _profile.name.trim().isEmpty
         ? 'Balance Desk'
         : _profile.name.trim();
-    final logoFile =
-        _profile.logoPath == null || _profile.logoPath!.trim().isEmpty
-        ? null
-        : File(_profile.logoPath!);
-    final hasLogo = logoFile != null && logoFile.existsSync();
+    final logoFile = _logoFile;
+    final hasLogo = _hasLogo;
 
     if (!PlatformHelper.isDesktop) {
       return _buildPremiumMobileSplash(

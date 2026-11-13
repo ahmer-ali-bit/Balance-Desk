@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../common/amount_chip.dart';
-import '../mobile_premium.dart';
+import '../mobile/mobile_premium.dart';
 
 const double kMobileCardRadius = 20;
 

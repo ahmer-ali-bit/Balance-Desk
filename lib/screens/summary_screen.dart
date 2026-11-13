@@ -9,8 +9,7 @@ import '../services/pdf_service.dart';
 import '../utils/app_colors.dart';
 import '../utils/number_format_utils.dart';
 import '../utils/platform_helper.dart';
-import '../widgets/premium/premium_mobile.dart';
-import '../widgets/premium/premium_components.dart';
+import '../widgets/mobile/mobile_premium.dart';
 import '../widgets/customer_search_field.dart';
 import '../widgets/summary_stat_card.dart';
 import '../providers/customer_provider.dart';
@@ -507,11 +506,11 @@ class _SummaryScreenState extends State<SummaryScreen> {
     final overallBalance = _summaryData.finalBalance;
     final balanceColor = AppColors.balanceColor(overallBalance);
 
-    return PremiumPage(
+    return MobilePremiumPage(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          PremiumHeader(
+          MobilePremiumHeader(
             icon: Icons.analytics_rounded,
             title: 'Summary',
             subtitle: '${filteredCustomers.length} active customer totals',
@@ -523,20 +522,20 @@ class _SummaryScreenState extends State<SummaryScreen> {
                   )
                 : null,
             children: <Widget>[
-              PremiumMetricGrid(children: <Widget>[
-                PremiumMetricTile(
+              MobileMetricGrid(children: <Widget>[
+                MobileMetricTile(
                   label: 'Debit',
                   value: _formatAmount(_summaryData.overallDebit),
                   icon: Icons.south_west_rounded,
                   color: AppColors.debit,
                 ),
-                PremiumMetricTile(
+                MobileMetricTile(
                   label: 'Credit',
                   value: _formatAmount(_summaryData.overallCredit),
                   icon: Icons.north_east_rounded,
                   color: AppColors.credit,
                 ),
-                PremiumMetricTile(
+                MobileMetricTile(
                   label: 'Balance',
                   value: _formatBalance(overallBalance),
                   icon: Icons.account_balance_wallet_outlined,
@@ -548,17 +547,15 @@ class _SummaryScreenState extends State<SummaryScreen> {
           const SizedBox(height: 12),
           _buildPremiumMobileSummaryControls(context),
           const SizedBox(height: 16),
-            _buildPremiumMobileSummaryControls(context),
-const SizedBox(height: 16),
           if (_isLoading)
-            PremiumPanel(
+            MobilePremiumPanel(
               child: const SizedBox(
                 height: 180,
                 child: Center(child: CircularProgressIndicator()),
               ),
             )
           else if (_errorMessage != null)
-            PremiumPanel(
+            MobilePremiumPanel(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
@@ -574,18 +571,17 @@ const SizedBox(height: 16),
               ),
             )
           else ...<Widget>[
-            PremiumSectionHeader(
+            MobileSectionHeader(
               title: 'Customer Balances',
               count: '${filteredCustomers.length}',
             ),
             const SizedBox(height: 10),
             if (filteredCustomers.isEmpty)
-              PremiumPanel(child: _buildEmptyState(context))
+              MobilePremiumPanel(child: _buildEmptyState(context))
             else
               _buildPremiumMobileSummaryCards(context, filteredCustomers),
-            ],
           ],
-        ),
+        ],
       ),
     );
   }
@@ -593,7 +589,7 @@ const SizedBox(height: 16),
   Widget _buildPremiumMobileSummaryControls(BuildContext context) {
     final canExport = !_isLoading && _summaryData.customers.isNotEmpty;
 
-    return PremiumPanel(
+    return MobilePremiumPanel(
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -639,24 +635,24 @@ const SizedBox(height: 16),
     );
   }
 
-Widget _buildPremiumMobileSummaryCards(
-      BuildContext context,
-      List<_CustomerSummary> customers,
-    ) {
-      return ListView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: customers.length,
-        itemBuilder: (context, index) {
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: index == customers.length - 1 ? 12 : 10,
-            ),
-            child: _buildPremiumMobileSummaryCard(context, customers[index]),
-          );
-        },
-      );
-    }
+  Widget _buildPremiumMobileSummaryCards(
+    BuildContext context,
+    List<_CustomerSummary> customers,
+  ) {
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: customers.length,
+      itemBuilder: (context, index) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: index == customers.length - 1 ? 12 : 10,
+          ),
+          child: _buildPremiumMobileSummaryCard(context, customers[index]),
+        );
+      },
+    );
+  }
 
   Widget _buildPremiumMobileSummaryCard(
       BuildContext context,
@@ -666,7 +662,7 @@ Widget _buildPremiumMobileSummaryCards(
     final colorScheme = theme.colorScheme;
     final balanceColor = AppColors.balanceColor(item.balance);
 
-    return PremiumPanel(
+    return MobilePremiumPanel(
       onTap: () => _navigateToCustomerLedger(item.customer),
       padding: const EdgeInsets.all(14),
       accentColor: balanceColor,
@@ -715,7 +711,7 @@ Widget _buildPremiumMobileSummaryCards(
               Row(
                 children: <Widget>[
                   Expanded(
-                    child: PremiumMetricTile(
+                    child: MobileMetricTile(
                       label: item.customer.isStockLedger ? 'Buy' : 'Debit',
                       value: _formatAmount(item.totalDebit),
                       icon: Icons.south_west_rounded,
@@ -726,7 +722,7 @@ Widget _buildPremiumMobileSummaryCards(
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: PremiumMetricTile(
+                    child: MobileMetricTile(
                       label: item.customer.isStockLedger ? 'Sell' : 'Credit',
                       value: _formatAmount(item.totalCredit),
                       icon: Icons.north_east_rounded,
@@ -738,7 +734,7 @@ Widget _buildPremiumMobileSummaryCards(
                 ],
               ),
               const SizedBox(height: 8),
-              PremiumMetricTile(
+              MobileMetricTile(
                 label: 'Balance',
                 value: _formatBalance(item.balance),
                 icon: Icons.account_balance_wallet_outlined,

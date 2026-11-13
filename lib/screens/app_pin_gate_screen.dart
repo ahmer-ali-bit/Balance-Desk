@@ -5,7 +5,7 @@ import '../services/app_pin_service.dart';
 import '../services/biometric_auth_service.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/app_pin_dialogs.dart';
-import '../widgets/mobile_premium.dart';
+import '../widgets/mobile/mobile_premium.dart';
 
 class AppPinGateScreen extends StatefulWidget {
   const AppPinGateScreen({super.key, required this.child});

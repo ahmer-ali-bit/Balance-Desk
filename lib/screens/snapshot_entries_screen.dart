@@ -15,9 +15,7 @@ import '../services/pdf_service.dart';
 import '../utils/app_colors.dart';
 import '../utils/number_format_utils.dart';
 import '../utils/platform_helper.dart';
-import '../widgets/mobile_premium.dart';
-import '../widgets/premium/premium_mobile.dart';
-import '../widgets/premium/premium_components.dart';
+import '../widgets/mobile/mobile_premium.dart';
 import '../widgets/timeline/timeline_cards.dart';
 import 'ledger_screen.dart';
 
@@ -1097,7 +1095,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     return SingleChildScrollView(
       controller: _entryTableVerticalController,
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      child: PremiumPage(
+      child: MobilePremiumPage(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
@@ -1171,7 +1169,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
               _buildSearchBar(compact: true),
             ],
             const SizedBox(height: 16),
-            PremiumSectionHeader(
+            MobileSectionHeader(
               title: 'Timeline',
               count: '${_entries.length + _snapshots.length}',
             ),
@@ -1218,7 +1216,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       );
     }
 
-    return PremiumPanel(
+    return MobilePremiumPanel(
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

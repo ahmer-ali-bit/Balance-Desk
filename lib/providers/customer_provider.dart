@@ -13,30 +13,60 @@ class CustomerProvider extends ChangeNotifier {
     AppDatabase? database,
   }) : _database = database ?? AppDatabase.instance {
     _dbSub = _database.onDataChanged.listen((_) {
-      if (!_isDisposed) loadCustomers();
+      _scheduleReload();
     });
   }
 
   List<Customer> _customers = <Customer>[];
+  List<Customer>? _customersView;
+  List<Customer>? _filteredCache;
+  String _filteredCacheQuery = '';
+  int _customersVersion = 0;
+  int _filteredCacheVersion = -1;
+  Timer? _reloadDebounce;
   bool _isLoading = false;
   String? _errorMessage;
   String _searchQuery = '';
 
-  List<Customer> get customers => List<Customer>.unmodifiable(_customers);
+  List<Customer> get customers =>
+      _customersView ??= List<Customer>.unmodifiable(_customers);
   List<Customer> get filteredCustomers {
     final query = _searchQuery.trim().toLowerCase();
     if (query.isEmpty) {
       return customers;
     }
 
-    return _customers
+    final cached = _filteredCache;
+    if (cached != null &&
+        _filteredCacheQuery == query &&
+        _customersVersion == _filteredCacheVersion) {
+      return cached;
+    }
+
+    final filtered = _customers
         .where((Customer customer) => _matchesStartingLetters(customer, query))
         .toList(growable: false);
+    _filteredCache = filtered;
+    _filteredCacheQuery = query;
+    _filteredCacheVersion = _customersVersion;
+    return filtered;
   }
 
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   String get searchQuery => _searchQuery;
+
+  void _scheduleReload() {
+    if (_isDisposed) {
+      return;
+    }
+    _reloadDebounce?.cancel();
+    _reloadDebounce = Timer(const Duration(milliseconds: 150), () {
+      if (!_isDisposed) {
+        loadCustomers();
+      }
+    });
+  }
 
   Future<void> loadCustomers() async {
     _setLoading(true);
@@ -211,6 +241,9 @@ class CustomerProvider extends ChangeNotifier {
         return leftId.compareTo(rightId);
       });
     _customers = List<Customer>.unmodifiable(sortedCustomers);
+    _customersView = null;
+    _filteredCache = null;
+    _customersVersion++;
   }
 
   void _setLoading(bool value) {
@@ -231,6 +264,7 @@ class CustomerProvider extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _reloadDebounce?.cancel();
     _dbSub?.cancel();
     super.dispose();
   }
