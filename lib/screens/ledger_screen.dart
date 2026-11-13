@@ -2933,7 +2933,10 @@ class _LedgerViewState extends State<_LedgerView> {
 
         return LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
-            final isDesktop = PlatformHelper.isDesktop;
+            // Match the shell: below the desktop breakpoint the app
+            // shell renders the mobile layout, so the screen does too.
+            final isDesktop =
+                PlatformHelper.isDesktop && constraints.maxWidth >= 980;
             final isCompact = !isDesktop && constraints.maxWidth < 760;
             final useCardLayout = constraints.maxWidth < 1100;
             final hasFab = isCompact;

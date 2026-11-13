@@ -393,7 +393,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
           child: LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) {
               final isCompact = constraints.maxWidth < 720;
-              final isDesktop = PlatformHelper.isDesktop;
+              // Match the shell: below the desktop breakpoint the app
+              // shell renders the mobile layout, so the screen does too.
+              final isDesktop =
+                  PlatformHelper.isDesktop && constraints.maxWidth >= 980;
               final bottomPadding =
                   12.0 + MediaQuery.viewInsetsOf(context).bottom;
 
