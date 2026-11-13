@@ -628,7 +628,6 @@ class _AppShellScreenState extends State<AppShellScreen> {
     );
   }
 
-  /// Always returns true since linked devices feature is removed.
   bool _canEdit(BuildContext context) {
     return true;
   }

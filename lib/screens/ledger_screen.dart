@@ -111,7 +111,6 @@ class _LedgerViewState extends State<_LedgerView> {
     });
   }
 
-  /// Always returns true since linked devices feature is removed.
   bool _canEdit(BuildContext context, {bool listen = true}) {
     return true;
   }
@@ -3285,8 +3284,7 @@ class _LedgerViewState extends State<_LedgerView> {
         title: 'No ledger entries yet',
         message: canEdit
             ? 'Add the first debit or credit entry for this customer.'
-            : 'This device is linked in read-only mode, so entries can only be '
-                  'added from a device with edit access.',
+            : 'Entries can only be added from a device with edit access.',
         actionLabel: canEdit ? 'Add Entry' : null,
         onAction: canEdit ? _showAddEntryDialog : null,
       );

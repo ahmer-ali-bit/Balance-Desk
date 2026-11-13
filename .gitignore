@@ -44,5 +44,3 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# Firebase config (contains API keys)
-lib/core/config/firebase_config.dart

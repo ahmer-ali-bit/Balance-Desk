@@ -275,7 +275,7 @@ class _SplashScreenState extends State<SplashScreen>
                             ),
                             const SizedBox(height: 24),
                             Text(
-                              'SYNCHRONIZING...',
+                              'LOADING...',
                               style: theme.textTheme.labelMedium?.copyWith(
                                 color: colorScheme.onSurfaceVariant,
                                 fontWeight: FontWeight.w700,

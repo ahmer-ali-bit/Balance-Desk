@@ -37,9 +37,8 @@ target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib")
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 if(MSVC)
-  # Firebase's bundled Windows debug libraries can reference PDBs that are not
-  # shipped with the SDK. Ignore those linker warnings so debug builds don't
-  # flood the console or appear hung during link.
+  # Ignore missing-PDB linker warnings so debug builds don't flood the
+  # console or appear hung during link.
   target_link_options(${BINARY_NAME} PRIVATE "/ignore:4099")
 endif()
 

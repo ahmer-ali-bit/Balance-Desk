@@ -65,7 +65,6 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   SummarySnapshot? get _latestSnapshot =>
       _snapshots.isEmpty ? null : _snapshots.last;
 
-  /// Always returns true since linked devices feature is removed.
   bool _canEdit(BuildContext context, {bool listen = true}) {
     return true;
   }

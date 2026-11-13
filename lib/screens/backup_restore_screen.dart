@@ -20,10 +20,6 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
 
   bool _canEdit = true;
 
-  bool _readCanEdit(BuildContext context) {
-    return true;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -212,7 +208,6 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    _canEdit = _readCanEdit(context);
 
     if (Platform.isAndroid || Platform.isIOS) {
       return _buildPremiumMobileBackupScreen(theme, cs);
