@@ -214,7 +214,7 @@ class _SplashScreenState extends State<SplashScreen>
                                     ? Padding(
                                         padding: const EdgeInsets.all(24),
                                         child: Image.file(
-                                          logoFile,
+                                          logoFile!,
                                           fit: BoxFit.contain,
                                         ),
                                       )
