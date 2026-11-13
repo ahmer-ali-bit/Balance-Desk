@@ -533,82 +533,86 @@ class _SummaryScreenState extends State<SummaryScreen> {
     final overallBalance = _summaryData.finalBalance;
     final balanceColor = AppColors.balanceColor(overallBalance);
 
-    return MobilePremiumPage(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          MobilePremiumHeader(
-            icon: Icons.analytics_rounded,
-            title: 'Summary',
-            subtitle: '${filteredCustomers.length} active customer totals',
-            trailing: _isLoading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2.2),
-                  )
-                : null,
-            children: <Widget>[
-              MobileMetricGrid(children: <Widget>[
-                MobileMetricTile(
-                  label: 'Debit',
-                  value: _formatAmount(_summaryData.overallDebit),
-                  icon: Icons.south_west_rounded,
-                  color: AppColors.debit,
-                ),
-                MobileMetricTile(
-                  label: 'Credit',
-                  value: _formatAmount(_summaryData.overallCredit),
-                  icon: Icons.north_east_rounded,
-                  color: AppColors.credit,
-                ),
-                MobileMetricTile(
-                  label: 'Balance',
-                  value: _formatBalance(overallBalance),
-                  icon: Icons.account_balance_wallet_outlined,
-                  color: balanceColor,
-                ),
-              ]),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildPremiumMobileSummaryControls(context),
-          const SizedBox(height: 16),
-          if (_isLoading)
-            MobilePremiumPanel(
-              child: const SizedBox(
-                height: 180,
-                child: Center(child: CircularProgressIndicator()),
-              ),
-            )
-          else if (_errorMessage != null)
-            MobilePremiumPanel(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  const Icon(Icons.error_outline_rounded, size: 40),
-                  const SizedBox(height: 10),
-                  Text(_errorMessage!, textAlign: TextAlign.center),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: _loadSummary,
-                    child: const Text('Retry'),
+    return SingleChildScrollView(
+      controller: _tableVerticalController,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      child: MobilePremiumPage(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            MobilePremiumHeader(
+              icon: Icons.analytics_rounded,
+              title: 'Summary',
+              subtitle: '${filteredCustomers.length} active customer totals',
+              trailing: _isLoading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2.2),
+                    )
+                  : null,
+              children: <Widget>[
+                MobileMetricGrid(children: <Widget>[
+                  MobileMetricTile(
+                    label: 'Debit',
+                    value: _formatAmount(_summaryData.overallDebit),
+                    icon: Icons.south_west_rounded,
+                    color: AppColors.debit,
                   ),
-                ],
-              ),
-            )
-          else ...<Widget>[
-            MobileSectionHeader(
-              title: 'Customer Balances',
-              count: '${filteredCustomers.length}',
+                  MobileMetricTile(
+                    label: 'Credit',
+                    value: _formatAmount(_summaryData.overallCredit),
+                    icon: Icons.north_east_rounded,
+                    color: AppColors.credit,
+                  ),
+                  MobileMetricTile(
+                    label: 'Balance',
+                    value: _formatBalance(overallBalance),
+                    icon: Icons.account_balance_wallet_outlined,
+                    color: balanceColor,
+                  ),
+                ]),
+              ],
             ),
-            const SizedBox(height: 10),
-            if (filteredCustomers.isEmpty)
-              MobilePremiumPanel(child: _buildEmptyState(context))
-            else
-              _buildPremiumMobileSummaryCards(context, filteredCustomers),
+            const SizedBox(height: 12),
+            _buildPremiumMobileSummaryControls(context),
+            const SizedBox(height: 16),
+            if (_isLoading)
+              MobilePremiumPanel(
+                child: const SizedBox(
+                  height: 180,
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              )
+            else if (_errorMessage != null)
+              MobilePremiumPanel(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    const Icon(Icons.error_outline_rounded, size: 40),
+                    const SizedBox(height: 10),
+                    Text(_errorMessage!, textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: _loadSummary,
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              )
+            else ...<Widget>[
+              MobileSectionHeader(
+                title: 'Customer Balances',
+                count: '${filteredCustomers.length}',
+              ),
+              const SizedBox(height: 10),
+              if (filteredCustomers.isEmpty)
+                MobilePremiumPanel(child: _buildEmptyState(context))
+              else
+                _buildPremiumMobileSummaryCards(context, filteredCustomers),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

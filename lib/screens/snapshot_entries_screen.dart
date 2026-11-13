@@ -1653,66 +1653,58 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       required IconData icon,
       required Color accent,
     }) {
-      return Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Icon(icon, size: 11, color: accent),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5,
-                      fontSize: 8.5,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                value,
-                style: const TextStyle(
-                  fontFamily: 'IBM Plex Mono',
-                  fontSize: 15.5,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.2,
-                ).copyWith(color: colorScheme.onSurface),
+      return Row(
+        children: <Widget>[
+          Icon(icon, size: 15, color: accent),
+          const SizedBox(width: 9),
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.5,
+                fontSize: 9,
               ),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 3,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: const TextStyle(
+                    fontFamily: 'IBM Plex Mono',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.2,
+                  ).copyWith(color: colorScheme.onSurface),
+                ),
+              ),
+            ),
+          ),
+        ],
       );
     }
-
-    Widget divider() => Container(
-          width: 1,
-          height: 40,
-          color: colorScheme.outlineVariant,
-        );
 
     return MobilePremiumPanel(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Row(
             children: <Widget>[
-              Icon(
-                Icons.summarize_rounded,
-                size: 13,
-                color: colorScheme.primary,
-              ),
+              Icon(Icons.summarize_rounded, size: 14, color: colorScheme.primary),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -1725,47 +1717,44 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                   ),
                 ),
               ),
-              Text(
-                'ALL ENTRIES · INCL. OPENING',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.6,
-                  fontSize: 7.5,
+              Flexible(
+                child: Text(
+                  'ALL ENTRIES · INCL. OPENING',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.4,
+                    fontSize: 7.5,
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: <Widget>[
-              metric(
-                label: 'TOTAL DEBIT',
-                value: _formatAmount(_totalDebit),
-                icon: Icons.arrow_downward_rounded,
-                accent: AppColors.debit,
-              ),
-              divider(),
-              const SizedBox(width: 10),
-              metric(
-                label: 'TOTAL CREDIT',
-                value: _formatAmount(_totalCredit),
-                icon: Icons.arrow_upward_rounded,
-                accent: AppColors.credit,
-              ),
-              const SizedBox(width: 10),
-              divider(),
-              const SizedBox(width: 10),
-              metric(
-                label: 'TOTAL BALANCE',
-                value: _formatBalance(balance),
-                icon: balance >= 0
-                    ? Icons.arrow_downward_rounded
-                    : Icons.arrow_upward_rounded,
-                accent: balanceAccent,
-              ),
-            ],
+          const SizedBox(height: 10),
+          metric(
+            label: 'TOTAL DEBIT',
+            value: _formatAmount(_totalDebit),
+            icon: Icons.arrow_downward_rounded,
+            accent: AppColors.debit,
+          ),
+          Divider(height: 14, color: colorScheme.outlineVariant),
+          metric(
+            label: 'TOTAL CREDIT',
+            value: _formatAmount(_totalCredit),
+            icon: Icons.arrow_upward_rounded,
+            accent: AppColors.credit,
+          ),
+          Divider(height: 14, color: colorScheme.outlineVariant),
+          metric(
+            label: 'TOTAL BALANCE',
+            value: _formatBalance(balance),
+            icon: balance >= 0
+                ? Icons.arrow_downward_rounded
+                : Icons.arrow_upward_rounded,
+            accent: balanceAccent,
           ),
         ],
       ),
