@@ -7,10 +7,12 @@ class CustomerListTile extends StatelessWidget {
     super.key,
     required this.customer,
     required this.onDelete,
+    this.ledgerPageNo = '-',
   });
 
   final Customer customer;
   final VoidCallback onDelete;
+  final String ledgerPageNo;
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +44,9 @@ class CustomerListTile extends StatelessWidget {
             fontWeight: FontWeight.w800,
           ),
         ),
-        subtitle: Text('Customer ID: ${customer.id ?? '-'}'),
+        subtitle: Text(
+          'Ledger Page: ${ledgerPageNo.trim().isEmpty ? '-' : ledgerPageNo.trim()}',
+        ),
         trailing: IconButton(
           tooltip: 'Delete customer',
           onPressed: onDelete,

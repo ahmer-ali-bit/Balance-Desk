@@ -191,64 +191,16 @@ class _AppShellScreenState extends State<AppShellScreen> {
   }
 
   Widget _buildDesktopHeader(_ShellDestination destination) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
     final activeYear = context.watch<LedgerYearProvider>().activeYear;
     final workspaceName = context
         .watch<WorkspaceProvider>()
         .activeWorkspace
         .name;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: <Widget>[
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Text(
-                  destination.description.toUpperCase(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.labelSmall?.copyWith(
-                    color: colorScheme.tertiary,
-                    letterSpacing: 1.5,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 9.5,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  destination.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.displayMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.8,
-                    height: 1.05,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          ShellChip(
-            icon: Icons.calendar_month_outlined,
-            label: 'FY $activeYear',
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: ShellChip(
-              icon: Icons.workspaces_outlined,
-              label: workspaceName,
-              color: colorScheme.tertiary,
-            ),
-          ),
-        ],
-      ),
+    return ShellPageHeader(
+      eyebrow: destination.description,
+      title: destination.label,
+      subtitle: 'FY $activeYear  ·  $workspaceName',
     );
   }
 
@@ -296,117 +248,35 @@ class _AppShellScreenState extends State<AppShellScreen> {
             ),
           ),
         ),
-        appBar: AppBar(
-          toolbarHeight: 62,
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          leadingWidth: 56,
-          leading: Builder(
-            builder: (BuildContext headerContext) {
-              return Padding(
-                padding: const EdgeInsets.only(left: 10),
-                child: Material(
-                  color: colorScheme.surface,
-                  borderRadius: BorderRadius.circular(11),
-                  child: InkWell(
-                    onTap: () => Scaffold.of(headerContext).openDrawer(),
-                    borderRadius: BorderRadius.circular(11),
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(11),
-                        border: Border.all(color: colorScheme.outlineVariant),
-                      ),
-                      child: Icon(
-                        Icons.menu_rounded,
-                        size: 19,
-                        color: colorScheme.onSurface,
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-          titleSpacing: 2,
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Text(
-                _companyName.toUpperCase(),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontFamily: 'Lato',
-                  color: colorScheme.primary,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.3,
-                  fontSize: 9,
+        body: Column(
+          children: <Widget>[
+            SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                child: Builder(
+                  builder: (BuildContext headerContext) {
+                    return ShellMobileHeader(
+                      onMenu: () => Scaffold.of(headerContext).openDrawer(),
+                      companyName: _companyName,
+                      title: destination.label,
+                      icon: destination.selectedIcon,
+                      avatar: _buildCompanyLogo(),
+                    );
+                  },
                 ),
               ),
-              Text(
-                destination.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontFamily: 'Lato',
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -0.4,
-                  fontSize: 19,
-                  height: 1.15,
-                ),
-              ),
-            ],
-          ),
-          actions: <Widget>[
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: colorScheme.surface,
-                  borderRadius: BorderRadius.circular(11),
-                  border: Border.all(color: colorScheme.outlineVariant),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: _buildCompanyLogo() ??
-                    Icon(destination.selectedIcon,
-                        color: colorScheme.primary, size: 19),
-              ),
+            ),
+            Divider(height: 1, color: colorScheme.outlineVariant),
+            Expanded(
+              child: content,
             ),
           ],
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(1),
-            child: Divider(height: 1, color: colorScheme.outlineVariant),
-          ),
         ),
-        body: SafeArea(
-          top: false,
-          child: content,
-        ),
-        bottomNavigationBar: Container(
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(color: colorScheme.outlineVariant),
-            ),
-          ),
-          child: NavigationBar(
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: _selectIndex,
-            destinations: <NavigationDestination>[
-              for (final _ShellDestination d in _destinations)
-                NavigationDestination(
-                  icon: Icon(d.icon),
-                  selectedIcon: Icon(d.selectedIcon),
-                  label: d.label,
-                ),
-            ],
-          ),
+        bottomNavigationBar: ShellMobileDock(
+          entries: _shellNavEntries,
+          selectedIndex: _selectedIndex,
+          onSelected: _selectIndex,
         ),
       ),
     );

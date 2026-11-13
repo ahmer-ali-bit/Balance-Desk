@@ -1172,3 +1172,323 @@ class _RailScrollViewState extends State<_RailScrollView> {
     );
   }
 }
+
+/// Masthead header for the content canvas — brass eyebrow, Lato Black page
+/// title, muted subtitle, optional leading icon tile and trailing actions.
+class ShellPageHeader extends StatelessWidget {
+  const ShellPageHeader({
+    super.key,
+    required this.eyebrow,
+    required this.title,
+    required this.subtitle,
+    this.icon,
+    this.trailing,
+  });
+
+  final String eyebrow;
+  final String title;
+  final String subtitle;
+  final IconData? icon;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 2, 4, 0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: <Widget>[
+          if (icon != null) ...<Widget>[
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: colorScheme.primary.withValues(alpha: 0.22),
+                ),
+              ),
+              child: Icon(icon, size: 21, color: colorScheme.primary),
+            ),
+            const SizedBox(width: 12),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  eyebrow.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: colorScheme.tertiary,
+                    letterSpacing: 1.6,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 9.5,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.displayMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.8,
+                    height: 1.05,
+                  ),
+                ),
+                if (subtitle.trim().isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (trailing != null) ...<Widget>[
+            const SizedBox(width: 12),
+            trailing!,
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact top bar used by the mobile/tablet layout.
+class ShellMobileHeader extends StatelessWidget {
+  const ShellMobileHeader({
+    super.key,
+    required this.onMenu,
+    required this.companyName,
+    required this.title,
+    required this.icon,
+    this.avatar,
+  });
+
+  final VoidCallback onMenu;
+  final String companyName;
+  final String title;
+  final IconData icon;
+  final Widget? avatar;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Row(
+      children: <Widget>[
+        Semantics(
+          button: true,
+          label: 'Open menu',
+          child: Material(
+            color: colorScheme.surface,
+            borderRadius: BorderRadius.circular(11),
+            child: InkWell(
+              onTap: onMenu,
+              borderRadius: BorderRadius.circular(11),
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(11),
+                  border: Border.all(color: colorScheme.outlineVariant),
+                ),
+                child: Icon(
+                  Icons.menu_rounded,
+                  size: 19,
+                  color: colorScheme.onSurface,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(
+                companyName.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: colorScheme.primary,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.3,
+                  fontSize: 9,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: colorScheme.primaryContainer,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: colorScheme.primary.withValues(alpha: 0.2),
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: avatar ?? Icon(icon, color: colorScheme.primary, size: 20),
+        ),
+      ],
+    );
+  }
+}
+
+/// Floating bottom navigation used on phones — ivory pill, emerald selection.
+class ShellMobileDock extends StatelessWidget {
+  const ShellMobileDock({
+    super.key,
+    required this.entries,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
+
+  final List<ShellNavEntry> entries;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isLight = colorScheme.brightness == Brightness.light;
+
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: colorScheme.outlineVariant),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: isLight
+                  ? const Color(0xFF182420).withValues(alpha: 0.14)
+                  : Colors.black.withValues(alpha: 0.45),
+              blurRadius: 26,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(5),
+          child: Row(
+            children: <Widget>[
+              for (var i = 0; i < entries.length; i++) ...<Widget>[
+                Expanded(
+                  child: _ShellDockItem(
+                    entry: entries[i],
+                    selected: i == selectedIndex,
+                    onTap: () => onSelected(i),
+                  ),
+                ),
+                if (i != entries.length - 1) const SizedBox(width: 4),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ShellDockItem extends StatelessWidget {
+  const _ShellDockItem({
+    required this.entry,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final ShellNavEntry entry;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final accent = selected ? colorScheme.primary : colorScheme.onSurfaceVariant;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(15),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          decoration: BoxDecoration(
+            color: selected ? colorScheme.primaryContainer : Colors.transparent,
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(
+              color: selected
+                  ? colorScheme.primary.withValues(alpha: 0.28)
+                  : Colors.transparent,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              AnimatedScale(
+                duration: const Duration(milliseconds: 180),
+                scale: selected ? 1.08 : 1,
+                curve: Curves.easeOutCubic,
+                child: Icon(
+                  selected ? entry.selectedIcon : entry.icon,
+                  size: 20,
+                  color: accent,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                entry.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: accent,
+                  fontSize: 10,
+                  letterSpacing: 0.2,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../database/app_database.dart';
 import '../models/customer.dart';
 import '../providers/customer_provider.dart';
 import '../utils/platform_helper.dart';
@@ -23,6 +24,41 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode searchFocusNode = FocusNode();
   final ScrollController _tableVerticalController = ScrollController();
+  final AppDatabase _database = AppDatabase.instance;
+  Map<int, String> _pageNoByCustomer = <int, String>{};
+
+  Future<void> _loadPageNos() async {
+    try {
+      final rows = await _database.getCustomerEntryTotalsSince();
+      final map = <int, String>{};
+      for (final row in rows) {
+        final id = row['customerId'] as int?;
+        if (id == null) {
+          continue;
+        }
+        final pageNo = (row['latestPageNo'] as String?)?.trim() ?? '';
+        if (pageNo.isNotEmpty) {
+          map[id] = pageNo;
+        }
+      }
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _pageNoByCustomer = map;
+      });
+    } catch (_) {
+      // Keep whatever was loaded before; the list stays usable without it.
+    }
+  }
+
+  String _pageNoFor(Customer customer) {
+    final id = customer.id;
+    if (id == null) {
+      return '';
+    }
+    return _pageNoByCustomer[id] ?? '';
+  }
 
   @override
   void initState() {
@@ -36,6 +72,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       if (provider.customers.isEmpty && !provider.isLoading) {
         provider.loadCustomers();
       }
+      _loadPageNos();
     });
   }
 
@@ -111,6 +148,10 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
         ),
       ),
     );
+    if (!mounted) {
+      return;
+    }
+    _loadPageNos();
   }
 
   Future<void> _confirmDelete(Customer customer) async {
@@ -145,6 +186,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     if (!mounted) {
       return;
     }
+    _loadPageNos();
 
     final message = context.read<CustomerProvider>().errorMessage;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -187,6 +229,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                   } else if (intent.action == _CustomerShortcut.refresh) {
                     if (!provider.isLoading) {
                       provider.loadCustomers();
+                      _loadPageNos();
                     }
                   }
                   return null;
@@ -298,7 +341,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       controller: _tableVerticalController,
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       child: MobilePremiumPage(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 112),
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
@@ -326,7 +369,10 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                         child: OutlinedButton.icon(
                           onPressed: provider.isLoading
                               ? null
-                              : provider.loadCustomers,
+                              : () async {
+                                  await provider.loadCustomers();
+                                  await _loadPageNos();
+                                },
                           icon: const Icon(Icons.refresh_rounded),
                           label: const Text('Refresh'),
                         ),
@@ -383,7 +429,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
           ),
           child: MobilePremiumCustomerCard(
             name: customer.name,
-            id: customer.id?.toString() ?? '-',
+            ledgerPageNo: _pageNoFor(customer),
             isStockLedger: customer.isStockLedger,
             onTap: () => _openLedger(customer),
             onDelete: () => _confirmDelete(customer),
@@ -444,7 +490,12 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       runSpacing: 10,
       children: <Widget>[
         OutlinedButton.icon(
-          onPressed: provider.isLoading ? null : provider.loadCustomers,
+          onPressed: provider.isLoading
+              ? null
+              : () async {
+                  await provider.loadCustomers();
+                  await _loadPageNos();
+                },
           icon: const Icon(Icons.refresh_rounded),
           label: const Text('Refresh'),
         ),
@@ -622,7 +673,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                             child: Text('Customer'),
                           ),
                         ),
-                        const DataColumn(label: Text('Customer ID')),
+                        const DataColumn(label: Text('Ledger Page')),
                         const DataColumn(label: Text('Open Ledger')),
                         DataColumn(
                           label: Padding(
@@ -721,7 +772,9 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                             ),
                             DataCell(
                               Text(
-                                '${customer.id ?? '-'}',
+                                _pageNoFor(customer).isEmpty
+                                    ? '-'
+                                    : _pageNoFor(customer),
                                 style: const TextStyle(
                                   fontFamily: 'IBM Plex Mono',
                                   fontSize: 12,
@@ -782,7 +835,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
 
         return CustomerCompactCard(
           name: customer.name,
-          id: customer.id?.toString() ?? '-',
+          ledgerPageNo: _pageNoFor(customer),
           onTap: () => _openLedger(customer),
           onDelete: () => _confirmDelete(customer),
           canEdit: _canEdit(context),

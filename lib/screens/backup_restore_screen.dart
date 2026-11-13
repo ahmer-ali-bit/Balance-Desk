@@ -18,7 +18,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
   List<FileInfo> _backups = [];
   bool _isLoading = true;
 
-  bool _canEdit = true;
+  final bool _canEdit = true;
 
   @override
   void initState() {

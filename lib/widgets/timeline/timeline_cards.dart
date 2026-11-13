@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../common/amount_chip.dart';
 import '../mobile/mobile_premium.dart';
+import '../../utils/number_format_utils.dart';
 
 const double kMobileCardRadius = 20;
 
@@ -10,7 +11,7 @@ class MobilePremiumCustomerCard extends StatelessWidget {
   const MobilePremiumCustomerCard({
     super.key,
     required this.name,
-    required this.id,
+    required this.ledgerPageNo,
     required this.isStockLedger,
     required this.onTap,
     required this.onDelete,
@@ -18,7 +19,7 @@ class MobilePremiumCustomerCard extends StatelessWidget {
   });
 
   final String name;
-  final String id;
+  final String ledgerPageNo;
   final bool isStockLedger;
   final VoidCallback onTap;
   final VoidCallback? onDelete;
@@ -73,14 +74,20 @@ class MobilePremiumCustomerCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: <Widget>[
+                        Icon(
+                          Icons.menu_book_outlined,
+                          size: 12,
+                          color: colorScheme.tertiary,
+                        ),
+                        const SizedBox(width: 5),
                         Text(
-                          'ID  $id',
+                          'Pg  ${ledgerPageNo.trim().isEmpty ? '-' : ledgerPageNo.trim()}',
                           style: const TextStyle(
                             fontFamily: 'IBM Plex Mono',
                             fontSize: 10.5,
                             fontWeight: FontWeight.w500,
                             letterSpacing: 0.3,
-                          ).copyWith(color: colorScheme.onSurfaceVariant),
+                          ).copyWith(color: colorScheme.tertiary),
                         ),
                         if (isStockLedger) ...[
                           const SizedBox(width: 8),
@@ -239,14 +246,14 @@ class CustomerCompactCard extends StatelessWidget {
   const CustomerCompactCard({
     super.key,
     required this.name,
-    required this.id,
+    required this.ledgerPageNo,
     required this.onTap,
     required this.onDelete,
     required this.canEdit,
   });
 
   final String name;
-  final String id;
+  final String ledgerPageNo;
   final VoidCallback onTap;
   final VoidCallback? onDelete;
   final bool canEdit;
@@ -293,7 +300,7 @@ class CustomerCompactCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Customer ID: $id',
+                  'Ledger Page: ${ledgerPageNo.trim().isEmpty ? '-' : ledgerPageNo.trim()}',
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),
@@ -442,7 +449,7 @@ class MobilePremiumSummaryCard extends StatelessWidget {
   final bool isStockLedger;
   final VoidCallback onTap;
 
-  String _amount(double v) => v == 0 ? '-' : v.toStringAsFixed(2);
+  String _amount(double v) => v == 0 ? '-' : formatAmount(v);
 
   @override
   Widget build(BuildContext context) {
@@ -547,7 +554,7 @@ class PremiumTimelineEntryCard extends StatelessWidget {
   final VoidCallback? onRemove;
   final bool canEdit;
 
-  String _amount(double v) => v == 0 ? '-' : v.toStringAsFixed(2);
+  String _amount(double v) => v == 0 ? '-' : formatAmount(v);
 
   @override
   Widget build(BuildContext context) {
@@ -667,11 +674,14 @@ class PremiumSnapshotCard extends StatelessWidget {
   final VoidCallback? onEditPageNo;
   final VoidCallback? onDelete;
 
-  String _amount(double v) => v == 0 ? '-' : v.toStringAsFixed(2);
+  String _amount(double v) => v == 0 ? '-' : formatAmount(v);
 
   String _balanceText(double v) {
-    final formatted = v.toStringAsFixed(2);
-    return v > 0 ? '+$formatted' : (v < 0 ? formatted : '0');
+    if (v == 0) {
+      return '0';
+    }
+    final formatted = formatAmount(v.abs());
+    return v > 0 ? '+$formatted' : '-$formatted';
   }
 
   @override
@@ -785,11 +795,14 @@ class PremiumBalanceCard extends StatelessWidget {
   final double balance;
   final Color balanceColor;
 
-  String _amount(double v) => v == 0 ? '-' : v.toStringAsFixed(2);
+  String _amount(double v) => v == 0 ? '-' : formatAmount(v);
 
   String _balanceText(double v) {
-    final formatted = v.toStringAsFixed(2);
-    return v > 0 ? '+$formatted' : (v < 0 ? formatted : '0');
+    if (v == 0) {
+      return '0';
+    }
+    final formatted = formatAmount(v.abs());
+    return v > 0 ? '+$formatted' : '-$formatted';
   }
 
   @override

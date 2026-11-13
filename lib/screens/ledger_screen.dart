@@ -716,7 +716,6 @@ class _LedgerViewState extends State<_LedgerView> {
 
       rows.add(<String>[
         _formatStoredDate(entry.entryDate),
-        _formatStoredDate(entry.createdAt),
         entry.pageNo.isEmpty ? '-' : entry.pageNo,
         entry.displayDescription,
         provider.formatAmount(debit),
@@ -737,7 +736,6 @@ class _LedgerViewState extends State<_LedgerView> {
         fileName: fileName,
         headers: const <String>[
           'Entry Date',
-          'Created Date',
           'Page No',
           'Description',
           'Debit',
@@ -2359,8 +2357,8 @@ class _LedgerViewState extends State<_LedgerView> {
                     final bagsCard = provider.isStockLedger
                         ? _buildHeroBalanceCard(
                             context,
-                            value: provider.finalRemainingBags.toStringAsFixed(
-                              0,
+                            value: provider.formatBags(
+                              provider.finalRemainingBags,
                             ),
                             accentColor: colorScheme.primary,
                             label: 'Remaining',
@@ -3353,12 +3351,6 @@ class _LedgerViewState extends State<_LedgerView> {
                         const DataColumn(
                           label: FittedBox(
                             fit: BoxFit.scaleDown,
-                            child: Text('Created Date'),
-                          ),
-                        ),
-                        const DataColumn(
-                          label: FittedBox(
-                            fit: BoxFit.scaleDown,
                             child: Text('Page No'),
                           ),
                         ),
@@ -3421,12 +3413,6 @@ class _LedgerViewState extends State<_LedgerView> {
                           label: FittedBox(
                             fit: BoxFit.scaleDown,
                             child: Text('Entry Date'),
-                          ),
-                        ),
-                        DataColumn(
-                          label: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('Created Date'),
                           ),
                         ),
                         DataColumn(
@@ -3605,12 +3591,6 @@ class _LedgerViewState extends State<_LedgerView> {
                   label: _formatStoredDate(entry.entryDate),
                   accentColor: accentColor,
                   highlight: isOpeningBalanceEntry,
-                ),
-                _buildEntryMetaChip(
-                  context,
-                  icon: Icons.schedule_outlined,
-                  label: _formatStoredDate(entry.createdAt),
-                  accentColor: accentColor,
                 ),
                 if (entry.pageNo.trim().isNotEmpty ||
                     entry.dailyLogPageNo.trim().isNotEmpty)
@@ -4307,7 +4287,6 @@ class _LedgerViewState extends State<_LedgerView> {
 
       final List<DataCell> cells = <DataCell>[
         DataCell(Text(_formatStoredDate(entry.entryDate), style: rowStyle)),
-        DataCell(Text(_formatStoredDate(entry.createdAt), style: rowStyle)),
         DataCell(
           Text(
             isOpeningBalanceEntry

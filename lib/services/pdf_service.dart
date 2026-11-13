@@ -24,7 +24,6 @@ class PdfService {
   static const List<String> _ledgerHeaders = <String>[
     'Sr #',
     'Entry Date',
-    'Created Date',
     'Page No',
     'Description',
     'Debit',
@@ -59,10 +58,10 @@ class PdfService {
   static const Map<int, pw.Alignment> _ledgerCellAlignments =
       <int, pw.Alignment>{
         0: pw.Alignment.center,
-        3: pw.Alignment.center,
+        2: pw.Alignment.center,
+        4: pw.Alignment.centerRight,
         5: pw.Alignment.centerRight,
         6: pw.Alignment.centerRight,
-        7: pw.Alignment.centerRight,
       };
 
   static const Map<int, pw.Alignment> _stockLedgerCellAlignments =
@@ -81,12 +80,11 @@ class PdfService {
       <int, pw.TableColumnWidth>{
         0: const pw.FlexColumnWidth(0.5),
         1: const pw.FlexColumnWidth(1.35),
-        2: const pw.FlexColumnWidth(1.35),
-        3: const pw.FlexColumnWidth(0.9),
-        4: const pw.FlexColumnWidth(2.5),
+        2: const pw.FlexColumnWidth(0.9),
+        3: const pw.FlexColumnWidth(2.5),
+        4: const pw.FlexColumnWidth(1.0),
         5: const pw.FlexColumnWidth(1.0),
-        6: const pw.FlexColumnWidth(1.0),
-        7: const pw.FlexColumnWidth(1.35),
+        6: const pw.FlexColumnWidth(1.35),
       };
 
   static final Map<int, pw.TableColumnWidth> _stockLedgerColumnWidths =
@@ -1154,7 +1152,6 @@ List<List<String>> _buildLedgerRows(
       rows.add(<String>[
         srNo.toString(),
         _formatDate(entry.entryDate),
-        _formatDate(entry.createdAt),
         isFirstEntry ? '-' : (entry.pageNo.isEmpty ? '-' : entry.pageNo),
         isFirstEntry ? 'Opening Balance' : _formatDescription(entry, useWeight: useWeight),
         _formatAmount(entry.debit),
