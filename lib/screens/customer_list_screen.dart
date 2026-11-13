@@ -481,11 +481,43 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     BuildContext context, {
     required int count,
   }) {
-    return Text(
-      'Directory ($count)',
-      style: Theme.of(
-        context,
-      ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Row(
+      children: <Widget>[
+        Container(
+          width: 3.5,
+          height: 16,
+          decoration: BoxDecoration(
+            color: colorScheme.primary,
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          'DIRECTORY',
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.6,
+                color: colorScheme.onSurfaceVariant,
+              ),
+        ),
+        const SizedBox(width: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+          decoration: BoxDecoration(
+            color: colorScheme.primaryContainer,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            '$count',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: colorScheme.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -575,11 +607,11 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                       horizontalMargin: isCompactTable ? 0 : 12,
                       columnSpacing: isCompactTable ? 10 : 18,
                       showCheckboxColumn: false,
-                      headingRowHeight: 56,
-                      dataRowMinHeight: 54,
-                      dataRowMaxHeight: 60,
+                      headingRowHeight: 46,
+                      dataRowMinHeight: 48,
+                      dataRowMaxHeight: 54,
                       headingRowColor: WidgetStatePropertyAll<Color?>(
-                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                        Theme.of(context).colorScheme.surfaceContainerLow,
                       ),
                       columns: <DataColumn>[
                         DataColumn(
@@ -615,12 +647,28 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                                 width: isCompactTable ? 250 : 280,
                                 child: Row(
                                   children: <Widget>[
-                                    CircleAvatar(
-                                      radius: isCompactTable ? 16 : 18,
+                                    Container(
+                                      width: isCompactTable ? 34 : 38,
+                                      height: isCompactTable ? 34 : 38,
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primaryContainer,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      alignment: Alignment.center,
                                       child: Text(
                                         customer.name.isEmpty
                                             ? '?'
                                             : customer.name[0].toUpperCase(),
+                                        style: TextStyle(
+                                          fontFamily: 'Lato',
+                                          fontSize: isCompactTable ? 14 : 15,
+                                          fontWeight: FontWeight.w900,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onPrimaryContainer,
+                                        ),
                                       ),
                                     ),
                                     SizedBox(width: isCompactTable ? 10 : 12),
@@ -671,7 +719,16 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                                 ),
                               ),
                             ),
-                            DataCell(Text('${customer.id ?? '-'}')),
+                            DataCell(
+                              Text(
+                                '${customer.id ?? '-'}',
+                                style: const TextStyle(
+                                  fontFamily: 'IBM Plex Mono',
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
                             DataCell(
                               TextButton.icon(
                                 onPressed: () => _openLedger(customer),
@@ -684,7 +741,12 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                                   ? IconButton(
                                       tooltip: 'Delete customer',
                                       onPressed: () => _confirmDelete(customer),
-                                      icon: const Icon(Icons.delete_outline),
+                                      icon: Icon(
+                                        Icons.delete_outline,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                      ),
                                     )
                                   : const SizedBox.shrink(),
                             ),

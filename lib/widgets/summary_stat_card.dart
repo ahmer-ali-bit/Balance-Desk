@@ -18,7 +18,13 @@ class SummaryStatCard extends StatelessWidget {
   final bool stretch;
   final bool compact;
   final double? height;
+
+  /// Accent hue for metric cards (debit/credit/balance semantics). Tints the
+  /// icon tile and border; the figure itself stays ink-colored for contrast.
   final Color? backgroundColor;
+
+  /// Legacy override for text color. Prefer leaving null so the card picks
+  /// theme-readable colors on its own tinted surface.
   final Color? labelColor;
   final IconData? icon;
 
@@ -26,16 +32,20 @@ class SummaryStatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isLight = colorScheme.brightness == Brightness.light;
+
     final labelStyle = compact
-        ? theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)
-        : theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600);
-    final valueStyle = compact
-        ? theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)
-        : theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700);
+        ? theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700)
+        : theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800);
     final resolvedHeight = height ?? (compact ? 56 : 76);
 
-    final isMetric = backgroundColor != null;
-    final borderRadius = BorderRadius.circular(compact ? 12 : 16);
+    final accent = backgroundColor;
+    final isMetric = accent != null;
+    final borderRadius = BorderRadius.circular(compact ? 12 : 14);
+
+    final effectiveLabelColor = labelColor ??
+        (isMetric ? accent.withValues(alpha: 1) : colorScheme.onSurfaceVariant);
+    final effectiveValueColor = labelColor ?? colorScheme.onSurface;
 
     return SizedBox(
       width: stretch
@@ -55,14 +65,22 @@ class SummaryStatCard extends StatelessWidget {
           ),
           decoration: BoxDecoration(
             color: isMetric
-                ? backgroundColor!.withValues(alpha: 0.12)
-                : colorScheme.surfaceContainer,
+                ? accent.withValues(alpha: isLight ? 0.085 : 0.14)
+                : colorScheme.surface,
             borderRadius: borderRadius,
-            border: isMetric
-                ? Border.all(
-                    color: backgroundColor!.withValues(alpha: 0.2),
-                    width: 1,
-                  )
+            border: Border.all(
+              color: isMetric
+                  ? accent.withValues(alpha: isLight ? 0.22 : 0.3)
+                  : colorScheme.outlineVariant,
+            ),
+            boxShadow: isLight
+                ? <BoxShadow>[
+                    BoxShadow(
+                      color: const Color(0xFF182420).withValues(alpha: 0.035),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
                 : null,
           ),
           child: Row(
@@ -73,15 +91,14 @@ class SummaryStatCard extends StatelessWidget {
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: isMetric
-                        ? Colors.white.withValues(alpha: 0.15)
-                        : colorScheme.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(10),
+                        ? accent.withValues(alpha: isLight ? 0.14 : 0.2)
+                        : colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(9),
                   ),
                   child: Icon(
                     icon,
-                    size: compact ? 16 : 20,
-                    color: labelColor ??
-                        (isMetric ? Colors.white : colorScheme.primary),
+                    size: compact ? 15 : 18,
+                    color: isMetric ? accent : colorScheme.primary,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -90,7 +107,7 @@ class SummaryStatCard extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
+                  children: <Widget>[
                     SizedBox(
                       width: double.infinity,
                       child: FittedBox(
@@ -99,17 +116,17 @@ class SummaryStatCard extends StatelessWidget {
                         child: Text(
                           label.toUpperCase(),
                           style: labelStyle?.copyWith(
-                            letterSpacing: 0.5,
-                            fontSize: compact ? 9 : 10,
-                            color: labelColor ??
-                                (isMetric
-                                    ? Colors.white.withValues(alpha: 0.7)
-                                    : colorScheme.onSurfaceVariant),
+                            letterSpacing: 0.9,
+                            fontSize: compact ? 9 : 9.5,
+                            fontWeight: FontWeight.w800,
+                            color: effectiveLabelColor.withValues(
+                              alpha: labelColor != null ? 1 : 0.85,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                    SizedBox(height: height != null ? 1 : (compact ? 2 : 4)),
+                    SizedBox(height: height != null ? 2 : (compact ? 2 : 4)),
                     SizedBox(
                       width: double.infinity,
                       child: FittedBox(
@@ -117,10 +134,13 @@ class SummaryStatCard extends StatelessWidget {
                         alignment: Alignment.centerLeft,
                         child: Text(
                           value,
-                          style: valueStyle?.copyWith(
-                            fontSize: compact ? 14 : 16,
-                            color: labelColor ??
-                                (isMetric ? Colors.white : null),
+                          style: const TextStyle(
+                            fontFamily: 'IBM Plex Mono',
+                            letterSpacing: -0.3,
+                          ).copyWith(
+                            color: effectiveValueColor,
+                            fontWeight: FontWeight.w600,
+                            fontSize: compact ? 14 : 16.5,
                           ),
                         ),
                       ),

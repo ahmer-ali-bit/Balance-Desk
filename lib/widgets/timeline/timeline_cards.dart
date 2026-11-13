@@ -38,29 +38,21 @@ class MobilePremiumCustomerCard extends StatelessWidget {
           Row(
             children: <Widget>[
               Container(
-                width: 50,
-                height: 50,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: <Color>[
-                      colorScheme.primary.withValues(alpha: 0.16),
-                      colorScheme.secondary.withValues(alpha: 0.10),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(14),
+                  color: colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(13),
                   border: Border.all(
-                    color: colorScheme.primary.withValues(alpha: 0.22),
+                    color: colorScheme.primary.withValues(alpha: 0.18),
                   ),
                 ),
-                child: Center(
-                  child: Text(
-                    name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase(),
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: colorScheme.primary,
-                      fontWeight: FontWeight.w900,
-                    ),
+                alignment: Alignment.center,
+                child: Text(
+                  name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase(),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: colorScheme.onPrimaryContainer,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
               ),
@@ -82,11 +74,13 @@ class MobilePremiumCustomerCard extends StatelessWidget {
                     Row(
                       children: <Widget>[
                         Text(
-                          'ID: $id',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          'ID  $id',
+                          style: const TextStyle(
+                            fontFamily: 'IBM Plex Mono',
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0.3,
+                          ).copyWith(color: colorScheme.onSurfaceVariant),
                         ),
                         if (isStockLedger) ...[
                           const SizedBox(width: 8),
@@ -131,22 +125,31 @@ class MobilePremiumCustomerCard extends StatelessWidget {
               ),
             ],
           ),
-          const Divider(height: 20),
-          const SizedBox(height: 6),
+          Divider(height: 1, color: colorScheme.outlineVariant),
+          const SizedBox(height: 8),
           Row(
-            mainAxisAlignment: MainAxisAlignment.end,
             children: <Widget>[
-              const SizedBox(width: 8),
-              IconButton(
-                tooltip: 'Open ledger',
+              const Spacer(),
+              TextButton.icon(
                 onPressed: onTap,
-                icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+                icon: const Icon(Icons.menu_book_outlined, size: 16),
+                label: const Text('Open Ledger'),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                ),
               ),
               if (canEdit)
                 IconButton(
                   tooltip: 'Delete customer',
                   onPressed: onDelete,
-                  icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                  icon: Icon(
+                    Icons.delete_outline_rounded,
+                    size: 18,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                 ),
             ],
           ),

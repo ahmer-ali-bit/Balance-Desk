@@ -87,8 +87,11 @@ class AmountChip extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             value,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w700,
+            style: const TextStyle(
+              fontFamily: 'IBM Plex Mono',
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.2,
+            ).copyWith(
               color: primaryColor,
               fontSize: compact ? 12 : 13,
             ),

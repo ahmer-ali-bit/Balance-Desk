@@ -2430,11 +2430,11 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 dataTextStyle: dataTextStyle,
                 horizontalMargin: 12,
                 columnSpacing: 16,
-                headingRowHeight: 56,
-                dataRowMinHeight: 52,
-                dataRowMaxHeight: 64,
+                headingRowHeight: 44,
+                dataRowMinHeight: 46,
+                dataRowMaxHeight: 54,
                 headingRowColor: WidgetStatePropertyAll(
-                  Theme.of(context).colorScheme.surfaceContainerHighest,
+                  Theme.of(context).colorScheme.surfaceContainerLow,
                 ),
                 columns: const <DataColumn>[
                   DataColumn(label: Text('Customer')),

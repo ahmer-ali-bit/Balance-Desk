@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import 'app_root.dart';
 import 'database/app_database.dart';
+import 'providers/theme_provider.dart';
 import 'services/workspace_service.dart';
 import 'screens/app_pin_gate_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/app_shell_screen.dart';
 import 'theme/balance_desk_theme.dart';
-import 'utils/platform_helper.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,22 +24,29 @@ class ShopDesktopApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDesktop = PlatformHelper.isDesktop;
+    return const AppRoot(
+      child: _ThemedMaterialApp(),
+    );
+  }
+}
 
-    return AppRoot(
-      child: MaterialApp(
-        title: 'Balance Desk',
-        debugShowCheckedModeBanner: false,
-        theme: isDesktop
-            ? BalanceDeskTheme.desktopTheme()
-            : BalanceDeskTheme.lightTheme(),
-        darkTheme: isDesktop
-            ? BalanceDeskTheme.desktopTheme()
-            : BalanceDeskTheme.darkTheme(),
-        themeMode: isDesktop ? ThemeMode.light : ThemeMode.system,
-        home: const SplashScreen(
-          child: AppPinGateScreen(child: AppShellScreen()),
-        ),
+/// MaterialApp lives *inside* [AppRoot] so it can follow the user's saved
+/// [ThemeProvider] selection instead of forcing a platform default.
+class _ThemedMaterialApp extends StatelessWidget {
+  const _ThemedMaterialApp();
+
+  @override
+  Widget build(BuildContext context) {
+    final themeMode = context.watch<ThemeProvider>().themeMode;
+
+    return MaterialApp(
+      title: 'Balance Desk',
+      debugShowCheckedModeBanner: false,
+      theme: BalanceDeskTheme.lightTheme(),
+      darkTheme: BalanceDeskTheme.darkTheme(),
+      themeMode: themeMode,
+      home: const SplashScreen(
+        child: AppPinGateScreen(child: AppShellScreen()),
       ),
     );
   }

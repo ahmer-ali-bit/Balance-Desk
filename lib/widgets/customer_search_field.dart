@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+/// Professional search field — white surface, hairline border, emerald focus.
 class CustomerSearchField extends StatelessWidget {
   const CustomerSearchField({
     super.key,
@@ -22,57 +23,44 @@ class CustomerSearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(16),
+    return TextField(
+      controller: controller,
+      focusNode: focusNode,
+      onChanged: onChanged,
+      textInputAction: TextInputAction.search,
+      scrollPadding: const EdgeInsets.only(bottom: 140),
+      style: theme.textTheme.bodyLarge?.copyWith(
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.1,
       ),
-      child: TextField(
-        controller: controller,
-        focusNode: focusNode,
-        onChanged: onChanged,
-        textInputAction: TextInputAction.search,
-        scrollPadding: const EdgeInsets.only(bottom: 140),
-        decoration: InputDecoration(
-          hintText: hintText,
-          hintStyle: TextStyle(
-            color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-          ),
-          prefixIcon: Icon(
-            Icons.search_rounded,
-            size: 22,
-            color: colorScheme.onSurfaceVariant,
-          ),
-          suffixIcon: controller.text.isEmpty
-              ? null
-              : IconButton(
-                  tooltip: 'Clear search',
-                  onPressed: onClear,
-                  icon: Icon(
-                    Icons.close_rounded,
-                    size: 20,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+      decoration: InputDecoration(
+        hintText: hintText,
+        hintStyle: TextStyle(
+          color: colorScheme.onSurfaceVariant.withValues(alpha: 0.75),
+          fontWeight: FontWeight.w500,
+        ),
+        prefixIcon: Icon(
+          Icons.search_rounded,
+          size: 20,
+          color: colorScheme.onSurfaceVariant,
+        ),
+        suffixIcon: controller.text.isEmpty
+            ? null
+            : IconButton(
+                tooltip: 'Clear search',
+                onPressed: onClear,
+                icon: Icon(
+                  Icons.close_rounded,
+                  size: 18,
+                  color: colorScheme.onSurfaceVariant,
                 ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          filled: false,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 12,
-          ),
+              ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 13,
         ),
       ),
     );

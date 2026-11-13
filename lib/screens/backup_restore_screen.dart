@@ -470,17 +470,17 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                     ),
                   )
                 else
-                  Column(
-                    children: <Widget>[
-                      for (var index = 0; index < _backups.length; index++) ...[
-                        if (index != 0) const SizedBox(height: 10),
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _backups.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
+                    itemBuilder: (BuildContext context, int index) =>
                         _buildPremiumMobileBackupFile(
-                          theme,
-                          cs,
-                          _backups[index],
-                        ),
-                      ],
-                    ],
+                      theme,
+                      cs,
+                      _backups[index],
+                    ),
                   ),
               ],
             ),
@@ -504,10 +504,11 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: cs.primary.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(kMobilePremiumRadius),
+              color: cs.primaryContainer,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
             ),
-            child: Icon(Icons.description_rounded, color: cs.primary),
+            child: Icon(Icons.description_rounded, color: cs.primary, size: 21),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -519,10 +520,11 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     file.name,
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
-                      fontFamily: 'RobotoMono',
-                    ),
+                    style: const TextStyle(
+                      fontFamily: 'IBM Plex Mono',
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                    ).copyWith(color: cs.onSurface),
                   ),
                 ),
                 const SizedBox(height: 4),

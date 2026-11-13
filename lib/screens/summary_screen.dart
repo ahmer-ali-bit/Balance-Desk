@@ -978,7 +978,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 height: 56,
                 icon: Icons.arrow_downward_rounded,
                 backgroundColor: AppColors.debit,
-                labelColor: Colors.white,
               ),
             ),
             SizedBox(
@@ -990,7 +989,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 height: 56,
                 icon: Icons.arrow_upward_rounded,
                 backgroundColor: AppColors.credit,
-                labelColor: Colors.white,
               ),
             ),
             SizedBox(
@@ -1012,7 +1010,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
                               AppColors.credit
                           ? AppColors.credit
                           : Colors.grey.shade600),
-                labelColor: Colors.white,
               ),
             ),
           ],

@@ -3294,9 +3294,14 @@ class _LedgerViewState extends State<_LedgerView> {
       return _buildCompactLedgerEntries(context, provider);
     }
 
-    final dataTextStyle = Theme.of(
-      context,
-    ).textTheme.bodyMedium?.copyWith(fontSize: 14, fontWeight: FontWeight.w600);
+    final dataTextStyle = const TextStyle(
+      fontFamily: 'IBM Plex Mono',
+      fontSize: 12.5,
+      fontWeight: FontWeight.w500,
+      letterSpacing: -0.2,
+    ).copyWith(
+      color: Theme.of(context).colorScheme.onSurface,
+    );
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
@@ -3331,11 +3336,11 @@ class _LedgerViewState extends State<_LedgerView> {
                 dataTextStyle: dataTextStyle,
                 horizontalMargin: horizontalMargin,
                 columnSpacing: columnSpacing,
-                headingRowHeight: 54,
-                dataRowMinHeight: 50,
-                dataRowMaxHeight: 56,
+                headingRowHeight: 44,
+                dataRowMinHeight: 46,
+                dataRowMaxHeight: 50,
                 headingRowColor: WidgetStatePropertyAll(
-                  Theme.of(context).colorScheme.surfaceContainerHighest,
+                  Theme.of(context).colorScheme.surfaceContainerLow,
                 ),
                 columns: provider.isStockLedger
                     ? <DataColumn>[

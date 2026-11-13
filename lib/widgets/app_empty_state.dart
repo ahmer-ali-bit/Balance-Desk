@@ -33,17 +33,17 @@ class AppEmptyState extends StatelessWidget {
                 width: 72,
                 height: 72,
                 decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHigh,
+                  color: colorScheme.primaryContainer,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: colorScheme.outline.withValues(alpha: 0.2),
+                    color: colorScheme.primary.withValues(alpha: 0.22),
                   ),
                 ),
                 child: Center(
                   child: Icon(
                     icon,
                     size: 32,
-                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                    color: colorScheme.primary,
                   ),
                 ),
               ),
