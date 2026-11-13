@@ -4,12 +4,10 @@ import 'package:provider/provider.dart';
 
 import '../models/customer.dart';
 import '../providers/customer_provider.dart';
-import '../providers/linked_workspace_provider.dart';
-import '../screens/linked_device_management_screen.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/customer_search_field.dart';
-import '../widgets/premium/premium_mobile.dart';
+import '../widgets/mobile_premium.dart';
 import '../widgets/scale_down_width.dart';
 import '../widgets/timeline/timeline_cards.dart';
 import 'ledger_screen.dart';
@@ -283,12 +281,12 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     );
   }
 
+  /// Always returns true since linked devices feature is removed.
   bool _canEdit(BuildContext context, {bool listen = true}) {
-    final provider = context.read<LinkedWorkspaceProvider>();
-    return provider.isAdmin;
+    return true;
   }
 
-Widget _buildPremiumMobileCustomerLayout({
+  Widget _buildPremiumMobileCustomerLayout({
     required BuildContext context,
     required CustomerProvider provider,
     required List<Customer> customers,
@@ -297,34 +295,66 @@ Widget _buildPremiumMobileCustomerLayout({
     final state = _buildCustomerState(provider: provider, customers: customers);
     final isLoading = provider.isLoading;
 
-    return PremiumPage(
-      child: SingleChildScrollView(
+    return SingleChildScrollView(
+      controller: _tableVerticalController,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      child: MobilePremiumPage(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 112),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            PremiumHeader(
+            MobilePremiumHeader(
               icon: Icons.people_alt_outlined,
               title: 'Customers',
               subtitle: '${provider.customers.length} account${provider.customers.length == 1 ? '' : 's'}',
-              trailing: isLoading
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2.2),
-                    )
-                  : null,
-              children: <Widget>[
-                _buildCustomerToolbar(context: context, provider: provider, isCompact: false),
-              ],
+              trailing: isLoading ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2.2),
+              ) : null,
+            ),
+            const SizedBox(height: 14),
+            MobilePremiumPanel(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  _buildSearchField(provider),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: provider.isLoading
+                              ? null
+                              : provider.loadCustomers,
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: const Text('Refresh'),
+                        ),
+                      ),
+                      if (canEdit) ...[
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: _showAddCustomerDialog,
+                            icon: const Icon(Icons.person_add_alt_1_rounded),
+                            label: const Text('Add Customer'),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 16),
-            PremiumSectionHeader(
+            MobileSectionHeader(
               title: 'Directory',
               count: '${provider.customers.length}',
             ),
             const SizedBox(height: 10),
             if (state != null)
-              PremiumPanel(child: state)
+              MobilePremiumPanel(child: state)
             else
               _buildPremiumMobileCustomerCards(
                 context: context,
@@ -425,7 +455,6 @@ Widget _buildPremiumMobileCustomerLayout({
             icon: const Icon(Icons.person_add_alt_1_rounded),
             label: const Text('Add Customer'),
           ),
-        _LinkedDevicesButton(),
       ],
     );
 
@@ -788,29 +817,4 @@ class _CustomerIntent extends Intent {
 class _ScrollIntent extends Intent {
   const _ScrollIntent(this.delta);
   final double delta;
-}
-
-class _LinkedDevicesButton extends StatelessWidget {
-  const _LinkedDevicesButton();
-
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<LinkedWorkspaceProvider>(
-      builder: (context, provider, child) {
-        if (!provider.isLinked) return const SizedBox.shrink();
-        
-        return TextButton.icon(
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => const LinkedDeviceManagementScreen(),
-              ),
-            );
-          },
-          icon: const Icon(Icons.link_rounded),
-          label: const Text('Linked Devices'),
-        );
-      },
-    );
-  }
 }

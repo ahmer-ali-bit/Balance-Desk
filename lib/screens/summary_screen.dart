@@ -10,6 +10,7 @@ import '../utils/app_colors.dart';
 import '../utils/number_format_utils.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/premium/premium_mobile.dart';
+import '../widgets/premium/premium_components.dart';
 import '../widgets/customer_search_field.dart';
 import '../widgets/summary_stat_card.dart';
 import '../providers/customer_provider.dart';
@@ -547,6 +548,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
           const SizedBox(height: 12),
           _buildPremiumMobileSummaryControls(context),
           const SizedBox(height: 16),
+            _buildPremiumMobileSummaryControls(context),
+const SizedBox(height: 16),
           if (_isLoading)
             PremiumPanel(
               child: const SizedBox(
@@ -583,6 +586,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
             ],
           ],
         ),
+      ),
     );
   }
 
@@ -665,7 +669,7 @@ Widget _buildPremiumMobileSummaryCards(
     return PremiumPanel(
       onTap: () => _navigateToCustomerLedger(item.customer),
       padding: const EdgeInsets.all(14),
-      accent: balanceColor,
+      accentColor: balanceColor,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[

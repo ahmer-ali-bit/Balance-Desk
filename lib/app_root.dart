@@ -3,9 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'providers/customer_provider.dart';
 import 'providers/ledger_year_provider.dart';
-import 'providers/linked_workspace_provider.dart';
 import 'providers/workspace_provider.dart';
-
 class AppRoot extends StatelessWidget {
   const AppRoot({super.key, required this.child});
 
@@ -26,10 +24,7 @@ class AppRoot extends StatelessWidget {
           create: (_) =>
               CustomerProvider()..loadCustomers(),
         ),
-        ChangeNotifierProvider(
-          create: (context) => LinkedWorkspaceProvider()
-            ..initialize(),
-        ),
+
       ],
       child: child,
     );
