@@ -340,10 +340,25 @@ class _LinkedDevicesScreenState extends State<LinkedDevicesScreen> {
     final colors = Theme.of(context).colorScheme;
     final hasError = provider.error != null;
     final color = hasError ? colors.error : colors.primary;
-    final detail = provider.lastSyncAt == null
-        ? (provider.error ?? 'This workspace remains local until you choose to share or join.')
-        : 'Last synced ${TimeOfDay.fromDateTime(provider.lastSyncAt!).format(context)}'
-            '${provider.lastChangeCount > 0 ? ' · ${provider.lastChangeCount} updates applied' : ''}';
+    final lastSync = provider.lastSyncAt;
+    final lastSyncLabel = lastSync == null
+        ? null
+        : TimeOfDay.fromDateTime(lastSync).format(context);
+    final lastSuccessDetail = lastSyncLabel == null
+        ? ''
+        : ' Last successful sync: $lastSyncLabel.';
+    final detail = hasError
+        ? provider.conflictCount > 0
+            ? '${provider.error} Other records continue syncing.$lastSuccessDetail'
+            : provider.isLinked
+                ? '${provider.error}$lastSuccessDetail Will retry automatically.'
+                : provider.error!
+        : lastSyncLabel == null
+            ? provider.isLinked
+                ? 'Automatic sync is on. Cloud changes are checked about every 15 seconds.'
+                : 'This workspace remains local until you choose to share or join.'
+            : 'Last synced $lastSyncLabel'
+                '${provider.lastChangeCount > 0 ? ' · ${provider.lastChangeCount} updates applied' : ''} · checking for cloud changes every 15 seconds';
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(

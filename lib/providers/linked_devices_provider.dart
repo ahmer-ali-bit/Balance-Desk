@@ -30,6 +30,9 @@ class LinkedDevicesProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool _isSyncing = false;
   bool _isBusy = false;
   bool _isConfigLoading = true;
+  bool _syncRequestedWhileBusy = false;
+  bool _lastSyncFailed = false;
+  int _consecutiveSyncFailures = 0;
   String _activeLocalWorkspaceId = 'default';
   LinkedWorkspaceConfig? _config;
   String? _error;
@@ -55,9 +58,12 @@ class LinkedDevicesProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   String get syncLabel {
     if (_isSyncing) return 'Syncing changes…';
-    if (_error != null) return 'Sync paused';
+    if (_error != null) {
+      if (_conflictCount > 0) return 'Conflict needs review';
+      return _config == null ? 'Sync stopped' : 'Retrying automatically';
+    }
     if (_config?.isReadOnly ?? false) return 'Read-only device';
-    if (_config != null) return 'Connected · local-first sync';
+    if (_config != null) return 'Auto-sync on · local-first';
     return 'This workspace is only on this device';
   }
 
@@ -65,13 +71,18 @@ class LinkedDevicesProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_initialized) return;
     WidgetsBinding.instance.addObserver(this);
     _databaseSubscription = AppDatabase.instance.onDataChanged.listen((_) {
-      if (_config != null && !_isSyncing) _scheduleSync();
-    });
-    _periodicTimer = Timer.periodic(const Duration(seconds: 8), (_) {
-      if (_config != null) unawaited(syncNow(silent: true));
+      if (_config == null) return;
+      if (_isSyncing) {
+        _syncRequestedWhileBusy = true;
+      } else {
+        _scheduleSync();
+      }
     });
     await _refreshConfig();
     _initialized = true;
+    if (_config != null) {
+      _scheduleNextSync(const Duration(seconds: 1));
+    }
     _notify();
   }
 
@@ -87,15 +98,25 @@ class LinkedDevicesProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> setActiveWorkspace(String workspaceId) async {
+    _periodicTimer?.cancel();
+    _debounceTimer?.cancel();
     if (_activeLocalWorkspaceId == workspaceId && _initialized) {
       // A device may rejoin a workspace whose local database is still active.
       // Refresh config instead of assuming the previous link is still valid.
       await _refreshConfig();
       _notify();
+      if (_config != null) {
+        unawaited(syncNow(silent: true));
+      }
       return;
     }
     _activeLocalWorkspaceId = workspaceId;
     _error = null;
+    _lastSyncAt = null;
+    _lastChangeCount = 0;
+    _lastSyncFailed = false;
+    _consecutiveSyncFailures = 0;
+    _syncRequestedWhileBusy = false;
     _devices = const <Map<String, Object?>>[];
     _invite = null;
     await _refreshConfig();
@@ -246,6 +267,10 @@ class LinkedDevicesProvider extends ChangeNotifier with WidgetsBindingObserver {
     _setBusy(true);
     try {
       await _service.stopSharing(config);
+      _periodicTimer?.cancel();
+      _periodicTimer = null;
+      _debounceTimer?.cancel();
+      _debounceTimer = null;
       _config = null;
       _devices = const <Map<String, Object?>>[];
       _invite = null;
@@ -265,6 +290,10 @@ class LinkedDevicesProvider extends ChangeNotifier with WidgetsBindingObserver {
     _setBusy(true);
     try {
       await _service.disconnect(config);
+      _periodicTimer?.cancel();
+      _periodicTimer = null;
+      _debounceTimer?.cancel();
+      _debounceTimer = null;
       _config = null;
       _devices = const <Map<String, Object?>>[];
       _error = null;
@@ -280,7 +309,13 @@ class LinkedDevicesProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> syncNow({bool silent = false}) async {
     final config = _config;
     if (config == null || _isSyncing) return;
+    _periodicTimer?.cancel();
+    _periodicTimer = null;
+    _debounceTimer?.cancel();
+    _debounceTimer = null;
+    _syncRequestedWhileBusy = false;
     _isSyncing = true;
+    _lastSyncFailed = false;
     _error = null;
     _notify();
     try {
@@ -314,10 +349,13 @@ class LinkedDevicesProvider extends ChangeNotifier with WidgetsBindingObserver {
       _lastSyncAt = DateTime.now();
       _lastChangeCount = result.changedRecords;
       _conflictCount = result.conflictCount;
+      _consecutiveSyncFailures = 0;
       if (_conflictCount > 0) {
         _error = 'Some records changed on two devices. Review the conflicts below.';
       }
     } catch (error) {
+      _lastSyncFailed = true;
+      _consecutiveSyncFailures++;
       _error = _friendlyError(error);
       final message = error.toString();
       if (message.contains('device_revoked_or_invalid') ||
@@ -332,6 +370,15 @@ class LinkedDevicesProvider extends ChangeNotifier with WidgetsBindingObserver {
     } finally {
       _isSyncing = false;
       _notify();
+      if (_config == null) {
+        _periodicTimer?.cancel();
+        _periodicTimer = null;
+      } else if (_syncRequestedWhileBusy) {
+        _syncRequestedWhileBusy = false;
+        _scheduleSync();
+      } else {
+        _scheduleNextSync(_nextSyncDelay);
+      }
     }
   }
 
@@ -357,9 +404,33 @@ class LinkedDevicesProvider extends ChangeNotifier with WidgetsBindingObserver {
     return db.query('sync_conflicts', orderBy: 'detectedAt');
   }
 
+  Duration get _nextSyncDelay {
+    if (!_lastSyncFailed) return const Duration(seconds: 15);
+    final retrySeconds = switch (_consecutiveSyncFailures) {
+      <= 1 => 8,
+      2 => 16,
+      3 => 32,
+      _ => 60,
+    };
+    return Duration(seconds: retrySeconds);
+  }
+
+  void _scheduleNextSync([Duration? delay]) {
+    _periodicTimer?.cancel();
+    _periodicTimer = null;
+    if (_config == null || _isDisposed) return;
+    _periodicTimer = Timer(delay ?? _nextSyncDelay, () {
+      _periodicTimer = null;
+      unawaited(syncNow(silent: true));
+    });
+  }
+
   void _scheduleSync() {
+    _periodicTimer?.cancel();
+    _periodicTimer = null;
     _debounceTimer?.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 900), () {
+      _debounceTimer = null;
       unawaited(syncNow(silent: true));
     });
   }
