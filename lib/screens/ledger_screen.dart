@@ -1208,6 +1208,61 @@ class _LedgerViewState extends State<_LedgerView> {
     }
   }
 
+  Future<void> _showLedgerOverflowMenu(LedgerProvider provider) async {
+    final canEdit = _canEdit(context, listen: false);
+    final canExport = _canExport(context, listen: false);
+    final hasEntries = provider.entries.isNotEmpty;
+    final actions = <({
+      _LedgerAppBarAction action,
+      IconData icon,
+      String label,
+    })>[
+      if (canExport && hasEntries)
+        (
+          action: _LedgerAppBarAction.export,
+          icon: Icons.file_download_outlined,
+          label: 'Export',
+        ),
+      if (canExport && hasEntries)
+        (
+          action: _LedgerAppBarAction.print,
+          icon: Icons.print_outlined,
+          label: 'Print',
+        ),
+      if (canEdit)
+        (
+          action: _LedgerAppBarAction.editCustomer,
+          icon: Icons.edit_outlined,
+          label: 'Edit Customer',
+        ),
+      (
+        action: _LedgerAppBarAction.filterAndBalance,
+        icon: Icons.tune_rounded,
+        label: 'Filters',
+      ),
+    ];
+
+    final action = await showModalBottomSheet<_LedgerAppBarAction>(
+      context: context,
+      useSafeArea: true,
+      builder: (BuildContext sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            for (final item in actions)
+              ListTile(
+                leading: Icon(item.icon),
+                title: Text(item.label),
+                onTap: () => Navigator.of(sheetContext).pop(item.action),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    await _handleAppBarAction(action, provider: provider);
+  }
+
   List<Widget> _buildAppBarActions({
     required BuildContext context,
     required LedgerProvider provider,
@@ -1216,52 +1271,22 @@ class _LedgerViewState extends State<_LedgerView> {
     final hasEntries = provider.entries.isNotEmpty;
     final canEdit = _canEdit(context);
     final canExport = _canExport(context);
+    if (isCompact) {
+      return <Widget>[
+        IconButton(
+          tooltip: 'Refresh ledger',
+          onPressed: provider.isLoading ? null : provider.loadEntries,
+          icon: const Icon(Icons.refresh_rounded),
+        ),
+        IconButton(
+          tooltip: 'More actions',
+          onPressed: () => unawaited(_showLedgerOverflowMenu(provider)),
+          icon: const Icon(Icons.more_horiz_rounded),
+        ),
+        const SizedBox(width: 4),
+      ];
+    }
     if (!canEdit) {
-      if (isCompact) {
-        return <Widget>[
-          IconButton(
-            tooltip: 'Refresh ledger',
-            onPressed: provider.isLoading ? null : provider.loadEntries,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-          PopupMenuButton<_LedgerAppBarAction>(
-            tooltip: 'More actions',
-            onSelected: (_LedgerAppBarAction action) {
-              unawaited(_handleAppBarAction(action, provider: provider));
-            },
-            itemBuilder: (BuildContext context) =>
-                <PopupMenuEntry<_LedgerAppBarAction>>[
-                  if (canExport && hasEntries)
-                    PopupMenuItem<_LedgerAppBarAction>(
-                      value: _LedgerAppBarAction.export,
-                      child: _buildAppBarMenuItem(
-                        context,
-                        icon: Icons.file_download_outlined,
-                        label: 'Export',
-                      ),
-                    ),
-                  if (canExport && hasEntries)
-                    PopupMenuItem<_LedgerAppBarAction>(
-                      value: _LedgerAppBarAction.print,
-                      child: _buildAppBarMenuItem(
-                        context,
-                        icon: Icons.print_outlined,
-                        label: 'Print',
-                      ),
-                    ),
-                  PopupMenuItem<_LedgerAppBarAction>(
-                    value: _LedgerAppBarAction.filterAndBalance,
-                    child: _buildAppBarMenuItem(
-                      context,
-                      icon: Icons.tune_rounded,
-                      label: 'Filters',
-                    ),
-                  ),
-                ],
-          ),
-          const SizedBox(width: 4),
-        ];
-      }
       if (!canExport || !hasEntries) return const <Widget>[];
       return <Widget>[
         OutlinedButton.icon(
@@ -1276,62 +1301,6 @@ class _LedgerViewState extends State<_LedgerView> {
         ),
       ];
     }
-    if (isCompact) {
-      return <Widget>[
-        IconButton(
-          tooltip: 'Refresh ledger',
-          onPressed: provider.isLoading ? null : provider.loadEntries,
-          icon: const Icon(Icons.refresh_rounded),
-        ),
-        PopupMenuButton<_LedgerAppBarAction>(
-          tooltip: 'More actions',
-          onSelected: (_LedgerAppBarAction action) {
-            unawaited(_handleAppBarAction(action, provider: provider));
-          },
-          itemBuilder: (BuildContext context) =>
-              <PopupMenuEntry<_LedgerAppBarAction>>[
-                PopupMenuItem<_LedgerAppBarAction>(
-                  value: _LedgerAppBarAction.export,
-                  enabled: hasEntries,
-                  child: _buildAppBarMenuItem(
-                    context,
-                    icon: Icons.file_download_outlined,
-                    label: 'Export',
-                  ),
-                ),
-                if (canExport)
-                  PopupMenuItem<_LedgerAppBarAction>(
-                    value: _LedgerAppBarAction.print,
-                    enabled: hasEntries,
-                  child: _buildAppBarMenuItem(
-                    context,
-                    icon: Icons.print_outlined,
-                    label: 'Print',
-                  ),
-                ),
-                if (_canEdit(context))
-                  PopupMenuItem<_LedgerAppBarAction>(
-                    value: _LedgerAppBarAction.editCustomer,
-                    child: _buildAppBarMenuItem(
-                      context,
-                      icon: Icons.edit_outlined,
-                      label: 'Edit Customer',
-                    ),
-                  ),
-                PopupMenuItem<_LedgerAppBarAction>(
-                  value: _LedgerAppBarAction.filterAndBalance,
-                  child: _buildAppBarMenuItem(
-                    context,
-                    icon: Icons.tune_rounded,
-                    label: 'Menu',
-                  ),
-                ),
-              ],
-        ),
-        const SizedBox(width: 4),
-      ];
-    }
-
     final maxWidth = math.min(MediaQuery.sizeOf(context).width * 0.72, 540.0);
 
     return <Widget>[
@@ -1382,20 +1351,6 @@ class _LedgerViewState extends State<_LedgerView> {
         ),
       ),
     ];
-  }
-
-  Widget _buildAppBarMenuItem(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-  }) {
-    return Row(
-      children: <Widget>[
-        Icon(icon, size: 18),
-        const SizedBox(width: 12),
-        Text(label, style: Theme.of(context).textTheme.bodyMedium),
-      ],
-    );
   }
 
   Widget _buildFilterBar({
