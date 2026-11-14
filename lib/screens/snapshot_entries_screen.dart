@@ -49,6 +49,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
 
   List<SummarySnapshot> _snapshots = <SummarySnapshot>[];
   List<_SnapshotEntry> _entries = <_SnapshotEntry>[];
+  double _entriesDebitTotal = 0;
+  double _entriesCreditTotal = 0;
   SnapshotOpeningBalance? _savedOpeningBalance;
   bool _isLoading = true;
   bool _isSavingSnapshot = false;
@@ -56,9 +58,14 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   bool _showDailyLogActions = false;
   bool _showDailyOpeningBalance = false;
   static const int _snapshotPageSize = 800;
+  static const int _timelineEntryPageSize = 100;
+  int _visibleTimelineEntryCount = _timelineEntryPageSize;
   final Set<String> _expandedSnapshots = <String>{};
   String _searchQuery = '';
   Timer? _obDebounceTimer;
+  Timer? _reloadDebounce;
+  StreamSubscription<void>? _dataSubscription;
+  int _timelineLoadGeneration = 0;
 
   SummarySnapshot? get _latestSnapshot =>
       _snapshots.isEmpty ? null : _snapshots.last;
@@ -94,18 +101,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
 
   // All-time totals (opening balance + every entry). Display-only derivation
   // mirroring _buildSnapshotTotals semantics; no business logic involved.
-  double get _totalDebit =>
-      _openingDebitBalance +
-      _entries.fold<double>(
-        0,
-        (double sum, _SnapshotEntry entry) => sum + entry.debit,
-      );
-  double get _totalCredit =>
-      _openingCreditBalance +
-      _entries.fold<double>(
-        0,
-        (double sum, _SnapshotEntry entry) => sum + entry.credit,
-      );
+  double get _totalDebit => _openingDebitBalance + _entriesDebitTotal;
+  double get _totalCredit => _openingCreditBalance + _entriesCreditTotal;
   double get _totalBalance => _totalDebit - _totalCredit;
   bool get _hasSavedOpeningBalance => _savedOpeningBalance?.hasValue ?? false;
   bool get _hasOpeningBalance => _effectiveOpeningBalance.hasValue;
@@ -139,10 +136,19 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   void initState() {
     super.initState();
     _loadTimeline();
+    _dataSubscription = _database.onDataChanged.listen((_) {
+      if (_isSavingSnapshot) return;
+      _reloadDebounce?.cancel();
+      _reloadDebounce = Timer(const Duration(milliseconds: 250), () {
+        if (mounted && !_isSavingSnapshot) _loadTimeline();
+      });
+    });
   }
 
   @override
   void dispose() {
+    _dataSubscription?.cancel();
+    _reloadDebounce?.cancel();
     _entryTableVerticalController.dispose();
     _debitOpeningBalanceController.dispose();
     _creditOpeningBalanceController.dispose();
@@ -151,6 +157,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   }
 
   Future<void> _loadTimeline() async {
+    _reloadDebounce?.cancel();
+    final generation = ++_timelineLoadGeneration;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -174,14 +182,28 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         startDate: null,
         endDate: DateTime.now().toIso8601String(),
       );
+      if (!mounted || generation != _timelineLoadGeneration) return;
 
-      if (!mounted) {
+      var entriesDebitTotal = 0.0;
+      var entriesCreditTotal = 0.0;
+      for (var index = 0; index < entries.length; index++) {
+        entriesDebitTotal += entries[index].debit;
+        entriesCreditTotal += entries[index].credit;
+        if ((index + 1) % _snapshotPageSize == 0) {
+          await Future<void>.delayed(Duration.zero);
+          if (!mounted || generation != _timelineLoadGeneration) return;
+        }
+      }
+
+      if (!mounted || generation != _timelineLoadGeneration) {
         return;
       }
 
       setState(() {
         _snapshots = snapshots;
         _entries = entries;
+        _entriesDebitTotal = entriesDebitTotal;
+        _entriesCreditTotal = entriesCreditTotal;
         _savedOpeningBalance = openingBalance;
         _errorMessage = null;
         _isLoading = false;
@@ -197,7 +219,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           : '';
     } catch (error) {
       debugPrint('SnapshotEntriesScreen._loadTimeline failed: $error');
-      if (!mounted) {
+      if (!mounted || generation != _timelineLoadGeneration) {
         return;
       }
       setState(() {
@@ -215,46 +237,17 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   }
 
   Future<void> _recalculateSnapshots() async {
+    if (_isLoading || _isSavingSnapshot) return;
     setState(() {
       _isLoading = true;
+      _isSavingSnapshot = true;
       _errorMessage = null;
     });
 
     try {
-      final snapshotRows = await _database.getSummarySnapshots();
-      final snapshots = snapshotRows
-          .map((Map<String, Object?> row) => SummarySnapshot.fromMap(row))
-          .toList()
-          .reversed
-          .toList();
-
-      String? previousSavedAt;
-      SnapshotOpeningBalance currentStartingBalance = _effectiveOpeningBalance;
-
-      for (final snapshot in snapshots) {
-        if (snapshot.id == null) continue;
-
-        final entries = await _loadEntriesPaged(
-          startDate: previousSavedAt,
-          endDate: snapshot.savedAt,
-        );
-
-        final totals = _buildSnapshotTotals(
-          entries: entries,
-          startingBalance: currentStartingBalance,
-        );
-
-        await _database.updateSummarySnapshotTotals(
-          id: snapshot.id!,
-          overallDebit: totals.debit,
-          overallCredit: totals.credit,
-        );
-
-        final finalBalance = totals.debit - totals.credit;
-        currentStartingBalance = _balanceToOpening(finalBalance);
-        previousSavedAt = snapshot.savedAt;
-      }
-
+      await _database.recalculateAllSnapshots(
+        startingBalanceOverride: _effectiveOpeningBalance,
+      );
       await _loadTimeline();
 
       if (!mounted) return;
@@ -267,12 +260,14 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       debugPrint('SnapshotEntriesScreen._recalculateSnapshots failed: $e');
       debugPrint('$stackTrace');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to recalculate snapshots: $e')),
-      );
       setState(() {
         _isLoading = false;
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to recalculate snapshots: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSavingSnapshot = false);
     }
   }
 
@@ -425,6 +420,102 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           _isSavingSnapshot = false;
         });
       }
+    }
+  }
+
+  bool _isUnsavedEntry(Entry entry) {
+    final latestSnapshot = _latestSnapshot;
+    return latestSnapshot != null &&
+        _compareMoments(entry.createdAt, latestSnapshot.savedAt) > 0;
+  }
+
+  Future<void> _moveEntryToSavedSnapshot(Entry entry) async {
+    if (entry.id == null ||
+        !_canEdit(context, listen: false) ||
+        _isLoading ||
+        _isSavingSnapshot) {
+      return;
+    }
+
+    final savedSnapshots = _snapshots
+        .where((SummarySnapshot snapshot) => snapshot.id != null)
+        .toList(growable: false)
+        .reversed
+        .toList(growable: false);
+    if (savedSnapshots.isEmpty) return;
+
+    final targetSnapshot = await showDialog<SummarySnapshot>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('Move to Saved Snapshot'),
+        content: SizedBox(
+          width: 380,
+          height: 360,
+          child: ListView.separated(
+            itemCount: savedSnapshots.length,
+            separatorBuilder: (_, _) => const Divider(height: 1),
+            itemBuilder: (BuildContext context, int index) {
+              final snapshot = savedSnapshots[index];
+              return ListTile(
+                leading: const Icon(Icons.history_rounded),
+                title: Text(
+                  snapshot.dailyLogPageNo.trim().isEmpty
+                      ? 'Saved snapshot'
+                      : 'Daily Log Page ${snapshot.dailyLogPageNo}',
+                ),
+                subtitle: Text(_formatDateTime(snapshot.savedAt)),
+                onTap: () => Navigator.of(dialogContext).pop(snapshot),
+              );
+            },
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    if (targetSnapshot == null || !mounted) return;
+
+    setState(() => _isSavingSnapshot = true);
+    var entryMoved = false;
+    try {
+      final updatedRows = await _database.addEntryToSavedSnapshot(
+        entryId: entry.id!,
+        savedAt: targetSnapshot.savedAt,
+        dailyLogPageNo: targetSnapshot.dailyLogPageNo,
+      );
+      if (updatedRows == 0) {
+        throw StateError('The entry no longer exists.');
+      }
+      entryMoved = true;
+      await _database.recalculateAllSnapshots(
+        startingBalanceOverride: _effectiveOpeningBalance,
+      );
+      await _loadTimeline();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Entry moved into the saved snapshot.')),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('SnapshotEntriesScreen._moveEntryToSavedSnapshot failed: $error');
+      debugPrint('$stackTrace');
+      if (!mounted) return;
+      if (entryMoved) await _loadTimeline();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            entryMoved
+                ? 'Entry moved, but snapshot totals could not be refreshed.'
+                : 'Unable to move entry to that snapshot.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSavingSnapshot = false);
     }
   }
 
@@ -635,28 +726,10 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       await Future<void>.delayed(Duration.zero);
     }
 
-    entries.sort(_compareEntries);
-    return entries;
-  }
-
-  int _compareEntries(_SnapshotEntry a, _SnapshotEntry b) {
-    final createdCompare = _compareMoments(
-      a.entry.createdAt,
-      b.entry.createdAt,
-    );
-    if (createdCompare != 0) {
-      return createdCompare;
-    }
-
-    final entryDateCompare = _compareMoments(
-      a.entry.entryDate,
-      b.entry.entryDate,
-    );
-    if (entryDateCompare != 0) {
-      return entryDateCompare;
-    }
-
-    return (a.entry.id ?? 0).compareTo(b.entry.id ?? 0);
+    // The database query is already ordered newest-first by createdAt,
+    // entryDate, and id. Reverse it to the screen's ascending order instead of
+    // sorting the entire timeline synchronously on the UI isolate.
+    return entries.reversed.toList(growable: false);
   }
 
   int _compareMoments(String left, String right) {
@@ -1998,18 +2071,23 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       );
     }
 
-    return _buildPremiumMobileTimeline(context);
+    return _withMoreTimelineEntries(
+      _buildPremiumMobileTimeline(context),
+      totalCount: _timelineCandidateEntryCount(),
+    );
   }
 
   Widget _buildPremiumMobileTimeline(BuildContext context) {
     final canEdit = _canEdit(context);
     final nodes = <_TimelineNode>[];
+    var visibleEntriesAdded = 0;
 
     if (_snapshots.isEmpty) {
       var entryIdx = _entries.length - 1;
       if (_searchQuery.isEmpty) {
-        for (; entryIdx >= 0; entryIdx--) {
+        for (; entryIdx >= 0 && visibleEntriesAdded < _visibleTimelineEntryCount; entryIdx--) {
           nodes.add(_TimelineNode.entry(entryIdx));
+          visibleEntriesAdded++;
         }
       }
       if (_hasOpeningBalance) {
@@ -2026,12 +2104,17 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 _snapshots.last.savedAt,
               ) >
               0) {
-        currentIndices.add(entryIndex);
+        if (_searchQuery.isEmpty &&
+            currentIndices.length < _visibleTimelineEntryCount) {
+          currentIndices.add(entryIndex);
+        }
         entryIndex--;
       }
       if (_searchQuery.isEmpty) {
-        for (var i = 0; i < currentIndices.length; i++) {
+        for (var i = 0; i < currentIndices.length &&
+            visibleEntriesAdded < _visibleTimelineEntryCount; i++) {
           nodes.add(_TimelineNode.entry(currentIndices[i]));
+          visibleEntriesAdded++;
         }
       }
 
@@ -2048,7 +2131,11 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                       previousSnapshot.savedAt,
                     ) >
                     0)) {
-          snapshotIndices.add(entryIndex);
+          if (_expandedSnapshots.contains(snapshot.savedAt) &&
+              snapshotIndices.length <
+                  _visibleTimelineEntryCount - visibleEntriesAdded) {
+            snapshotIndices.add(entryIndex);
+          }
           entryIndex--;
         }
 
@@ -2061,8 +2148,10 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         if (matchesSearch) {
           final isExpanded = _expandedSnapshots.contains(snapshot.savedAt);
           if (isExpanded) {
-            for (var j = 0; j < snapshotIndices.length; j++) {
+            for (var j = 0; j < snapshotIndices.length &&
+                visibleEntriesAdded < _visibleTimelineEntryCount; j++) {
               nodes.add(_TimelineNode.entry(snapshotIndices[j]));
+              visibleEntriesAdded++;
             }
           }
           nodes.add(_TimelineNode.snapshotCard(i));
@@ -2131,6 +2220,12 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       credit: item.credit,
       onTap: () => _navigateToCustomerLedger(item),
       onRemove: canEdit ? () => _removeEntryFromDailyLog(item.entry) : null,
+      onMove: canEdit &&
+          !_isLoading &&
+          !_isSavingSnapshot &&
+          _isUnsavedEntry(item.entry)
+          ? () => _moveEntryToSavedSnapshot(item.entry)
+          : null,
       canEdit: canEdit,
     );
   }
@@ -2187,6 +2282,86 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     );
   }
 
+  int _timelineCandidateEntryCount() {
+    if (_snapshots.isEmpty) {
+      return _searchQuery.isEmpty ? _entries.length : 0;
+    }
+
+    var count = 0;
+    var entryIndex = _entries.length - 1;
+    if (_searchQuery.isEmpty) {
+      while (entryIndex >= 0 &&
+          _compareMoments(
+                _entries[entryIndex].entry.createdAt,
+                _snapshots.last.savedAt,
+              ) >
+              0) {
+        count++;
+        entryIndex--;
+      }
+    } else {
+      while (entryIndex >= 0 &&
+          _compareMoments(
+                _entries[entryIndex].entry.createdAt,
+                _snapshots.last.savedAt,
+              ) >
+              0) {
+        entryIndex--;
+      }
+    }
+
+    for (var i = _snapshots.length - 1; i >= 0; i--) {
+      final snapshot = _snapshots[i];
+      final previousSnapshot = i > 0 ? _snapshots[i - 1] : null;
+      final matchesSearch =
+          _searchQuery.isEmpty ||
+          snapshot.dailyLogPageNo.toLowerCase().contains(
+            _searchQuery.toLowerCase(),
+          );
+      final isExpanded = _expandedSnapshots.contains(snapshot.savedAt);
+
+      while (entryIndex >= 0 &&
+          (previousSnapshot == null ||
+              _compareMoments(
+                    _entries[entryIndex].entry.createdAt,
+                    previousSnapshot.savedAt,
+                  ) >
+                  0)) {
+        if (isExpanded && matchesSearch) count++;
+        entryIndex--;
+      }
+    }
+    return count;
+  }
+
+  Widget _withMoreTimelineEntries(Widget timeline, {int? totalCount}) {
+    final entryCount = totalCount ?? _entries.length;
+    if (_visibleTimelineEntryCount >= entryCount) return timeline;
+
+    final remaining = entryCount - _visibleTimelineEntryCount;
+    final nextCount = _visibleTimelineEntryCount + _timelineEntryPageSize;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        timeline,
+        const SizedBox(height: 12),
+        Center(
+          child: OutlinedButton.icon(
+            onPressed: () => setState(() {
+              _visibleTimelineEntryCount = nextCount < entryCount
+                  ? nextCount
+                  : entryCount;
+            }),
+            icon: const Icon(Icons.expand_more_rounded),
+            label: Text(
+              'Show ${remaining < _timelineEntryPageSize ? remaining : _timelineEntryPageSize} more entries',
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildTimelineContent(BuildContext context) {
     if (_isLoading) {
       return const SizedBox(
@@ -2234,7 +2409,10 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       );
     }
 
-    return _buildEntryTable(context);
+    return _withMoreTimelineEntries(
+      _buildEntryTable(context),
+      totalCount: _timelineCandidateEntryCount(),
+    );
   }
 
   // ignore: unused_element
@@ -2248,6 +2426,12 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       credit: item.credit,
       onTap: () => _navigateToCustomerLedger(item),
       onRemove: canEdit ? () => _removeEntryFromDailyLog(item.entry) : null,
+      onMove: canEdit &&
+          !_isLoading &&
+          !_isSavingSnapshot &&
+          _isUnsavedEntry(item.entry)
+          ? () => _moveEntryToSavedSnapshot(item.entry)
+          : null,
       canEdit: canEdit,
     );
   }
@@ -2306,6 +2490,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   Widget _buildCompactTimeline(BuildContext context) {
     final items = <Widget>[];
     var entryIndex = _entries.length - 1;
+    var visibleEntryCards = 0;
+    final showCurrentEntries = _searchQuery.isEmpty;
 
     final currentEntries = <Widget>[];
     while (entryIndex >= 0 &&
@@ -2315,12 +2501,15 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                   _snapshots.last.savedAt,
                 ) >
                 0)) {
-      currentEntries.add(
-        _buildCompactEntryCard(context, _entries[entryIndex]),
-      );
+      if (showCurrentEntries &&
+          visibleEntryCards < _visibleTimelineEntryCount) {
+        currentEntries.add(
+          _buildCompactEntryCard(context, _entries[entryIndex]),
+        );
+        visibleEntryCards++;
+      }
       entryIndex--;
     }
-    final showCurrentEntries = _searchQuery.isEmpty;
     if (showCurrentEntries) {
       items.addAll(currentEntries);
     }
@@ -2339,10 +2528,16 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                     previousSnapshot.savedAt,
                   ) >
                   0)) {
-        if (isExpanded) {
+        if (isExpanded &&
+            (_searchQuery.isEmpty ||
+                snapshot.dailyLogPageNo.toLowerCase().contains(
+                  _searchQuery.toLowerCase(),
+                )) &&
+            visibleEntryCards < _visibleTimelineEntryCount) {
           snapshotEntries.add(
             _buildCompactEntryCard(context, _entries[entryIndex]),
           );
+          visibleEntryCards++;
         }
         entryIndex--;
       }
@@ -2443,6 +2638,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   }) {
     final rows = <DataRow>[];
     var entryIndex = _entries.length - 1;
+    var visibleEntriesBuilt = 0;
+    final showCurrentEntries = _searchQuery.isEmpty;
 
     final currentEntries = <DataRow>[];
     while (entryIndex >= 0 &&
@@ -2452,12 +2649,15 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                   _snapshots.last.savedAt,
                 ) >
                 0)) {
-      currentEntries.add(
-        _buildEntryRow(_entries[entryIndex], compact: compact),
-      );
+      if (showCurrentEntries &&
+          visibleEntriesBuilt < _visibleTimelineEntryCount) {
+        currentEntries.add(
+          _buildEntryRow(_entries[entryIndex], compact: compact),
+        );
+        visibleEntriesBuilt++;
+      }
       entryIndex--;
     }
-    final showCurrentEntries = _searchQuery.isEmpty;
     if (showCurrentEntries) {
       rows.addAll(currentEntries);
     }
@@ -2476,10 +2676,16 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                     previousSnapshot.savedAt,
                   ) >
                   0)) {
-        if (isExpanded) {
+        if (isExpanded &&
+            (_searchQuery.isEmpty ||
+                snapshot.dailyLogPageNo.toLowerCase().contains(
+                  _searchQuery.toLowerCase(),
+                )) &&
+            visibleEntriesBuilt < _visibleTimelineEntryCount) {
           snapshotEntries.add(
             _buildEntryRow(_entries[entryIndex], compact: compact),
           );
+          visibleEntriesBuilt++;
         }
         entryIndex--;
       }
@@ -2565,12 +2771,28 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         DataCell(Text(item.entry.pageNo.isEmpty ? '-' : item.entry.pageNo)),
         DataCell(
           _canEdit(context)
-              ? IconButton(
-                  tooltip: 'Delete or Remove Entry',
-                  icon: const Icon(Icons.remove_circle_outline),
-                  color: Theme.of(context).colorScheme.error,
-                  onPressed: () => _removeEntryFromDailyLog(item.entry),
-                  visualDensity: VisualDensity.compact,
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    if (_isUnsavedEntry(item.entry))
+                      IconButton(
+                        tooltip: 'Move to a saved snapshot',
+                        icon: const Icon(Icons.drive_file_move_outline_rounded),
+                        onPressed: _isLoading || _isSavingSnapshot
+                            ? null
+                            : () => _moveEntryToSavedSnapshot(item.entry),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    IconButton(
+                      tooltip: 'Delete or Remove Entry',
+                      icon: const Icon(Icons.remove_circle_outline),
+                      color: Theme.of(context).colorScheme.error,
+                      onPressed: _isLoading || _isSavingSnapshot
+                          ? null
+                          : () => _removeEntryFromDailyLog(item.entry),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ],
                 )
               : const SizedBox.shrink(),
         ),

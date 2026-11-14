@@ -3590,13 +3590,19 @@ class _LedgerViewState extends State<_LedgerView> {
     BuildContext context,
     LedgerProvider provider,
   ) {
-    final entries = provider.entries.reversed.toList();
-    final balances = <_EntryBalance>[];
+    // The provider exposes newest-first entries (with a synthetic opening
+    // balance at the end). Walk chronologically to calculate balances, but
+    // only materialize display data for the currently visible newest rows.
+    final entries = provider.entries;
+    final visibleEntryCount = entries.length < _visibleEntryCount
+        ? entries.length
+        : _visibleEntryCount;
+    final visibleBalancesChronological = <_EntryBalance>[];
     double? runningBalance;
     double? runningRemainingBags;
 
-    for (final entry in entries) {
-      final isOpeningBalanceEntry = _isOpeningBalanceEntry(provider, entry);
+    for (var index = entries.length - 1; index >= 0; index--) {
+      final entry = entries[index];
       final debit = entry.debit;
       final credit = entry.credit;
       final buyBags = entry.buyBags;
@@ -3606,59 +3612,54 @@ class _LedgerViewState extends State<_LedgerView> {
           credit != 0 ||
           buyBags.trim().isNotEmpty && buyBags.trim() != '0' ||
           sellBags.trim().isNotEmpty && sellBags.trim() != '0';
-      var balanceLabel = '';
-      var remainingBagsLabel = '';
-      double currentBalance = 0;
+      var currentBalance = 0.0;
 
       if (hasValue) {
         currentBalance = provider.isStockLedger
             ? (runningBalance ?? 0) + credit - debit
             : (runningBalance ?? 0) + debit - credit;
         runningBalance = currentBalance;
-        balanceLabel = provider.formatBalance(currentBalance);
-
-        if (provider.isStockLedger) {
-          final currentRemainingBags =
-              (runningRemainingBags ?? 0) +
-              (double.tryParse(buyBags) ?? 0) -
-              (double.tryParse(sellBags) ?? 0);
-          runningRemainingBags = currentRemainingBags;
-          remainingBagsLabel = provider.formatBags(currentRemainingBags);
-        }
       }
 
-      balances.add(
-        _EntryBalance(
-          isOpeningBalanceEntry: isOpeningBalanceEntry,
-          balanceLabel: balanceLabel,
-          balance: currentBalance,
-          remainingBagsLabel: remainingBagsLabel,
-        ),
-      );
-    }
+      if (provider.isStockLedger && hasValue) {
+        runningRemainingBags =
+            (runningRemainingBags ?? 0) +
+            (double.tryParse(buyBags) ?? 0) -
+            (double.tryParse(sellBags) ?? 0);
+      }
 
-    final reversedBalances = balances.reversed.toList();
-    final chronEntries = entries.reversed.toList();
-    final visibleEntryCount = chronEntries.length < _visibleEntryCount
-        ? chronEntries.length
-        : _visibleEntryCount;
+      if (index < visibleEntryCount) {
+        visibleBalancesChronological.add(
+          _EntryBalance(
+            isOpeningBalanceEntry: _isOpeningBalanceEntry(provider, entry),
+            balanceLabel: hasValue ? provider.formatBalance(currentBalance) : '',
+            balance: currentBalance,
+            remainingBagsLabel: provider.isStockLedger && hasValue
+                ? provider.formatBags(runningRemainingBags ?? 0)
+                : '',
+          ),
+        );
+      }
+    }
 
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: visibleEntryCount,
       itemBuilder: (context, index) {
-        final b = reversedBalances[index];
+        final balance = visibleBalancesChronological[
+          visibleEntryCount - index - 1
+        ];
         return Padding(
           padding: EdgeInsets.only(top: index == 0 ? 0 : 12),
           child: _buildLedgerEntryCard(
             context,
             provider,
-            entry: chronEntries[index],
-            balanceLabel: b.balanceLabel,
-            balance: b.balance,
-            remainingBagsLabel: b.remainingBagsLabel,
-            isOpeningBalanceEntry: b.isOpeningBalanceEntry,
+            entry: entries[index],
+            balanceLabel: balance.balanceLabel,
+            balance: balance.balance,
+            remainingBagsLabel: balance.remainingBagsLabel,
+            isOpeningBalanceEntry: balance.isOpeningBalanceEntry,
           ),
         );
       },
@@ -4253,10 +4254,25 @@ class _LedgerViewState extends State<_LedgerView> {
   Future<List<Map<String, Object?>>> _getOtherCustomers(
     int currentCustomerId,
   ) async {
-    _cachedLedgerCustomers ??= await AppDatabase.instance.getCustomers();
+    if (_cachedLedgerCustomers == null) {
+      final database = AppDatabase.instance;
+      final customers = await database.getCustomers();
+      final pageNumbers = await database.getCustomerLedgerPageNumbers();
+      _cachedLedgerCustomers = customers
+          .map<Map<String, Object?>>((Map<String, Object?> customer) {
+            final customerId = customer['id'] as int;
+            return <String, Object?>{
+              ...customer,
+              'ledgerPageNo': pageNumbers[customerId] ?? '',
+            };
+          })
+          .toList(growable: false);
+    }
+
     return _cachedLedgerCustomers!
         .where(
-          (Map<String, Object?> c) => (c['id'] as int) != currentCustomerId,
+          (Map<String, Object?> customer) =>
+              (customer['id'] as int) != currentCustomerId,
         )
         .toList(growable: false);
   }
@@ -4376,7 +4392,6 @@ class _LedgerViewState extends State<_LedgerView> {
     for (final entry in entries) {
       final includeRow = entryIndex >= entries.length - maxRows;
       entryIndex++;
-      final isOpeningBalanceEntry = _isOpeningBalanceEntry(provider, entry);
       final debit = entry.debit;
       final credit = entry.credit;
       final buyBags = entry.buyBags;
@@ -4386,33 +4401,36 @@ class _LedgerViewState extends State<_LedgerView> {
           credit != 0 ||
           buyBags.trim().isNotEmpty && buyBags.trim() != '0' ||
           sellBags.trim().isNotEmpty && sellBags.trim() != '0';
-      String balanceLabel = '';
-      String remainingBagsLabel = '';
-      final rowStyle = isOpeningBalanceEntry
-          ? Theme.of(
-              context,
-            ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600)
-          : null;
-
+      var currentBalance = 0.0;
       if (hasValue) {
-        final currentBalance = provider.isStockLedger
+        currentBalance = provider.isStockLedger
             ? (runningBalance ?? 0) + credit - debit
             : (runningBalance ?? 0) + debit - credit;
         runningBalance = currentBalance;
-        balanceLabel = provider.formatBalance(currentBalance);
 
         if (provider.isStockLedger) {
-          final currentRemainingBags =
+          runningRemainingBags =
               (runningRemainingBags ?? 0) +
               (double.tryParse(buyBags) ?? 0) -
               (double.tryParse(sellBags) ?? 0);
-          runningRemainingBags = currentRemainingBags;
-          remainingBagsLabel = provider.formatBags(currentRemainingBags);
         }
       }
 
       if (!includeRow) continue;
 
+      final isOpeningBalanceEntry = _isOpeningBalanceEntry(provider, entry);
+      final rowStyle = isOpeningBalanceEntry
+          ? Theme.of(
+              context,
+            ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600)
+          : null;
+      final balanceLabel = hasValue
+          ? provider.formatBalance(currentBalance)
+          : '';
+      final remainingBagsLabel =
+          provider.isStockLedger && hasValue
+          ? provider.formatBags(runningRemainingBags ?? 0)
+          : '';
       final List<DataCell> cells = <DataCell>[
         DataCell(Text(_formatStoredDate(entry.entryDate), style: rowStyle)),
         DataCell(
@@ -6279,7 +6297,7 @@ class _LedgerTransferCustomerDialogState
                         return ListTile(
                           title: Text(name),
                           subtitle: Text(
-                            'ID: ${customer['id']}',
+                            'Ledger Page: ${(customer['ledgerPageNo'] as String?)?.trim().isNotEmpty == true ? customer['ledgerPageNo'] : '-'}',
                             style: theme.textTheme.bodySmall,
                           ),
                           onTap: () => Navigator.of(context).pop(customer),

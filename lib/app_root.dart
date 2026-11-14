@@ -20,12 +20,10 @@ class AppRoot extends StatelessWidget {
           create: (_) => WorkspaceProvider(),
         ),
         ChangeNotifierProvider(
-          create: (_) =>
-              LedgerYearProvider()..loadYears(),
+          create: (_) => LedgerYearProvider()..loadYears(),
         ),
         ChangeNotifierProvider(
-          create: (_) =>
-              CustomerProvider()..loadCustomers(),
+          create: (_) => CustomerProvider()..loadCustomers(),
         ),
         ChangeNotifierProvider(
           create: (_) => ThemeProvider(),

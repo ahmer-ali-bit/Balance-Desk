@@ -23,6 +23,7 @@ class CustomerProvider extends ChangeNotifier {
   String _filteredCacheQuery = '';
   int _customersVersion = 0;
   int _filteredCacheVersion = -1;
+  int _loadGeneration = 0;
   Timer? _reloadDebounce;
   bool _isLoading = false;
   String? _errorMessage;
@@ -69,17 +70,21 @@ class CustomerProvider extends ChangeNotifier {
   }
 
   Future<void> loadCustomers() async {
+    final generation = ++_loadGeneration;
     _setLoading(true);
 
     try {
-      await _refreshCustomers();
+      await _refreshCustomers(generation: generation);
+      if (generation != _loadGeneration) return;
       _errorMessage = null;
     } catch (error, stackTrace) {
       debugPrint('CustomerProvider.loadCustomers failed: $error');
       debugPrint('$stackTrace');
-      _errorMessage = 'Unable to load customers.';
+      if (generation == _loadGeneration) {
+        _errorMessage = 'Unable to load customers.';
+      }
     } finally {
-      _setLoading(false);
+      if (generation == _loadGeneration) _setLoading(false);
     }
   }
 
@@ -223,32 +228,30 @@ class CustomerProvider extends ChangeNotifier {
         parts.any((String part) => part.startsWith(query));
   }
 
-  Future<void> _refreshCustomers() async {
+  Future<void> _refreshCustomers({int? generation}) async {
+    final activeGeneration = generation ?? ++_loadGeneration;
     final rows = await _database.getCustomers();
+    if (activeGeneration != _loadGeneration) return;
+
     final customers = <Customer>[];
     for (var index = 0; index < rows.length; index++) {
       customers.add(Customer.fromMap(rows[index]));
       if ((index + 1) % 500 == 0) {
         // Keep the first load responsive for large customer directories.
         await Future<void>.delayed(Duration.zero);
+        if (activeGeneration != _loadGeneration) return;
       }
     }
-    final sortedCustomers = customers.toList(growable: false)
-      ..sort((Customer a, Customer b) {
-        final leftName = a.name.trim().toLowerCase();
-        final rightName = b.name.trim().toLowerCase();
-        final nameCompare = leftName.compareTo(rightName);
-        if (nameCompare != 0) {
-          return nameCompare;
-        }
-        final leftId = a.id ?? 0;
-        final rightId = b.id ?? 0;
-        return leftId.compareTo(rightId);
-      });
-    _customers = List<Customer>.unmodifiable(sortedCustomers);
+    if (activeGeneration != _loadGeneration) return;
+
+    // The database query already orders names case-insensitively with an ID
+    // tie-breaker, so avoid sorting a potentially large directory on the UI
+    // isolate.
+    _customers = List<Customer>.unmodifiable(customers);
     _customersView = null;
     _filteredCache = null;
     _customersVersion++;
+    if (generation == null) _setLoading(false);
   }
 
   void _setLoading(bool value) {

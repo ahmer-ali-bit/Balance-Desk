@@ -43,6 +43,8 @@ class _AppShellScreenState extends State<AppShellScreen> {
   final ManualUpdateService _manualUpdateService = ManualUpdateService.instance;
   int _selectedIndex = 0;
   int _reloadRevision = 0;
+  List<Widget?> _pageCache = <Widget?>[];
+  String? _pageCacheSignature;
   bool _isPinEnabled = false;
   bool _isBiometricAvailable = false;
   bool _isBiometricEnabled = false;
@@ -777,13 +779,28 @@ class _AppShellScreenState extends State<AppShellScreen> {
   Widget _buildActivePage() {
     final activeYear = context.watch<LedgerYearProvider>().activeYear;
     final workspaceId = context.watch<WorkspaceProvider>().activeWorkspaceId;
+    final signature = '$_reloadRevision-$activeYear-$workspaceId';
 
-    return KeyedSubtree(
-      key: ValueKey<String>(
-        '$_selectedIndex-$_reloadRevision-$activeYear-$workspaceId',
-      ),
-      child: _destinations[_selectedIndex].child,
-    );
+    // Keep already-visited tabs mounted so moving between screens does not
+    // discard their scroll position or repeat expensive initial loads. Pages
+    // are still created only when first opened, keeping app startup light.
+    if (_pageCacheSignature != signature ||
+        _pageCache.length != _destinations.length) {
+      _pageCacheSignature = signature;
+      _pageCache = List<Widget?>.filled(_destinations.length, null);
+    }
+
+    final pages = List<Widget>.generate(_destinations.length, (int index) {
+      if (_pageCache[index] == null && index == _selectedIndex) {
+        _pageCache[index] = KeyedSubtree(
+          key: ValueKey<String>('$index-$signature'),
+          child: _destinations[index].child,
+        );
+      }
+      return _pageCache[index] ?? const SizedBox.shrink();
+    }, growable: false);
+
+    return IndexedStack(index: _selectedIndex, children: pages);
   }
 
   void _selectIndex(int index) {

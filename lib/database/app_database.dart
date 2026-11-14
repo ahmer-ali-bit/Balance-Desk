@@ -434,13 +434,22 @@ class DatabaseHelper {
       'CREATE INDEX IF NOT EXISTS idx_customers_ledger_year ON $customersTable(ledgerYear)',
     );
     await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_customers_year_name ON $customersTable(ledgerYear, TRIM(name) COLLATE NOCASE, id)',
+    );
+    await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_entries_customer_id ON $entriesTable(customerId)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_entries_customer_created ON $entriesTable(customerId, createdAt DESC, entryDate DESC, id DESC)',
     );
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_entries_entry_date ON $entriesTable(entryDate)',
     );
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_entries_created_at ON $entriesTable(createdAt)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_entries_dailylog_created ON $entriesTable(showInDailyLog, createdAt, entryDate, id)',
     );
     await db.execute(
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_sync_id ON $customersTable(syncId)',
@@ -625,6 +634,39 @@ class DatabaseHelper {
     );
   }
 
+  Future<Map<int, SnapshotOpeningBalance>>
+  getCustomerLedgerOpeningBalances() async {
+    final db = await database;
+    final rows = await db.query(
+      appSettingsTable,
+      columns: const <String>['settingKey', 'settingValue'],
+      where: 'settingKey LIKE ?',
+      whereArgs: <Object?>['ledgerOpening%:$_activeYear:%'],
+    );
+    final valuesByCustomer = <int, Map<String, String>>{};
+    for (final row in rows) {
+      final parts = (row['settingKey'] as String).split(':');
+      if (parts.length != 3 || int.tryParse(parts[1]) != _activeYear) continue;
+      final customerId = int.tryParse(parts[2]);
+      if (customerId == null) continue;
+      valuesByCustomer.putIfAbsent(customerId, () => <String, String>{})[
+        parts[0]
+      ] = row['settingValue'] as String? ?? '';
+    }
+
+    return <int, SnapshotOpeningBalance>{
+      for (final entry in valuesByCustomer.entries)
+        entry.key: SnapshotOpeningBalance(
+          debit: double.tryParse(entry.value['ledgerOpeningDebit'] ?? '') ?? 0,
+          credit: double.tryParse(entry.value['ledgerOpeningCredit'] ?? '') ?? 0,
+          buyBags:
+              double.tryParse(entry.value['ledgerOpeningBuyBags'] ?? '') ?? 0,
+          sellBags:
+              double.tryParse(entry.value['ledgerOpeningSellBags'] ?? '') ?? 0,
+        ),
+    };
+  }
+
   Future<void> setCustomerLedgerOpeningBalance({
     required int customerId,
     required double debit,
@@ -765,7 +807,7 @@ class DatabaseHelper {
       ],
       where: 'ledgerYear = ?',
       whereArgs: <Object?>[_activeYear],
-      orderBy: 'name COLLATE NOCASE',
+      orderBy: 'TRIM(name) COLLATE NOCASE ASC, id ASC',
     );
   }
 
@@ -1077,7 +1119,16 @@ class DatabaseHelper {
     String? startCreatedAt,
   }) async {
     final db = await database;
-    final args = <Object?>[_activeYear];
+    final args = <Object?>[];
+    final pageFilter = StringBuffer(
+      "e2.customerId = c.id AND TRIM(e2.pageNo) <> ''",
+    );
+    if (startCreatedAt != null) {
+      pageFilter.write(' AND e2.createdAt > ?');
+      args.add(startCreatedAt);
+    }
+    args.add(_activeYear);
+
     final whereClause = StringBuffer('c.ledgerYear = ?');
     if (startCreatedAt != null) {
       whereClause.write(' AND e.createdAt > ?');
@@ -1091,12 +1142,41 @@ class DatabaseHelper {
         SUM(e.credit) AS totalCredit,
         SUM(e.buyBags) AS totalBuyBags,
         SUM(e.sellBags) AS totalSellBags,
-        MAX(e.pageNo) AS latestPageNo
+        (
+          SELECT e2.pageNo
+          FROM $entriesTable e2
+          WHERE ${pageFilter.toString()}
+          ORDER BY e2.createdAt DESC, e2.entryDate DESC, e2.id DESC
+          LIMIT 1
+        ) AS latestPageNo
       FROM $customersTable c
       LEFT JOIN $entriesTable e ON e.customerId = c.id
       WHERE ${whereClause.toString()}
       GROUP BY c.id
       ''', args);
+  }
+
+  Future<Map<int, String>> getCustomerLedgerPageNumbers() async {
+    final db = await database;
+    final rows = await db.rawQuery('''
+      SELECT
+        c.id AS customerId,
+        (
+          SELECT e.pageNo
+          FROM $entriesTable e
+          WHERE e.customerId = c.id AND TRIM(e.pageNo) <> ''
+          ORDER BY e.createdAt DESC, e.entryDate DESC, e.id DESC
+          LIMIT 1
+        ) AS ledgerPageNo
+      FROM $customersTable c
+      WHERE c.ledgerYear = ?
+      ''', <Object?>[_activeYear]);
+
+    return <int, String>{
+      for (final row in rows)
+        if (row['customerId'] is int && row['ledgerPageNo'] is String)
+          row['customerId'] as int: row['ledgerPageNo'] as String,
+    };
   }
 
   Future<int> insertCustomer(
@@ -1173,14 +1253,19 @@ class DatabaseHelper {
     required int id,
     required double overallDebit,
     required double overallCredit,
+    int? customerCount,
   }) async {
     final db = await database;
+    final values = <String, Object?>{
+      'overallDebit': overallDebit,
+      'overallCredit': overallCredit,
+    };
+    if (customerCount != null) {
+      values['customerCount'] = customerCount;
+    }
     return db.update(
       summarySnapshotsTable,
-      <String, Object?>{
-        'overallDebit': overallDebit,
-        'overallCredit': overallCredit,
-      },
+      values,
       where: 'id = ?',
       whereArgs: <Object?>[id],
     );
@@ -1217,26 +1302,27 @@ class DatabaseHelper {
     );
   }
 
-  Future<void> addEntryToSavedSnapshot({
+  Future<int> addEntryToSavedSnapshot({
     required int entryId,
     required String savedAt,
     required String? dailyLogPageNo,
   }) async {
     final db = await database;
-    await db.update(
+    return db.update(
       entriesTable,
       <String, Object?>{
         'showInDailyLog': 1,
         'createdAt': savedAt,
-        'dailyLogPageNo': ?dailyLogPageNo,
+        'dailyLogPageNo': dailyLogPageNo ?? '',
       },
       where: 'id = ?',
       whereArgs: <Object?>[entryId],
     );
-    await recalculateAllSnapshots();
   }
 
-  Future<void> recalculateAllSnapshots() async {
+  Future<void> recalculateAllSnapshots({
+    SnapshotOpeningBalance? startingBalanceOverride,
+  }) async {
     final snapshotRows = await getSummarySnapshots();
     final snapshots = List<Map<String, Object?>>.from(snapshotRows);
     snapshots.sort((a, b) {
@@ -1245,7 +1331,8 @@ class DatabaseHelper {
       return savedAtA.compareTo(savedAtB);
     });
 
-    final openingBalance = await getSnapshotOpeningBalance();
+    final openingBalance =
+        startingBalanceOverride ?? await getSnapshotOpeningBalance();
 
     String? previousSavedAt;
     SnapshotOpeningBalance currentStartingBalance =
@@ -1256,25 +1343,35 @@ class DatabaseHelper {
       final savedAt = snapshot['savedAt'] as String;
       if (snapshotId == null) continue;
 
-      final entries = await getEntriesWithCustomerRangePaged(
-        startDate: previousSavedAt,
-        endDate: savedAt,
-        limit: 1000000,
-        offset: 0,
-      );
+      const pageSize = 800;
+      var offset = 0;
+      var debitSum = currentStartingBalance.debit;
+      var creditSum = currentStartingBalance.credit;
+      final customerIds = <int>{};
 
-      double debitSum = currentStartingBalance.debit;
-      double creditSum = currentStartingBalance.credit;
-
-      for (final entryRow in entries) {
-        debitSum += (entryRow['debit'] as num?)?.toDouble() ?? 0.0;
-        creditSum += (entryRow['credit'] as num?)?.toDouble() ?? 0.0;
+      while (true) {
+        final entries = await getEntriesWithCustomerRangePaged(
+          startDate: previousSavedAt,
+          endDate: savedAt,
+          limit: pageSize,
+          offset: offset,
+        );
+        for (final entryRow in entries) {
+          debitSum += (entryRow['debit'] as num?)?.toDouble() ?? 0.0;
+          creditSum += (entryRow['credit'] as num?)?.toDouble() ?? 0.0;
+          final customerId = entryRow['customerId'] as int?;
+          if (customerId != null) customerIds.add(customerId);
+        }
+        if (entries.length < pageSize) break;
+        offset += pageSize;
+        await Future<void>.delayed(Duration.zero);
       }
 
       await updateSummarySnapshotTotals(
         id: snapshotId,
         overallDebit: debitSum,
         overallCredit: creditSum,
+        customerCount: customerIds.length,
       );
 
       final finalBalance = debitSum - creditSum;
@@ -2483,11 +2580,13 @@ class AppDatabase {
     required int id,
     required double overallDebit,
     required double overallCredit,
+    int? customerCount,
   }) {
     return _helper.updateSummarySnapshotTotals(
       id: id,
       overallDebit: overallDebit,
       overallCredit: overallCredit,
+      customerCount: customerCount,
     );
   }
 
@@ -2533,6 +2632,10 @@ class AppDatabase {
     String? startCreatedAt,
   }) {
     return _helper.getCustomerEntryTotalsSince(startCreatedAt: startCreatedAt);
+  }
+
+  Future<Map<int, String>> getCustomerLedgerPageNumbers() {
+    return _helper.getCustomerLedgerPageNumbers();
   }
 
   Future<void> restoreFromCsv({
@@ -2592,6 +2695,11 @@ class AppDatabase {
     return _helper.getCustomerLedgerOpeningBalance(customerId);
   }
 
+  Future<Map<int, SnapshotOpeningBalance>>
+  getCustomerLedgerOpeningBalances() {
+    return _helper.getCustomerLedgerOpeningBalances();
+  }
+
   Future<void> setCustomerLedgerOpeningBalance({
     required int customerId,
     required double debit,
@@ -2616,7 +2724,7 @@ class AppDatabase {
 
   Future<bool> resetCustomerIdSequence() => _helper.resetCustomerIdSequence();
 
-  Future<void> addEntryToSavedSnapshot({
+  Future<int> addEntryToSavedSnapshot({
     required int entryId,
     required String savedAt,
     required String? dailyLogPageNo,
@@ -2628,8 +2736,12 @@ class AppDatabase {
     );
   }
 
-  Future<void> recalculateAllSnapshots() {
-    return _helper.recalculateAllSnapshots();
+  Future<void> recalculateAllSnapshots({
+    SnapshotOpeningBalance? startingBalanceOverride,
+  }) {
+    return _helper.recalculateAllSnapshots(
+      startingBalanceOverride: startingBalanceOverride,
+    );
   }
 
   Future<void> close() => _helper.close();

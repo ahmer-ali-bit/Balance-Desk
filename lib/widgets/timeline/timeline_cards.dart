@@ -542,6 +542,7 @@ class PremiumTimelineEntryCard extends StatelessWidget {
     required this.credit,
     required this.onTap,
     required this.onRemove,
+    this.onMove,
     required this.canEdit,
   });
 
@@ -552,6 +553,7 @@ class PremiumTimelineEntryCard extends StatelessWidget {
   final double credit;
   final VoidCallback onTap;
   final VoidCallback? onRemove;
+  final VoidCallback? onMove;
   final bool canEdit;
 
   String _amount(double v) => v == 0 ? '-' : formatAmount(v);
@@ -611,6 +613,12 @@ class PremiumTimelineEntryCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (canEdit && onMove != null)
+                IconButton(
+                  tooltip: 'Move to a saved snapshot',
+                  onPressed: onMove,
+                  icon: const Icon(Icons.drive_file_move_outline_rounded, size: 18),
+                ),
               if (canEdit)
                 IconButton(
                   tooltip: 'Delete or Remove Entry',

@@ -47,6 +47,7 @@ class LedgerProvider extends ChangeNotifier {
     credit: 0,
   );
   bool _isLoading = false;
+  int _loadGeneration = 0;
   String? _errorMessage;
   LedgerDateFilter _activeFilter = LedgerDateFilter.all;
   DateTimeRange? _customRange;
@@ -148,6 +149,7 @@ class LedgerProvider extends ChangeNotifier {
   }
 
   Future<void> loadEntries() async {
+    final generation = ++_loadGeneration;
     if (_customer.id == null) {
       _errorMessage = 'Customer record is invalid.';
       _notifyListeners();
@@ -159,6 +161,7 @@ class LedgerProvider extends ChangeNotifier {
     try {
       // Sync customer details to ensure settings like Stock Ledger mode persist correctly
       final customerData = await _database.getCustomer(_customer.id!);
+      if (generation != _loadGeneration) return;
       if (customerData != null) {
         _customerName = customerData['name'] as String? ?? _customerName;
         _customerAddress = customerData['address'] as String? ?? _customerAddress;
@@ -175,9 +178,11 @@ class LedgerProvider extends ChangeNotifier {
               startDate: range.start.toIso8601String(),
               endDate: range.end.toIso8601String(),
             );
+      if (generation != _loadGeneration) return;
       final openingBalance = await _database.getCustomerLedgerOpeningBalance(
         _customer.id!,
       );
+      if (generation != _loadGeneration) return;
       final loadedEntries = <Entry>[];
       for (var index = 0; index < rows.length; index++) {
         loadedEntries.add(Entry.fromMap(rows[index]));
@@ -185,6 +190,7 @@ class LedgerProvider extends ChangeNotifier {
           // Let loading indicators and user input continue to render while a
           // large ledger is converted from database rows.
           await Future<void>.delayed(Duration.zero);
+          if (generation != _loadGeneration) return;
         }
       }
       _entries = List<Entry>.unmodifiable(loadedEntries);
@@ -195,9 +201,11 @@ class LedgerProvider extends ChangeNotifier {
     } catch (error, stackTrace) {
       debugPrint('LedgerProvider.loadEntries failed: $error');
       debugPrint('$stackTrace');
-      _errorMessage = 'Unable to load ledger entries.';
+      if (generation == _loadGeneration) {
+        _errorMessage = 'Unable to load ledger entries.';
+      }
     } finally {
-      _setLoading(false);
+      if (generation == _loadGeneration) _setLoading(false);
     }
   }
 

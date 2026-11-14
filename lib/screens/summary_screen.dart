@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -41,15 +43,28 @@ class _SummaryScreenState extends State<SummaryScreen> {
   String _searchQuery = '';
   bool _showSummaryTools = false;
   bool _showSummaryTotals = false;
+  static const int _summaryPageSize = 100;
+  int _visibleSummaryCount = _summaryPageSize;
+  StreamSubscription<void>? _dataSubscription;
+  Timer? _reloadDebounce;
+  int _summaryLoadGeneration = 0;
 
   @override
   void initState() {
     super.initState();
     _loadSummary();
+    _dataSubscription = _database.onDataChanged.listen((_) {
+      _reloadDebounce?.cancel();
+      _reloadDebounce = Timer(const Duration(milliseconds: 250), () {
+        if (mounted) _loadSummary();
+      });
+    });
   }
 
   @override
   void dispose() {
+    _dataSubscription?.cancel();
+    _reloadDebounce?.cancel();
     _tableVerticalController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
@@ -71,6 +86,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   Future<void> _loadSummary() async {
+    _reloadDebounce?.cancel();
+    final generation = ++_summaryLoadGeneration;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -78,11 +95,17 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
     try {
       final customerRows = await _database.getCustomers();
-      final customers = customerRows
-          .map<Customer>((Map<String, Object?> row) => Customer.fromMap(row))
-          .toList(growable: false);
+      final customers = <Customer>[];
+      for (var index = 0; index < customerRows.length; index++) {
+        customers.add(Customer.fromMap(customerRows[index]));
+        if ((index + 1) % 500 == 0) {
+          if (generation != _summaryLoadGeneration) return;
+          await Future<void>.delayed(Duration.zero);
+        }
+      }
 
       // Single JOIN query to compute per-customer totals instead of N+1 queries
+      final openingBalances = await _database.getCustomerLedgerOpeningBalances();
       final totalsRows = await _database.getCustomerEntryTotalsSince();
       final totalsByCustomer = <int, Map<String, Object?>>{};
       for (final row in totalsRows) {
@@ -94,14 +117,19 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
       final summaries = <_CustomerSummary>[];
 
-      for (final customer in customers) {
+      for (var index = 0; index < customers.length; index++) {
+        if ((index + 1) % 500 == 0) {
+          if (generation != _summaryLoadGeneration) return;
+          await Future<void>.delayed(Duration.zero);
+        }
+        final customer = customers[index];
         final customerId = customer.id;
         if (customerId == null) {
           continue;
         }
 
         final openingBalance =
-            await _database.getCustomerLedgerOpeningBalance(customerId) ??
+            openingBalances[customerId] ??
             const SnapshotOpeningBalance(debit: 0, credit: 0);
 
         final totals = totalsByCustomer[customerId];
@@ -133,13 +161,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
           ),
         );
       }
-      summaries.sort(
-        (_CustomerSummary a, _CustomerSummary b) => a.customer.name
-            .trim()
-            .toLowerCase()
-            .compareTo(b.customer.name.trim().toLowerCase()),
-      );
-
       final overallDebit = summaries.fold<double>(
         0,
         (double sum, _CustomerSummary item) => sum + item.totalDebit,
@@ -149,7 +170,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
         (double sum, _CustomerSummary item) => sum + item.totalCredit,
       );
 
-      if (!mounted) {
+      if (!mounted || generation != _summaryLoadGeneration) {
         return;
       }
 
@@ -162,11 +183,12 @@ class _SummaryScreenState extends State<SummaryScreen> {
         _isLoading = false;
       });
     } catch (e) {
-      if (!mounted) {
+      if (!mounted || generation != _summaryLoadGeneration) {
         return;
       }
       setState(() {
         _isLoading = false;
+        _errorMessage = 'Unable to load summary.';
       });
       ScaffoldMessenger.of(
         context,
@@ -513,12 +535,14 @@ class _SummaryScreenState extends State<SummaryScreen> {
       onChanged: (String value) {
         setState(() {
           _searchQuery = value;
+          _visibleSummaryCount = _summaryPageSize;
         });
       },
       onClear: () {
         _searchController.clear();
         setState(() {
           _searchQuery = '';
+          _visibleSummaryCount = _summaryPageSize;
         });
       },
     );
@@ -573,6 +597,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
   Widget _buildPremiumMobileSummaryPage(BuildContext context) {
     final filteredCustomers = _filteredCustomers();
+    final visibleCustomers = _visibleSummaryCustomers(filteredCustomers);
     final overallBalance = _summaryData.finalBalance;
     final balanceColor = AppColors.balanceColor(overallBalance);
 
@@ -655,8 +680,11 @@ class _SummaryScreenState extends State<SummaryScreen> {
               const SizedBox(height: 10),
               if (filteredCustomers.isEmpty)
                 MobilePremiumPanel(child: _buildEmptyState(context))
-              else
-                _buildPremiumMobileSummaryCards(context, filteredCustomers),
+              else ...<Widget>[
+                _buildPremiumMobileSummaryCards(context, visibleCustomers),
+                if (visibleCustomers.length < filteredCustomers.length)
+                  _buildShowMoreSummaryButton(filteredCustomers.length),
+              ],
             ],
           ],
         ),
@@ -684,12 +712,14 @@ class _SummaryScreenState extends State<SummaryScreen> {
             onChanged: (String value) {
               setState(() {
                 _searchQuery = value;
+                _visibleSummaryCount = _summaryPageSize;
               });
             },
             onClear: () {
               _searchController.clear();
               setState(() {
                 _searchQuery = '';
+                _visibleSummaryCount = _summaryPageSize;
               });
             },
           ),
@@ -1017,6 +1047,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
         _summaryData.overallDebit - _summaryData.overallCredit;
 
     final filteredCustomers = _filteredCustomers();
+    final visibleCustomers = _visibleSummaryCustomers(filteredCustomers);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -1032,7 +1063,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
         SizedBox(height: compactLayout ? 10 : 12),
         filteredCustomers.isEmpty
             ? _buildEmptyState(context)
-            : _buildSummaryTable(context, filteredCustomers),
+            : _buildSummaryTable(context, visibleCustomers),
+        if (visibleCustomers.length < filteredCustomers.length)
+          _buildShowMoreSummaryButton(filteredCustomers.length),
       ],
     );
   }
@@ -1445,6 +1478,35 @@ class _SummaryScreenState extends State<SummaryScreen> {
       height: 34,
       margin: const EdgeInsets.symmetric(horizontal: 8),
       color: Theme.of(context).colorScheme.outlineVariant,
+    );
+  }
+
+  List<_CustomerSummary> _visibleSummaryCustomers(
+    List<_CustomerSummary> customers,
+  ) {
+    return customers.length <= _visibleSummaryCount
+        ? customers
+        : customers.take(_visibleSummaryCount).toList(growable: false);
+  }
+
+  Widget _buildShowMoreSummaryButton(int totalCount) {
+    final remaining = totalCount - _visibleSummaryCount;
+    final nextCount = _visibleSummaryCount + _summaryPageSize;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.only(top: 10, bottom: 12),
+        child: OutlinedButton.icon(
+          onPressed: () => setState(() {
+            _visibleSummaryCount = nextCount < totalCount
+                ? nextCount
+                : totalCount;
+          }),
+          icon: const Icon(Icons.expand_more_rounded),
+          label: Text(
+            'Show ${remaining < _summaryPageSize ? remaining : _summaryPageSize} more customers',
+          ),
+        ),
+      ),
     );
   }
 
