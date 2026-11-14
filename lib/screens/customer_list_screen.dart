@@ -668,6 +668,9 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
         final customerNameStyle = Theme.of(
           context,
         ).textTheme.bodyLarge?.copyWith(fontSize: isCompactTable ? 18 : null);
+        final visibleCount = customers.length < _visibleCustomerCount
+            ? customers.length
+            : _visibleCustomerCount;
 
         return ScaleDownWidth(
           designWidth: designWidth,
@@ -713,9 +716,10 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                           ),
                         ),
                       ],
-                      rows: List<DataRow>.generate(customers.length, (
-                        int index,
-                      ) {
+                      rows: <DataRow>[
+                        ...List<DataRow>.generate(visibleCount, (
+                          int index,
+                        ) {
                         final customer = customers[index];
 
                         return DataRow.byIndex(
@@ -834,7 +838,27 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                             ),
                           ],
                         );
-                      }),
+                        }),
+                        if (visibleCount < customers.length)
+                          DataRow(
+                            cells: <DataCell>[
+                              DataCell(
+                                TextButton.icon(
+                                  onPressed: () => setState(() {
+                                    _visibleCustomerCount += _customerPageSize;
+                                  }),
+                                  icon: const Icon(Icons.expand_more_rounded),
+                                  label: Text(
+                                    'Show ${customers.length - visibleCount < _customerPageSize ? customers.length - visibleCount : _customerPageSize} more customers',
+                                  ),
+                                ),
+                              ),
+                              const DataCell(SizedBox.shrink()),
+                              const DataCell(SizedBox.shrink()),
+                              const DataCell(SizedBox.shrink()),
+                            ],
+                          ),
+                      ],
                     ),
                   ),
                 ),
