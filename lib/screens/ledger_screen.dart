@@ -5975,6 +5975,7 @@ class _CustomerInfoTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isLight = colorScheme.brightness == Brightness.light;
     final borderRadius = BorderRadius.circular(22);
 
     final resolvedBg = backgroundColor ?? colorScheme.surfaceContainerLowest;
@@ -5992,18 +5993,20 @@ class _CustomerInfoTile extends StatelessWidget {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: isMetric
-                  ? resolvedBg.withValues(alpha: 0.15)
+                  ? resolvedBg.withValues(alpha: isLight ? 0.085 : 0.15)
                   : resolvedBg.withValues(alpha: 0.1),
               gradient: isMetric
-                  ? LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: <Color>[
-                        resolvedBg.withValues(alpha: 0.25),
-                        resolvedBg.withValues(alpha: 0.15),
-                        resolvedBg.withValues(alpha: 0.2),
-                      ],
-                    )
+                  ? (isLight
+                        ? null
+                        : LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: <Color>[
+                              resolvedBg.withValues(alpha: 0.25),
+                              resolvedBg.withValues(alpha: 0.15),
+                              resolvedBg.withValues(alpha: 0.2),
+                            ],
+                          ))
                   : LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
@@ -6024,7 +6027,7 @@ class _CustomerInfoTile extends StatelessWidget {
               borderRadius: borderRadius,
               border: Border.all(
                 color: isMetric
-                    ? resolvedBg.withValues(alpha: 0.3)
+                    ? resolvedBg.withValues(alpha: isLight ? 0.22 : 0.3)
                     : borderColor ??
                           colorScheme.outlineVariant.withValues(alpha: 0.2),
                 width: 1.2,
@@ -6041,7 +6044,9 @@ class _CustomerInfoTile extends StatelessWidget {
                         label.toUpperCase(),
                         style: theme.textTheme.labelMedium?.copyWith(
                           color: isMetric
-                              ? Colors.white.withValues(alpha: 0.7)
+                              ? (isLight
+                                    ? resolvedBg
+                                    : Colors.white.withValues(alpha: 0.7))
                               : labelColor ?? colorScheme.onSurfaceVariant,
                           fontSize: 9,
                           letterSpacing: 0.5,
@@ -6053,7 +6058,7 @@ class _CustomerInfoTile extends StatelessWidget {
                         value,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: isMetric
-                              ? Colors.white
+                              ? (isLight ? colorScheme.onSurface : Colors.white)
                               : (valueColor ?? colorScheme.onSurface),
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
