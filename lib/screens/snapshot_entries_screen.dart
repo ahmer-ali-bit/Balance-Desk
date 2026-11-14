@@ -704,6 +704,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
 
   List<List<String>> _buildSnapshotExportRows({
     bool includeOpeningBalance = true,
+    bool includeBalanceBf = true,
   }) {
     final rows = <List<String>>[];
     var entryIndex = 0;
@@ -774,7 +775,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         // Next snapshot starts fresh with its own total calculation
 
         final carryForward = _balanceToOpening(snapshot.finalBalance);
-        if (carryForward.hasValue) {
+        if (includeBalanceBf && carryForward.hasValue) {
           rows.add(<String>[
             '',
             'Balance B/F',
@@ -834,7 +835,10 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
 
   Future<void> _exportSnapshotPdf() async {
     if (!_canExport(context, listen: false)) return;
-    final rows = _buildSnapshotExportRows(includeOpeningBalance: false);
+    final rows = _buildSnapshotExportRows(
+      includeOpeningBalance: false,
+      includeBalanceBf: false,
+    );
     if (rows.isEmpty && !_hasOpeningBalance) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No snapshot rows to export.')),
