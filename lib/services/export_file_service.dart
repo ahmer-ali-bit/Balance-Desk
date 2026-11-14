@@ -1,8 +1,10 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:cross_file/cross_file.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
@@ -18,10 +20,15 @@ import '../utils/platform_helper.dart';
 /// `locationLabel` is a short, human friendly description of where the file
 /// went, suitable for a snackbar such as `Saved to $locationLabel`.
 class ExportFileResult {
-  const ExportFileResult({required this.savedPath, required this.locationLabel});
+  const ExportFileResult({
+    required this.savedPath,
+    required this.locationLabel,
+    this.shared = false,
+  });
 
   final String? savedPath;
   final String locationLabel;
+  final bool shared;
 
   bool get isSaved => savedPath != null && savedPath!.isNotEmpty;
 }
@@ -119,6 +126,30 @@ class ExportFileService {
     return ExportFileResult(
       savedPath: uri,
       locationLabel: 'the chosen location',
+    );
+  }
+
+  Future<ExportFileResult> shareBytes({
+    required String fileName,
+    required Uint8List bytes,
+  }) async {
+    final extension = path.extension(fileName).toLowerCase();
+    final mimeType = switch (extension) {
+      '.pdf' => 'application/pdf',
+      '.csv' => 'text/csv',
+      _ => 'application/octet-stream',
+    };
+    await Share.shareXFiles(
+      <XFile>[
+        XFile.fromData(bytes, name: fileName, mimeType: mimeType),
+      ],
+      subject: fileName,
+      fileNameOverrides: <String>[fileName],
+    );
+    return const ExportFileResult(
+      savedPath: null,
+      locationLabel: 'the system share menu',
+      shared: true,
     );
   }
 

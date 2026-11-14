@@ -3,7 +3,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:provider/provider.dart';
+import '../providers/linked_devices_provider.dart';
 import '../services/csv_backup_service.dart';
+import '../services/export_file_service.dart';
+import '../widgets/export_delivery_dialog.dart';
 import '../widgets/mobile/mobile_premium.dart';
 
 class BackupRestoreScreen extends StatefulWidget {
@@ -18,7 +22,11 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
   List<FileInfo> _backups = [];
   bool _isLoading = true;
 
-  final bool _canEdit = true;
+  bool _canEdit(BuildContext context) =>
+      !Provider.of<LinkedDevicesProvider>(context).isReadOnly;
+
+  bool _canExport(BuildContext context) =>
+      Provider.of<LinkedDevicesProvider>(context).canExport;
 
   @override
   void initState() {
@@ -69,7 +77,21 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
   }
 
   Future<void> _createBackup() async {
+    if (!_canExport(context)) return;
+    final delivery = await showExportDeliveryDialog(context);
+    if (!mounted || delivery == null) return;
     try {
+      if (delivery == ExportDelivery.share) {
+        await const ExportFileService().shareBytes(
+          fileName: _buildBackupFileName(),
+          bytes: await _service.buildBackupBytes(),
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Share menu opened.')),
+        );
+        return;
+      }
       final path = await _service.createBackupFile();
       if (!mounted) return;
       if (path == null) return;
@@ -91,7 +113,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
   }
 
   Future<void> _saveBackupToFolder() async {
-    if (!Platform.isAndroid && !Platform.isIOS) return;
+    if (!_canExport(context) || (!Platform.isAndroid && !Platform.isIOS)) return;
     try {
       final fileName = _buildBackupFileName();
       final directoryPath = await FilePicker.getDirectoryPath(
@@ -231,61 +253,65 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
               if (Platform.isAndroid || Platform.isIOS) ...[
                 Row(
                   children: [
-                    Expanded(
-                      child: _buildActionCard(
-                        theme,
-                        cs,
-                        icon: Icons.backup_rounded,
-                        label: 'Quick Backup',
-                        onTap: _createBackup,
+                    if (_canExport(context)) ...[
+                      Expanded(
+                        child: _buildActionCard(
+                          theme,
+                          cs,
+                          icon: Icons.backup_rounded,
+                          label: 'Quick Backup',
+                          onTap: _createBackup,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _buildActionCard(
-                        theme,
-                        cs,
-                        icon: Icons.folder_open_rounded,
-                        label: 'Save to…',
-                        onTap: _saveBackupToFolder,
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildActionCard(
+                          theme,
+                          cs,
+                          icon: Icons.folder_open_rounded,
+                          label: 'Save to…',
+                          onTap: _saveBackupToFolder,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _buildActionCard(
-                        theme,
-                        cs,
-                        icon: Icons.restore_page_rounded,
-                        label: 'Pick & Restore',
-                        onTap: _pickAndRestore,
-                        enabled: _canEdit,
+                      const SizedBox(width: 8),
+                    ],
+                    if (_canEdit(context))
+                      Expanded(
+                        child: _buildActionCard(
+                          theme,
+                          cs,
+                          icon: Icons.restore_page_rounded,
+                          label: 'Pick & Restore',
+                          onTap: _pickAndRestore,
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ] else ...[
                 Row(
                   children: [
-                    Expanded(
-                      child: _buildActionCard(
-                        theme,
-                        cs,
-                        icon: Icons.backup_rounded,
-                        label: 'Create Backup',
-                        onTap: _createBackup,
+                    if (_canExport(context)) ...[
+                      Expanded(
+                        child: _buildActionCard(
+                          theme,
+                          cs,
+                          icon: Icons.backup_rounded,
+                          label: 'Create Backup',
+                          onTap: _createBackup,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildActionCard(
-                        theme,
-                        cs,
-                        icon: Icons.restore_page_rounded,
-                        label: 'Pick & Restore',
-                        onTap: _pickAndRestore,
-                        enabled: _canEdit,
+                      const SizedBox(width: 12),
+                    ],
+                    if (_canEdit(context))
+                      Expanded(
+                        child: _buildActionCard(
+                          theme,
+                          cs,
+                          icon: Icons.restore_page_rounded,
+                          label: 'Pick & Restore',
+                          onTap: _pickAndRestore,
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ],
@@ -417,21 +443,24 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                     children: <Widget>[
                       Row(
                         children: <Widget>[
-                          Expanded(
-                            child: FilledButton.icon(
-                              onPressed: _createBackup,
-                              icon: const Icon(Icons.backup_rounded),
-                              label: const Text('Create Backup'),
+                          if (_canExport(context)) ...[
+                            Expanded(
+                              child: FilledButton.icon(
+                                onPressed: _createBackup,
+                                icon: const Icon(Icons.backup_rounded),
+                                label: const Text('Create Backup'),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: _canEdit ? _pickAndRestore : null,
-                              icon: const Icon(Icons.restore_page_rounded),
-                              label: const Text('Pick & Restore'),
+                            const SizedBox(width: 10),
+                          ],
+                          if (_canEdit(context))
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: _pickAndRestore,
+                                icon: const Icon(Icons.restore_page_rounded),
+                                label: const Text('Pick & Restore'),
+                              ),
                             ),
-                          ),
                         ],
                       ),
                     ],
@@ -495,8 +524,9 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
     ColorScheme cs,
     FileInfo file,
   ) {
+    final canEdit = _canEdit(context);
     return MobilePremiumPanel(
-      onTap: () => _confirmRestore(file.path, file.name),
+      onTap: canEdit ? () => _confirmRestore(file.path, file.name) : null,
       padding: const EdgeInsets.all(12),
       child: Row(
         children: <Widget>[
@@ -537,13 +567,12 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
               ],
             ),
           ),
-          IconButton(
-            tooltip: 'Restore backup',
-            onPressed: _canEdit
-                ? () => _confirmRestore(file.path, file.name)
-                : null,
-            icon: const Icon(Icons.restore_rounded),
-          ),
+          if (canEdit)
+            IconButton(
+              tooltip: 'Restore backup',
+              onPressed: () => _confirmRestore(file.path, file.name),
+              icon: const Icon(Icons.restore_rounded),
+            ),
         ],
       ),
     );
@@ -645,19 +674,20 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                     ],
                   ),
                 ),
-                IconButton(
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 36,
-                    minHeight: 36,
+                if (_canEdit(context))
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 36,
+                    ),
+                    icon: Icon(
+                      Icons.restore_rounded,
+                      size: 18,
+                      color: cs.onSurfaceVariant,
+                    ),
+                    onPressed: () => _confirmRestore(f.path, f.name),
                   ),
-                  icon: Icon(
-                    Icons.restore_rounded,
-                    size: 18,
-                    color: cs.onSurfaceVariant,
-                  ),
-                  onPressed: _canEdit ? () => _confirmRestore(f.path, f.name) : null,
-                ),
               ],
             ),
           ),

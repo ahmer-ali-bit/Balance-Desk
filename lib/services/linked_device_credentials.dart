@@ -12,6 +12,7 @@ class LinkedWorkspaceConfig {
     required this.role,
     required this.permission,
     required this.cursor,
+    this.allowExport = false,
     this.returnWorkspaceId,
   });
 
@@ -21,15 +22,18 @@ class LinkedWorkspaceConfig {
   final String role;
   final String permission;
   final int cursor;
+  final bool allowExport;
   final String? returnWorkspaceId;
 
   bool get isOwner => role == 'owner';
   bool get isReadOnly => permission == 'read_only';
+  bool get canExport => isOwner || !isReadOnly || allowExport;
 
   LinkedWorkspaceConfig copyWith({
     String? permission,
     String? role,
     int? cursor,
+    bool? allowExport,
     String? returnWorkspaceId,
   }) {
     return LinkedWorkspaceConfig(
@@ -39,6 +43,7 @@ class LinkedWorkspaceConfig {
       role: role ?? this.role,
       permission: permission ?? this.permission,
       cursor: cursor ?? this.cursor,
+      allowExport: allowExport ?? this.allowExport,
       returnWorkspaceId: returnWorkspaceId ?? this.returnWorkspaceId,
     );
   }
@@ -50,6 +55,7 @@ class LinkedWorkspaceConfig {
     'role': role,
     'permission': permission,
     'cursor': cursor,
+    'allowExport': allowExport,
     'returnWorkspaceId': returnWorkspaceId,
   };
 
@@ -61,6 +67,7 @@ class LinkedWorkspaceConfig {
       role: json['role'] as String? ?? 'linked',
       permission: json['permission'] as String? ?? 'edit',
       cursor: (json['cursor'] as num?)?.toInt() ?? 0,
+      allowExport: json['allowExport'] as bool? ?? false,
       returnWorkspaceId: json['returnWorkspaceId'] as String?,
     );
   }

@@ -375,16 +375,22 @@ class PdfService {
   Future<ExportFileResult> exportCustomerLedgerPdf({
     required Customer customer,
     required List<Entry> entries,
+    bool share = false,
   }) async {
     final bytes = await generateCustomerLedgerPdf(
       customer: customer,
       entries: entries,
     );
-    return _fileService.saveBytes(
-      fileName: _buildFileName(customer.name),
-      bytes: bytes,
-      dialogTitle: 'Save customer ledger PDF',
-    );
+    return share
+        ? _fileService.shareBytes(
+            fileName: _buildFileName(customer.name),
+            bytes: bytes,
+          )
+        : _fileService.saveBytes(
+            fileName: _buildFileName(customer.name),
+            bytes: bytes,
+            dialogTitle: 'Save customer ledger PDF',
+          );
   }
 
   Future<void> printCustomerLedgerPdf({
@@ -410,6 +416,7 @@ class PdfService {
     Map<int, pw.TableColumnWidth>? columnWidths,
     bool highlightFirstRow = false,
     List<String>? openingBalanceRow,
+    bool share = false,
   }) async {
     final bytes = await generateSnapshotPdf(
       title: title,
@@ -423,11 +430,13 @@ class PdfService {
       openingBalanceRow: openingBalanceRow,
     );
 
-    return _fileService.saveBytes(
-      fileName: fileName,
-      bytes: bytes,
-      dialogTitle: 'Save $title PDF',
-    );
+    return share
+        ? _fileService.shareBytes(fileName: fileName, bytes: bytes)
+        : _fileService.saveBytes(
+            fileName: fileName,
+            bytes: bytes,
+            dialogTitle: 'Save $title PDF',
+          );
   }
 
   Future<Uint8List> generateSnapshotPdf({

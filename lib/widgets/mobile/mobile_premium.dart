@@ -182,9 +182,14 @@ class MobilePremiumHeader extends StatelessWidget {
 
 /// Responsive 2/3-column grid for metric tiles.
 class MobileMetricGrid extends StatelessWidget {
-  const MobileMetricGrid({super.key, required this.children});
+  const MobileMetricGrid({
+    super.key,
+    required this.children,
+    this.fullWidthIndexes = const <int>{},
+  });
 
   final List<Widget> children;
+  final Set<int> fullWidthIndexes;
 
   @override
   Widget build(BuildContext context) {
@@ -198,7 +203,13 @@ class MobileMetricGrid extends StatelessWidget {
           spacing: spacing,
           runSpacing: spacing,
           children: <Widget>[
-            for (final child in children) SizedBox(width: width, child: child),
+            for (var index = 0; index < children.length; index++)
+              SizedBox(
+                width: fullWidthIndexes.contains(index)
+                    ? constraints.maxWidth
+                    : width,
+                child: children[index],
+              ),
           ],
         );
       },

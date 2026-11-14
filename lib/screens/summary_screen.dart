@@ -11,6 +11,7 @@ import '../utils/number_format_utils.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/mobile/mobile_premium.dart';
 import '../widgets/customer_search_field.dart';
+import '../widgets/export_delivery_dialog.dart';
 import '../widgets/summary_stat_card.dart';
 import '../providers/customer_provider.dart';
 import '../providers/linked_devices_provider.dart';
@@ -60,6 +61,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
       context,
       listen: listen,
     ).isReadOnly;
+  }
+
+  bool _canExport(BuildContext context, {bool listen = true}) {
+    return Provider.of<LinkedDevicesProvider>(
+      context,
+      listen: listen,
+    ).canExport;
   }
 
   Future<void> _loadSummary() async {
@@ -185,6 +193,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   Future<void> _exportSummaryPdf() async {
+    if (!_canExport(context, listen: false)) return;
     final rows = _buildSummaryPdfRows();
     if (rows.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -192,6 +201,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
       );
       return;
     }
+
+    final delivery = await showExportDeliveryDialog(context);
+    if (!mounted || delivery == null) return;
 
     try {
       final pdfResult = await _pdfService.exportSnapshotPdf(
@@ -207,6 +219,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
         ],
         rows: rows,
         fileName: 'customer_summary.pdf',
+        share: delivery == ExportDelivery.share,
         summaryItems: <({String label, String value})>[
           (
             label: 'Customer Qty',
@@ -232,9 +245,11 @@ class _SummaryScreenState extends State<SummaryScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            pdfResult.isSaved
-                ? 'Saved to ${pdfResult.locationLabel}'
-                : 'Export cancelled.',
+            pdfResult.shared
+                ? 'Share menu opened.'
+                : (pdfResult.isSaved
+                      ? 'Saved to ${pdfResult.locationLabel}'
+                      : 'Export cancelled.'),
           ),
         ),
       );
@@ -251,6 +266,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   Future<void> _exportSummaryExcel() async {
+    if (!_canExport(context, listen: false)) return;
     final rows = _buildSummaryExportRows();
     if (rows.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -258,6 +274,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
       );
       return;
     }
+
+    final delivery = await showExportDeliveryDialog(context);
+    if (!mounted || delivery == null) return;
 
     try {
       final csvResult = await _exportService.saveCsv(
@@ -270,6 +289,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
           'Balance',
         ],
         rows: rows,
+        share: delivery == ExportDelivery.share,
       );
       if (!mounted) {
         return;
@@ -277,9 +297,11 @@ class _SummaryScreenState extends State<SummaryScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            csvResult.isSaved
-                ? 'Saved to ${csvResult.locationLabel}'
-                : 'Export cancelled.',
+            csvResult.shared
+                ? 'Share menu opened.'
+                : (csvResult.isSaved
+                      ? 'Saved to ${csvResult.locationLabel}'
+                      : 'Export cancelled.'),
           ),
         ),
       );
@@ -294,6 +316,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   Future<void> _exportSummary() async {
+    if (!_canExport(context, listen: false)) return;
     final choice = await showDialog<_SummaryExportChoice>(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -304,7 +327,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
             TextButton(
               onPressed: () =>
                   Navigator.of(dialogContext).pop(_SummaryExportChoice.excel),
-              child: const Text('Excel'),
+              child: const Text('Excel / CSV'),
             ),
             FilledButton(
               onPressed: () =>
@@ -471,7 +494,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   Widget _buildSummaryToolbar({required bool isCompact}) {
-    if (!_canEdit(context)) return const SizedBox.shrink();
+    final canEdit = _canEdit(context);
+    final canExport = _canExport(context);
+    if (!canEdit && !canExport) return const SizedBox.shrink();
     final isDesktop = PlatformHelper.isDesktop;
     final searchField = CustomerSearchField(
       controller: _searchController,
@@ -493,12 +518,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
       spacing: 10,
       runSpacing: 10,
       children: <Widget>[
-        OutlinedButton.icon(
-          onPressed: _isLoading ? null : _loadSummary,
-          icon: const Icon(Icons.refresh_rounded),
-          label: const Text('Refresh'),
-        ),
-        if (isDesktop)
+        if (canEdit)
+          OutlinedButton.icon(
+            onPressed: _isLoading ? null : _loadSummary,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Refresh'),
+          ),
+        if (canExport && isDesktop)
           OutlinedButton.icon(
             onPressed: _isLoading || _summaryData.customers.isEmpty
                 ? null
@@ -506,7 +532,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
             icon: const Icon(Icons.file_download_outlined),
             label: const Text('Export'),
           )
-        else
+        else if (canExport)
           FilledButton.icon(
             onPressed: _isLoading || _summaryData.customers.isEmpty
                 ? null
@@ -521,8 +547,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          searchField,
-          const SizedBox(height: 10),
+          if (canEdit) searchField,
+          if (canEdit) const SizedBox(height: 10),
           actionButtons,
         ],
       );
@@ -561,26 +587,29 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     )
                   : null,
               children: <Widget>[
-                MobileMetricGrid(children: <Widget>[
-                  MobileMetricTile(
-                    label: 'Debit',
-                    value: _formatAmount(_summaryData.overallDebit),
-                    icon: Icons.south_west_rounded,
-                    color: AppColors.debit,
-                  ),
-                  MobileMetricTile(
-                    label: 'Credit',
-                    value: _formatAmount(_summaryData.overallCredit),
-                    icon: Icons.north_east_rounded,
-                    color: AppColors.credit,
-                  ),
-                  MobileMetricTile(
-                    label: 'Balance',
-                    value: _formatBalance(overallBalance),
-                    icon: Icons.account_balance_wallet_outlined,
-                    color: balanceColor,
-                  ),
-                ]),
+                MobileMetricGrid(
+                  fullWidthIndexes: const <int>{2},
+                  children: <Widget>[
+                    MobileMetricTile(
+                      label: 'Debit',
+                      value: _formatAmount(_summaryData.overallDebit),
+                      icon: Icons.south_west_rounded,
+                      color: AppColors.debit,
+                    ),
+                    MobileMetricTile(
+                      label: 'Credit',
+                      value: _formatAmount(_summaryData.overallCredit),
+                      icon: Icons.north_east_rounded,
+                      color: AppColors.credit,
+                    ),
+                    MobileMetricTile(
+                      label: 'Balance',
+                      value: _formatBalance(overallBalance),
+                      icon: Icons.account_balance_wallet_outlined,
+                      color: balanceColor,
+                    ),
+                  ],
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -628,8 +657,12 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   Widget _buildPremiumMobileSummaryControls(BuildContext context) {
-    if (!_canEdit(context)) return const SizedBox.shrink();
-    final canExport = !_isLoading && _summaryData.customers.isNotEmpty;
+    final canEdit = _canEdit(context);
+    final exportAllowed = _canExport(context);
+    if (!canEdit && !exportAllowed) return const SizedBox.shrink();
+    final canExport = exportAllowed &&
+        !_isLoading &&
+        _summaryData.customers.isNotEmpty;
 
     return MobilePremiumPanel(
       padding: const EdgeInsets.all(14),
@@ -655,21 +688,24 @@ class _SummaryScreenState extends State<SummaryScreen> {
           const SizedBox(height: 10),
           Row(
             children: <Widget>[
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _isLoading ? null : _loadSummary,
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('Refresh'),
+              if (canEdit) ...<Widget>[
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _isLoading ? null : _loadSummary,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Refresh'),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: canExport ? _exportSummary : null,
-                  icon: const Icon(Icons.file_download_outlined),
-                  label: const Text('Export'),
+                if (canExport) const SizedBox(width: 10),
+              ],
+              if (canExport)
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _exportSummary,
+                    icon: const Icon(Icons.file_download_outlined),
+                    label: const Text('Export'),
+                  ),
                 ),
-              ),
             ],
           ),
         ],

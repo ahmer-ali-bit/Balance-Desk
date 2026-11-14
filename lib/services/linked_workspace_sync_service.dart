@@ -14,6 +14,7 @@ class LinkedSyncResult {
     required this.conflictCount,
     required this.permission,
     required this.role,
+    required this.allowExport,
   });
   final int cursor;
   final int changedRecords;
@@ -21,6 +22,7 @@ class LinkedSyncResult {
   final int conflictCount;
   final String permission;
   final String role;
+  final bool allowExport;
 }
 
 class _SyncRecord {
@@ -99,6 +101,7 @@ class LinkedWorkspaceSyncService {
     var hasMoreRemoteChanges = false;
     var permission = config.permission;
     var role = config.role;
+    var allowExport = config.allowExport;
     var changedCount = 0;
     final pageLimit = 12;
     for (var page = 0; page < pageLimit; page++) {
@@ -216,6 +219,7 @@ class LinkedWorkspaceSyncService {
       cursor = (body['cursor'] as num?)?.toInt() ?? cursor;
       permission = body['permission']?.toString() ?? permission;
       role = body['role']?.toString() ?? role;
+      allowExport = body['allow_export'] == true;
       hasMoreRemoteChanges = body['has_more'] == true;
       if (!hasMoreRemoteChanges) break;
     }
@@ -234,6 +238,7 @@ class LinkedWorkspaceSyncService {
       conflictCount: conflictsNow.length,
       permission: permission,
       role: role,
+      allowExport: allowExport,
     );
   }
 

@@ -15,19 +15,25 @@ class ExportService {
     required String fileName,
     required List<String> headers,
     required List<List<String>> rows,
+    bool share = false,
   }) async {
+    final bytes = _buildCsvBytes(headers, rows);
+    return share
+        ? _fileService.shareBytes(fileName: fileName, bytes: bytes)
+        : _fileService.saveBytes(
+            fileName: fileName,
+            bytes: bytes,
+            dialogTitle: 'Save CSV',
+          );
+  }
+
+  Uint8List _buildCsvBytes(List<String> headers, List<List<String>> rows) {
     final buffer = StringBuffer('\ufeff');
     buffer.writeln(_toCsvLine(headers));
     for (final row in rows) {
       buffer.writeln(_toCsvLine(row));
     }
-
-    final bytes = Uint8List.fromList(utf8.encode(buffer.toString()));
-    return _fileService.saveBytes(
-      fileName: fileName,
-      bytes: bytes,
-      dialogTitle: 'Save CSV',
-    );
+    return Uint8List.fromList(utf8.encode(buffer.toString()));
   }
 
   String _toCsvLine(List<String> values) {

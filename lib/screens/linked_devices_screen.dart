@@ -143,6 +143,21 @@ class _LinkedDevicesScreenState extends State<LinkedDevicesScreen> {
     }
   }
 
+  Future<void> _setDeviceExportAllowed(
+    LinkedDevicesProvider provider,
+    Map<String, Object?> device,
+    bool allowed,
+  ) async {
+    try {
+      await provider.setDeviceExportAllowed(device['id'].toString(), allowed);
+      if (mounted) {
+        _showMessage(allowed ? 'Export allowed for this device.' : 'Export disabled for this device.');
+      }
+    } catch (error) {
+      if (mounted) _showMessage(error.toString());
+    }
+  }
+
   Future<void> _transferOwnership(
     LinkedDevicesProvider provider,
     Map<String, Object?> device,
@@ -565,7 +580,13 @@ class _LinkedDevicesScreenState extends State<LinkedDevicesScreen> {
                 Row(children: <Widget>[Expanded(child: Text(device['name']?.toString() ?? 'Device', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))), if (isOwnerDevice) const Padding(padding: EdgeInsets.only(left: 5), child: Icon(Icons.verified_user_outlined, size: 16))]),
                 const SizedBox(height: 3),
                 Text(
-                  !isActive ? 'Unlinked' : isOwnerDevice ? 'Owner device' : readOnly ? 'Read-only' : 'Can edit',
+                  !isActive
+                      ? 'Unlinked'
+                      : isOwnerDevice
+                      ? 'Owner device'
+                      : readOnly
+                      ? (device['allow_export'] == true ? 'Read-only · exports allowed' : 'Read-only')
+                      : 'Can edit',
                   style: Theme.of(context).textTheme.labelSmall,
                 ),
                 if (created != null) Text('Added ${_formatDate(created)}${lastSeen == null ? '' : ' · Active ${_formatDate(lastSeen)}'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
@@ -578,15 +599,29 @@ class _LinkedDevicesScreenState extends State<LinkedDevicesScreen> {
               onSelected: (value) {
                 if (value == 'transfer_owner') {
                   _transferOwnership(provider, device);
+                } else if (value == 'toggle_export') {
+                  _setDeviceExportAllowed(
+                    provider,
+                    device,
+                    device['allow_export'] != true,
+                  );
                 } else {
                   _setDevicePermission(provider, device, value);
                 }
               },
-              itemBuilder: (_) => const <PopupMenuEntry<String>>[
-                PopupMenuItem(value: 'edit', child: Text('Allow editing')),
-                PopupMenuItem(value: 'read_only', child: Text('Read only')),
-                PopupMenuDivider(),
-                PopupMenuItem(value: 'transfer_owner', child: Text('Make workspace owner')),
+              itemBuilder: (_) => <PopupMenuEntry<String>>[
+                const PopupMenuItem(value: 'edit', child: Text('Allow editing')),
+                const PopupMenuItem(value: 'read_only', child: Text('Read only')),
+                PopupMenuItem(
+                  value: 'toggle_export',
+                  child: Text(
+                    device['allow_export'] == true
+                        ? 'Disable export in read-only mode'
+                        : 'Allow export in read-only mode',
+                  ),
+                ),
+                const PopupMenuDivider(),
+                const PopupMenuItem(value: 'transfer_owner', child: Text('Make workspace owner')),
               ],
               icon: const Icon(Icons.tune_rounded),
             ),

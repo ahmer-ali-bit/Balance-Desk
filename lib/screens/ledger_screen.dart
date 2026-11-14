@@ -22,6 +22,7 @@ import '../utils/number_format_utils.dart' as number_format_utils;
 import '../utils/platform_helper.dart';
 import '../widgets/amount_input_field.dart';
 import '../widgets/app_empty_state.dart';
+import '../widgets/export_delivery_dialog.dart';
 import '../widgets/forms/opening_balance_field.dart';
 import '../widgets/mobile/hero_balance_card.dart';
 import '../widgets/scale_down_width.dart';
@@ -117,6 +118,13 @@ class _LedgerViewState extends State<_LedgerView> {
       context,
       listen: listen,
     ).isReadOnly;
+  }
+
+  bool _canExport(BuildContext context, {bool listen = true}) {
+    return Provider.of<LinkedDevicesProvider>(
+      context,
+      listen: listen,
+    ).canExport;
   }
 
   @override
@@ -680,10 +688,14 @@ class _LedgerViewState extends State<_LedgerView> {
       return;
     }
 
+    final delivery = await showExportDeliveryDialog(context);
+    if (!mounted || delivery == null) return;
+
     try {
       final result = await _pdfService.exportCustomerLedgerPdf(
         customer: provider.customer,
         entries: provider.entries,
+        share: delivery == ExportDelivery.share,
       );
       if (!mounted) {
         return;
@@ -691,9 +703,11 @@ class _LedgerViewState extends State<_LedgerView> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            result.isSaved
-                ? 'Saved to ${result.locationLabel}'
-                : 'Export cancelled.',
+            result.shared
+                ? 'Share menu opened.'
+                : (result.isSaved
+                      ? 'Saved to ${result.locationLabel}'
+                      : 'Export cancelled.'),
           ),
         ),
       );
@@ -748,6 +762,9 @@ class _LedgerViewState extends State<_LedgerView> {
       'csv',
     );
 
+    final delivery = await showExportDeliveryDialog(context);
+    if (!mounted || delivery == null) return;
+
     try {
       final csvResult = await _exportService.saveCsv(
         fileName: fileName,
@@ -760,6 +777,7 @@ class _LedgerViewState extends State<_LedgerView> {
           'Balance',
         ],
         rows: rows,
+        share: delivery == ExportDelivery.share,
       );
       if (!mounted) {
         return;
@@ -767,9 +785,11 @@ class _LedgerViewState extends State<_LedgerView> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            csvResult.isSaved
-                ? 'Saved to ${csvResult.locationLabel}'
-                : 'Export cancelled.',
+            csvResult.shared
+                ? 'Share menu opened.'
+                : (csvResult.isSaved
+                      ? 'Saved to ${csvResult.locationLabel}'
+                      : 'Export cancelled.'),
           ),
         ),
       );
@@ -784,6 +804,7 @@ class _LedgerViewState extends State<_LedgerView> {
   }
 
   Future<void> _exportWithOptions() async {
+    if (!_canExport(context, listen: false)) return;
     final choice = await showDialog<_ExportChoice>(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -794,7 +815,7 @@ class _LedgerViewState extends State<_LedgerView> {
             TextButton(
               onPressed: () =>
                   Navigator.of(dialogContext).pop(_ExportChoice.excel),
-              child: const Text('Excel'),
+              child: const Text('Excel / CSV'),
             ),
             FilledButton(
               onPressed: () =>
@@ -818,6 +839,7 @@ class _LedgerViewState extends State<_LedgerView> {
   }
 
   Future<void> _printPdf() async {
+    if (!_canExport(context, listen: false)) return;
     final provider = context.read<LedgerProvider>();
     if (provider.entries.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1170,10 +1192,10 @@ class _LedgerViewState extends State<_LedgerView> {
   }) async {
     switch (action) {
       case _LedgerAppBarAction.export:
-        await _exportWithOptions();
+        if (_canExport(context, listen: false)) await _exportWithOptions();
         break;
       case _LedgerAppBarAction.print:
-        await _printPdf();
+        if (_canExport(context, listen: false)) await _printPdf();
         break;
       case _LedgerAppBarAction.editCustomer:
         if (_canEdit(context, listen: false)) {
@@ -1192,7 +1214,68 @@ class _LedgerViewState extends State<_LedgerView> {
     required bool isCompact,
   }) {
     final hasEntries = provider.entries.isNotEmpty;
-    if (!_canEdit(context)) return const <Widget>[];
+    final canEdit = _canEdit(context);
+    final canExport = _canExport(context);
+    if (!canEdit) {
+      if (isCompact) {
+        return <Widget>[
+          IconButton(
+            tooltip: 'Refresh ledger',
+            onPressed: provider.isLoading ? null : provider.loadEntries,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+          PopupMenuButton<_LedgerAppBarAction>(
+            tooltip: 'More actions',
+            onSelected: (_LedgerAppBarAction action) {
+              unawaited(_handleAppBarAction(action, provider: provider));
+            },
+            itemBuilder: (BuildContext context) =>
+                <PopupMenuEntry<_LedgerAppBarAction>>[
+                  if (canExport && hasEntries)
+                    PopupMenuItem<_LedgerAppBarAction>(
+                      value: _LedgerAppBarAction.export,
+                      child: _buildAppBarMenuItem(
+                        context,
+                        icon: Icons.file_download_outlined,
+                        label: 'Export',
+                      ),
+                    ),
+                  if (canExport && hasEntries)
+                    PopupMenuItem<_LedgerAppBarAction>(
+                      value: _LedgerAppBarAction.print,
+                      child: _buildAppBarMenuItem(
+                        context,
+                        icon: Icons.print_outlined,
+                        label: 'Print',
+                      ),
+                    ),
+                  PopupMenuItem<_LedgerAppBarAction>(
+                    value: _LedgerAppBarAction.filterAndBalance,
+                    child: _buildAppBarMenuItem(
+                      context,
+                      icon: Icons.tune_rounded,
+                      label: 'Filters',
+                    ),
+                  ),
+                ],
+          ),
+          const SizedBox(width: 4),
+        ];
+      }
+      if (!canExport || !hasEntries) return const <Widget>[];
+      return <Widget>[
+        OutlinedButton.icon(
+          onPressed: _exportWithOptions,
+          icon: const Icon(Icons.file_download_outlined),
+          label: const Text('Export'),
+        ),
+        OutlinedButton.icon(
+          onPressed: _printPdf,
+          icon: const Icon(Icons.print_outlined),
+          label: const Text('Print'),
+        ),
+      ];
+    }
     if (isCompact) {
       return <Widget>[
         IconButton(
@@ -1216,9 +1299,10 @@ class _LedgerViewState extends State<_LedgerView> {
                     label: 'Export',
                   ),
                 ),
-                PopupMenuItem<_LedgerAppBarAction>(
-                  value: _LedgerAppBarAction.print,
-                  enabled: hasEntries,
+                if (canExport)
+                  PopupMenuItem<_LedgerAppBarAction>(
+                    value: _LedgerAppBarAction.print,
+                    enabled: hasEntries,
                   child: _buildAppBarMenuItem(
                     context,
                     icon: Icons.print_outlined,
@@ -3036,11 +3120,12 @@ class _LedgerViewState extends State<_LedgerView> {
                                 context: context,
                                 provider: provider,
                               ),
-                              const SizedBox(height: 16),
-                              _buildOpeningBalanceSection(
-                                context: context,
-                                provider: provider,
-                              ),
+                              if (_canEdit(context)) ...<Widget>[
+                                const SizedBox(height: 16),
+                                _buildOpeningBalanceSection(
+                                  context: context,
+                                  provider: provider,
+                                ),
                               const SizedBox(height: 24),
                               Text(
                                 'LEDGER TYPE',
@@ -3131,6 +3216,7 @@ class _LedgerViewState extends State<_LedgerView> {
                                       ),
                                   contentPadding: EdgeInsets.zero,
                                 ),
+                              ],
                               ],
                             ],
                           ),
@@ -3226,9 +3312,11 @@ class _LedgerViewState extends State<_LedgerView> {
                           if (intent.action == _LedgerShortcut.addEntry &&
                               canEdit) {
                             _showAddEntryDialog();
-                          } else if (intent.action == _LedgerShortcut.export) {
+                          } else if (intent.action == _LedgerShortcut.export &&
+                              _canExport(context, listen: false)) {
                             _exportWithOptions();
-                          } else if (intent.action == _LedgerShortcut.print) {
+                          } else if (intent.action == _LedgerShortcut.print &&
+                              _canExport(context, listen: false)) {
                             _printPdf();
                           } else if (intent.action == _LedgerShortcut.goBack) {
                             Navigator.of(context).maybePop();

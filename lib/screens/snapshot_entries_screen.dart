@@ -15,6 +15,7 @@ import '../services/pdf_service.dart';
 import '../utils/app_colors.dart';
 import '../utils/number_format_utils.dart';
 import '../utils/platform_helper.dart';
+import '../widgets/export_delivery_dialog.dart';
 import '../widgets/mobile/mobile_premium.dart';
 import '../widgets/timeline/timeline_cards.dart';
 import 'ledger_screen.dart';
@@ -67,6 +68,13 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       context,
       listen: listen,
     ).isReadOnly;
+  }
+
+  bool _canExport(BuildContext context, {bool listen = true}) {
+    return Provider.of<LinkedDevicesProvider>(
+      context,
+      listen: listen,
+    ).canExport;
   }
 
   double get _openingDebitBalance =>
@@ -825,6 +833,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   }
 
   Future<void> _exportSnapshotPdf() async {
+    if (!_canExport(context, listen: false)) return;
     final rows = _buildSnapshotExportRows(includeOpeningBalance: false);
     if (rows.isEmpty && !_hasOpeningBalance) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -832,6 +841,9 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       );
       return;
     }
+
+    final delivery = await showExportDeliveryDialog(context);
+    if (!mounted || delivery == null) return;
 
     try {
       final pdfResult = await _pdfService.exportSnapshotPdf(
@@ -849,6 +861,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
         ],
         rows: rows,
         fileName: 'daily_log_snapshot.pdf',
+        share: delivery == ExportDelivery.share,
         summaryItems: _buildSnapshotPdfSummaryItems(),
         openingBalanceRow: _hasOpeningBalance
             ? <String>[
@@ -872,9 +885,11 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            pdfResult.isSaved
-                ? 'Saved to ${pdfResult.locationLabel}'
-                : 'Export cancelled.',
+            pdfResult.shared
+                ? 'Share menu opened.'
+                : (pdfResult.isSaved
+                      ? 'Saved to ${pdfResult.locationLabel}'
+                      : 'Export cancelled.'),
           ),
         ),
       );
@@ -891,6 +906,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   }
 
   Future<void> _exportSnapshotExcel() async {
+    if (!_canExport(context, listen: false)) return;
     final rows = _buildSnapshotExportRows();
     if (rows.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -898,6 +914,9 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       );
       return;
     }
+
+    final delivery = await showExportDeliveryDialog(context);
+    if (!mounted || delivery == null) return;
 
     try {
       final csvResult = await _exportService.saveCsv(
@@ -913,6 +932,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
           'Page No',
         ],
         rows: rows,
+        share: delivery == ExportDelivery.share,
       );
       if (!mounted) {
         return;
@@ -920,9 +940,11 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            csvResult.isSaved
-                ? 'Saved to ${csvResult.locationLabel}'
-                : 'Export cancelled.',
+            csvResult.shared
+                ? 'Share menu opened.'
+                : (csvResult.isSaved
+                      ? 'Saved to ${csvResult.locationLabel}'
+                      : 'Export cancelled.'),
           ),
         ),
       );
@@ -937,6 +959,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   }
 
   Future<void> _exportSnapshot() async {
+    if (!_canExport(context, listen: false)) return;
     final choice = await showDialog<_SnapshotExportChoice>(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -947,7 +970,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
             TextButton(
               onPressed: () =>
                   Navigator.of(dialogContext).pop(_SnapshotExportChoice.excel),
-              child: const Text('Excel'),
+              child: const Text('Excel / CSV'),
             ),
             FilledButton(
               onPressed: () =>
@@ -1188,9 +1211,23 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     BuildContext context, {
     required bool canEdit,
   }) {
-    if (!canEdit) return const SizedBox.shrink();
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final canExport = _canExport(context);
+    if (!canEdit) {
+      if (!canExport) return const SizedBox.shrink();
+      return MobilePremiumPanel(
+        padding: const EdgeInsets.all(14),
+        child: SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _isLoading || _isSavingSnapshot ? null : _exportSnapshot,
+            icon: const Icon(Icons.file_download_outlined),
+            label: const Text('Export'),
+          ),
+        ),
+      );
+    }
     final canSave =
         !_isLoading && !_isSavingSnapshot && _hasCurrentPeriodEntries;
     final canUseHistory =
@@ -1427,7 +1464,14 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   }
 
   Widget _buildHeaderActions({required bool isCompact, required bool canEdit}) {
-    if (!canEdit) return const SizedBox.shrink();
+    if (!canEdit) {
+      if (!_canExport(context)) return const SizedBox.shrink();
+      return OutlinedButton.icon(
+        onPressed: _isLoading || _isSavingSnapshot ? null : _exportSnapshot,
+        icon: const Icon(Icons.file_download_outlined),
+        label: const Text('Export'),
+      );
+    }
     final isDesktop =
         PlatformHelper.isDesktop &&
         MediaQuery.sizeOf(context).width >= 980;
@@ -2183,6 +2227,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
 
   // ignore: unused_element
   Widget _buildCompactEntryCard(BuildContext context, _SnapshotEntry item) {
+    final canEdit = _canEdit(context);
     return PremiumTimelineEntryCard(
       customerName: item.customerName,
       entryDate: _formatDate(item.entry.entryDate),
@@ -2190,8 +2235,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       debit: item.debit,
       credit: item.credit,
       onTap: () => _navigateToCustomerLedger(item),
-      onRemove: () => _removeEntryFromDailyLog(item.entry),
-      canEdit: true,
+      onRemove: canEdit ? () => _removeEntryFromDailyLog(item.entry) : null,
+      canEdit: canEdit,
     );
   }
 

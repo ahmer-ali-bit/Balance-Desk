@@ -32,6 +32,8 @@ class CsvBackupService {
   final AppDatabase _database;
   final CompanyProfileService _companyProfileService;
 
+  Future<Uint8List> buildBackupBytes() => _buildBackupBytes();
+
   Future<String?> createBackupFile() async {
     final bytes = await _buildBackupBytes();
     final fileName = _buildBackupFileName();

@@ -47,7 +47,8 @@ class LinkedDevicesProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool get isSyncing => _isSyncing;
   bool get isLinked => _config != null;
   bool get isOwner => _config?.isOwner ?? false;
-  bool get isReadOnly => _config?.isReadOnly ?? false;
+  bool get isReadOnly => _config?.isReadOnly ?? _isConfigLoading;
+  bool get canExport => _config?.canExport ?? !_isConfigLoading;
   String? get error => _error;
   DateTime? get lastSyncAt => _lastSyncAt;
   int get lastChangeCount => _lastChangeCount;
@@ -243,6 +244,13 @@ class LinkedDevicesProvider extends ChangeNotifier with WidgetsBindingObserver {
     await refreshDevices();
   }
 
+  Future<void> setDeviceExportAllowed(String deviceId, bool allowed) async {
+    final config = _config;
+    if (config == null || !config.isOwner) return;
+    await _service.setDeviceExportAllowed(config, deviceId, allowed);
+    await refreshDevices();
+  }
+
   Future<void> transferOwnership(String deviceId) async {
     final config = _config;
     if (config == null || !config.isOwner) return;
@@ -382,6 +390,7 @@ class LinkedDevicesProvider extends ChangeNotifier with WidgetsBindingObserver {
         conflictCount: _conflictCount,
         permission: current.permission,
         role: current.role,
+        allowExport: current.allowExport,
       );
       for (var pass = 0; pass < 20; pass++) {
         result = await _syncService.sync(current);
@@ -389,6 +398,7 @@ class LinkedDevicesProvider extends ChangeNotifier with WidgetsBindingObserver {
           cursor: result.cursor,
           permission: result.permission,
           role: result.role,
+          allowExport: result.allowExport,
         );
         await LinkedWorkspaceConfigStore().write(current);
         if (result.pendingRecords == 0) break;

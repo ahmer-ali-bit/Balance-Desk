@@ -180,6 +180,21 @@ class LinkedDevicesService {
     });
   }
 
+  Future<void> setDeviceExportAllowed(
+    LinkedWorkspaceConfig config,
+    String targetDeviceId,
+    bool allowed,
+  ) async {
+    final token = await _requireToken(config.localWorkspaceId);
+    await _api.rpc('bd_set_device_export_allowed', <String, Object?>{
+      'p_workspace_id': config.cloudWorkspaceId,
+      'p_device_id': config.deviceId,
+      'p_device_token': token,
+      'p_target_device_id': targetDeviceId,
+      'p_allow_export': allowed,
+    });
+  }
+
   Future<void> transferOwnership(
     LinkedWorkspaceConfig config,
     String targetDeviceId,
