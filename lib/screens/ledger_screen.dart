@@ -692,10 +692,14 @@ class _LedgerViewState extends State<_LedgerView> {
     if (!mounted || delivery == null) return;
 
     try {
-      final result = await _pdfService.exportCustomerLedgerPdf(
-        customer: provider.customer,
-        entries: provider.entries,
-        share: delivery == ExportDelivery.share,
+      final result = await withExportProgress(
+        context,
+        message: 'Preparing PDF…',
+        task: () => _pdfService.exportCustomerLedgerPdf(
+          customer: provider.customer,
+          entries: provider.entries,
+          share: delivery == ExportDelivery.share,
+        ),
       );
       if (!mounted) {
         return;
@@ -766,18 +770,22 @@ class _LedgerViewState extends State<_LedgerView> {
     if (!mounted || delivery == null) return;
 
     try {
-      final csvResult = await _exportService.saveCsv(
-        fileName: fileName,
-        headers: const <String>[
-          'Entry Date',
-          'Page No',
-          'Description',
-          'Debit',
-          'Credit',
-          'Balance',
-        ],
-        rows: rows,
-        share: delivery == ExportDelivery.share,
+      final csvResult = await withExportProgress(
+        context,
+        message: 'Preparing CSV…',
+        task: () => _exportService.saveCsv(
+          fileName: fileName,
+          headers: const <String>[
+            'Entry Date',
+            'Page No',
+            'Description',
+            'Debit',
+            'Credit',
+            'Balance',
+          ],
+          rows: rows,
+          share: delivery == ExportDelivery.share,
+        ),
       );
       if (!mounted) {
         return;

@@ -846,38 +846,42 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     if (!mounted || delivery == null) return;
 
     try {
-      final pdfResult = await _pdfService.exportSnapshotPdf(
-        title: 'Daily Log Snapshot',
-        subtitle: 'Daily Log',
-        headers: const <String>[
-          'Sr #',
-          'Customer',
-          'Entry Date',
-          'Description',
-          'Debit',
-          'Credit',
-          'Balance',
-          'Page No',
-        ],
-        rows: rows,
-        fileName: 'daily_log_snapshot.pdf',
-        share: delivery == ExportDelivery.share,
-        summaryItems: _buildSnapshotPdfSummaryItems(),
-        openingBalanceRow: _hasOpeningBalance
-            ? <String>[
-                '',
-                'Opening Balance',
-                '-',
-                'Starting amount',
-                _formatAmount(_effectiveOpeningBalance.debit),
-                _formatAmount(_effectiveOpeningBalance.credit),
-                _formatBalance(
-                  _effectiveOpeningBalance.debit -
-                      _effectiveOpeningBalance.credit,
-                ),
-                '-',
-              ]
-            : null,
+      final pdfResult = await withExportProgress(
+        context,
+        message: 'Preparing PDF…',
+        task: () => _pdfService.exportSnapshotPdf(
+          title: 'Daily Log Snapshot',
+          subtitle: 'Daily Log',
+          headers: const <String>[
+            'Sr #',
+            'Customer',
+            'Entry Date',
+            'Description',
+            'Debit',
+            'Credit',
+            'Balance',
+            'Page No',
+          ],
+          rows: rows,
+          fileName: 'daily_log_snapshot.pdf',
+          share: delivery == ExportDelivery.share,
+          summaryItems: _buildSnapshotPdfSummaryItems(),
+          openingBalanceRow: _hasOpeningBalance
+              ? <String>[
+                  '',
+                  'Opening Balance',
+                  '-',
+                  'Starting amount',
+                  _formatAmount(_effectiveOpeningBalance.debit),
+                  _formatAmount(_effectiveOpeningBalance.credit),
+                  _formatBalance(
+                    _effectiveOpeningBalance.debit -
+                        _effectiveOpeningBalance.credit,
+                  ),
+                  '-',
+                ]
+              : null,
+        ),
       );
       if (!mounted) {
         return;
@@ -919,20 +923,24 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     if (!mounted || delivery == null) return;
 
     try {
-      final csvResult = await _exportService.saveCsv(
-        fileName: _buildExportFileName('export', 'csv'),
-        headers: const <String>[
-          'Sr #',
-          'Customer',
-          'Entry Date',
-          'Description',
-          'Debit',
-          'Credit',
-          'Balance',
-          'Page No',
-        ],
-        rows: rows,
-        share: delivery == ExportDelivery.share,
+      final csvResult = await withExportProgress(
+        context,
+        message: 'Preparing CSV…',
+        task: () => _exportService.saveCsv(
+          fileName: _buildExportFileName('export', 'csv'),
+          headers: const <String>[
+            'Sr #',
+            'Customer',
+            'Entry Date',
+            'Description',
+            'Debit',
+            'Credit',
+            'Balance',
+            'Page No',
+          ],
+          rows: rows,
+          share: delivery == ExportDelivery.share,
+        ),
       );
       if (!mounted) {
         return;

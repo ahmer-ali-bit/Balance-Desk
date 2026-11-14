@@ -206,38 +206,42 @@ class _SummaryScreenState extends State<SummaryScreen> {
     if (!mounted || delivery == null) return;
 
     try {
-      final pdfResult = await _pdfService.exportSnapshotPdf(
-        title: 'Customer Summary',
-        subtitle: 'All Customers',
-        headers: const <String>[
-          'Sr #',
-          'Customer',
-          'Page No',
-          'Total Debit',
-          'Total Credit',
-          'Balance',
-        ],
-        rows: rows,
-        fileName: 'customer_summary.pdf',
-        share: delivery == ExportDelivery.share,
-        summaryItems: <({String label, String value})>[
-          (
-            label: 'Customer Qty',
-            value: _summaryData.customers.length.toString(),
-          ),
-          (
-            label: 'Overall Debit',
-            value: _formatAmount(_summaryData.overallDebit),
-          ),
-          (
-            label: 'Overall Credit',
-            value: _formatAmount(_summaryData.overallCredit),
-          ),
-          (
-            label: 'Final Balance',
-            value: _formatBalance(_summaryData.finalBalance),
-          ),
-        ],
+      final pdfResult = await withExportProgress(
+        context,
+        message: 'Preparing PDF…',
+        task: () => _pdfService.exportSnapshotPdf(
+          title: 'Customer Summary',
+          subtitle: 'All Customers',
+          headers: const <String>[
+            'Sr #',
+            'Customer',
+            'Page No',
+            'Total Debit',
+            'Total Credit',
+            'Balance',
+          ],
+          rows: rows,
+          fileName: 'customer_summary.pdf',
+          share: delivery == ExportDelivery.share,
+          summaryItems: <({String label, String value})>[
+            (
+              label: 'Customer Qty',
+              value: _summaryData.customers.length.toString(),
+            ),
+            (
+              label: 'Overall Debit',
+              value: _formatAmount(_summaryData.overallDebit),
+            ),
+            (
+              label: 'Overall Credit',
+              value: _formatAmount(_summaryData.overallCredit),
+            ),
+            (
+              label: 'Final Balance',
+              value: _formatBalance(_summaryData.finalBalance),
+            ),
+          ],
+        ),
       );
       if (!mounted) {
         return;
@@ -279,17 +283,21 @@ class _SummaryScreenState extends State<SummaryScreen> {
     if (!mounted || delivery == null) return;
 
     try {
-      final csvResult = await _exportService.saveCsv(
-        fileName: 'customer_summary.csv',
-        headers: const <String>[
-          'Customer',
-          'Page No',
-          'Total Debit',
-          'Total Credit',
-          'Balance',
-        ],
-        rows: rows,
-        share: delivery == ExportDelivery.share,
+      final csvResult = await withExportProgress(
+        context,
+        message: 'Preparing CSV…',
+        task: () => _exportService.saveCsv(
+          fileName: 'customer_summary.csv',
+          headers: const <String>[
+            'Customer',
+            'Page No',
+            'Total Debit',
+            'Total Credit',
+            'Balance',
+          ],
+          rows: rows,
+          share: delivery == ExportDelivery.share,
+        ),
       );
       if (!mounted) {
         return;

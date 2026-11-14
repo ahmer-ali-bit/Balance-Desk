@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -62,7 +63,7 @@ class ExportFileService {
         if (directory != null) {
           final file = await _writeUnique(directory, fileName, bytes);
           if (openAfterSave) {
-            await _openSavedFile(file.path);
+            unawaited(_openSavedFile(file.path));
           }
           return ExportFileResult(
             savedPath: file.path,
@@ -85,7 +86,7 @@ class ExportFileService {
         }
         final file = await _writeUnique(exportsDirectory, fileName, bytes);
         if (openAfterSave) {
-          await _openSavedFile(file.path);
+          unawaited(_openSavedFile(file.path));
         }
         return ExportFileResult(
           savedPath: file.path,

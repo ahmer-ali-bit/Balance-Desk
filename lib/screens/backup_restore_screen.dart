@@ -82,9 +82,15 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
     if (!mounted || delivery == null) return;
     try {
       if (delivery == ExportDelivery.share) {
-        await const ExportFileService().shareBytes(
-          fileName: _buildBackupFileName(),
-          bytes: await _service.buildBackupBytes(),
+        await withExportProgress(
+          context,
+          message: 'Preparing backup…',
+          task: () async {
+            await const ExportFileService().shareBytes(
+              fileName: _buildBackupFileName(),
+              bytes: await _service.buildBackupBytes(),
+            );
+          },
         );
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -92,7 +98,11 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
         );
         return;
       }
-      final path = await _service.createBackupFile();
+      final path = await withExportProgress(
+        context,
+        message: 'Creating backup…',
+        task: _service.createBackupFile,
+      );
       if (!mounted) return;
       if (path == null) return;
       ScaffoldMessenger.of(
@@ -121,7 +131,11 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
       );
       if (directoryPath == null || !mounted) return;
       final filePath = p.join(directoryPath, fileName);
-      await _service.backupToFile(filePath);
+      await withExportProgress(
+        context,
+        message: 'Saving backup…',
+        task: () => _service.backupToFile(filePath),
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,

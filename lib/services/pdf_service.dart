@@ -83,6 +83,7 @@ class PdfService {
   const PdfService();
 
   static _PdfFonts? _cachedFonts;
+  static Future<_PdfFonts>? _fontLoadFuture;
   static pw.MemoryImage? _cachedEmblem;
   static bool _emblemLoaded = false;
 
@@ -194,21 +195,44 @@ class PdfService {
 
   static Future<_PdfFonts> _loadFonts() async {
     final cached = _cachedFonts;
-    if (cached != null) {
-      return cached;
+    if (cached != null) return cached;
+
+    final inFlight = _fontLoadFuture;
+    if (inFlight != null) return inFlight;
+
+    final future = _loadFontAssets();
+    _fontLoadFuture = future;
+    try {
+      final fonts = await future;
+      _cachedFonts = fonts;
+      return fonts;
+    } catch (_) {
+      _fontLoadFuture = null;
+      rethrow;
     }
-    final fonts = _PdfFonts(
-      latoRegular: pw.Font.ttf(await rootBundle.load('assets/fonts/Lato-Regular.ttf')),
-      latoMedium: pw.Font.ttf(await rootBundle.load('assets/fonts/Lato-Medium.ttf')),
-      latoSemiBold: pw.Font.ttf(await rootBundle.load('assets/fonts/Lato-SemiBold.ttf')),
-      latoBold: pw.Font.ttf(await rootBundle.load('assets/fonts/Lato-Bold.ttf')),
-      latoBlack: pw.Font.ttf(await rootBundle.load('assets/fonts/Lato-Black.ttf')),
-      monoRegular: pw.Font.ttf(await rootBundle.load('assets/fonts/IBMPlexMono-Regular.ttf')),
-      monoSemiBold: pw.Font.ttf(await rootBundle.load('assets/fonts/IBMPlexMono-SemiBold.ttf')),
-      monoBold: pw.Font.ttf(await rootBundle.load('assets/fonts/IBMPlexMono-Bold.ttf')),
+  }
+
+  static Future<_PdfFonts> _loadFontAssets() async {
+    final assets = await Future.wait<ByteData>(<Future<ByteData>>[
+      rootBundle.load('assets/fonts/Lato-Regular.ttf'),
+      rootBundle.load('assets/fonts/Lato-Medium.ttf'),
+      rootBundle.load('assets/fonts/Lato-SemiBold.ttf'),
+      rootBundle.load('assets/fonts/Lato-Bold.ttf'),
+      rootBundle.load('assets/fonts/Lato-Black.ttf'),
+      rootBundle.load('assets/fonts/IBMPlexMono-Regular.ttf'),
+      rootBundle.load('assets/fonts/IBMPlexMono-SemiBold.ttf'),
+      rootBundle.load('assets/fonts/IBMPlexMono-Bold.ttf'),
+    ]);
+    return _PdfFonts(
+      latoRegular: pw.Font.ttf(assets[0]),
+      latoMedium: pw.Font.ttf(assets[1]),
+      latoSemiBold: pw.Font.ttf(assets[2]),
+      latoBold: pw.Font.ttf(assets[3]),
+      latoBlack: pw.Font.ttf(assets[4]),
+      monoRegular: pw.Font.ttf(assets[5]),
+      monoSemiBold: pw.Font.ttf(assets[6]),
+      monoBold: pw.Font.ttf(assets[7]),
     );
-    _cachedFonts = fonts;
-    return fonts;
   }
 
   static Future<pw.MemoryImage?> _loadEmblem() async {
@@ -252,9 +276,12 @@ class PdfService {
     required Customer customer,
     required List<Entry> entries,
   }) async {
-    final fonts = await _loadFonts();
-    final brand = await _loadBrand();
-    final emblem = await _loadEmblem();
+    final fontsFuture = _loadFonts();
+    final brandFuture = _loadBrand();
+    final emblemFuture = _loadEmblem();
+    final fonts = await fontsFuture;
+    final brand = await brandFuture;
+    final emblem = await emblemFuture;
 
     final pdf = pw.Document(
       title: customer.isStockLedger
@@ -465,9 +492,12 @@ class PdfService {
     bool highlightFirstRow = false,
     List<String>? openingBalanceRow,
   }) async {
-    final fonts = await _loadFonts();
-    final brand = await _loadBrand();
-    final emblem = await _loadEmblem();
+    final fontsFuture = _loadFonts();
+    final brandFuture = _loadBrand();
+    final emblemFuture = _loadEmblem();
+    final fonts = await fontsFuture;
+    final brand = await brandFuture;
+    final emblem = await emblemFuture;
 
     final pdf = pw.Document(
       title: title,

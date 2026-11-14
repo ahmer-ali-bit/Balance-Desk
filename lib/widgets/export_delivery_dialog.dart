@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 enum ExportDelivery { save, share }
@@ -28,4 +30,45 @@ Future<ExportDelivery?> showExportDeliveryDialog(BuildContext context) {
       ],
     ),
   );
+}
+
+Future<T> withExportProgress<T>(
+  BuildContext context, {
+  required String message,
+  required Future<T> Function() task,
+}) async {
+  final navigator = Navigator.of(context, rootNavigator: true);
+  unawaited(
+    showDialog<void>(
+      context: context,
+      useRootNavigator: true,
+      barrierDismissible: false,
+      builder: (_) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          content: Row(
+            children: <Widget>[
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
+              ),
+              const SizedBox(width: 18),
+              Expanded(child: Text(message)),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  try {
+    // Let the dialog paint before CPU-heavy PDF/CSV preparation begins.
+    await WidgetsBinding.instance.endOfFrame;
+    return await task();
+  } finally {
+    if (navigator.mounted && navigator.canPop()) {
+      navigator.pop();
+    }
+  }
 }
