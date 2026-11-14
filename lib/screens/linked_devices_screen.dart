@@ -612,14 +612,15 @@ class _LinkedDevicesScreenState extends State<LinkedDevicesScreen> {
               itemBuilder: (_) => <PopupMenuEntry<String>>[
                 const PopupMenuItem(value: 'edit', child: Text('Allow editing')),
                 const PopupMenuItem(value: 'read_only', child: Text('Read only')),
-                PopupMenuItem(
-                  value: 'toggle_export',
-                  child: Text(
-                    device['allow_export'] == true
-                        ? 'Disable export in read-only mode'
-                        : 'Allow export in read-only mode',
+                if (readOnly)
+                  PopupMenuItem(
+                    value: 'toggle_export',
+                    child: Text(
+                      device['allow_export'] == true
+                          ? 'Disable export'
+                          : 'Allow export',
+                    ),
                   ),
-                ),
                 const PopupMenuDivider(),
                 const PopupMenuItem(value: 'transfer_owner', child: Text('Make workspace owner')),
               ],
