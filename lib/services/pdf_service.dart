@@ -1264,8 +1264,8 @@ pw.Widget _buildCompactTextTableBody({
     children: List<pw.TableRow>.generate(rows.length, (int rowIndex) {
       final row = rows[rowIndex];
       final isFirst = rowIndex == 0 && highlightFirstRow;
-      final isSnapshotTotal = row.isNotEmpty && row[0] == 'Snapshot Total';
-      final isBalanceBF = row.isNotEmpty && row[0] == 'Balance B/F';
+      final isSnapshotTotal = row.contains('Snapshot Total');
+      final isBalanceBF = row.contains('Balance B/F');
       final isHighlighted = isFirst || isSnapshotTotal || isBalanceBF;
 
       return pw.TableRow(
