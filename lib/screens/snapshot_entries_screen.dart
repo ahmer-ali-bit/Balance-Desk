@@ -505,6 +505,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       debugPrint('$stackTrace');
       if (!mounted) return;
       if (entryMoved) await _loadTimeline();
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -2777,7 +2778,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                     if (_isUnsavedEntry(item.entry))
                       IconButton(
                         tooltip: 'Move to a saved snapshot',
-                        icon: const Icon(Icons.drive_file_move_outline_rounded),
+                        icon: const Icon(Icons.drive_file_move),
                         onPressed: _isLoading || _isSavingSnapshot
                             ? null
                             : () => _moveEntryToSavedSnapshot(item.entry),
@@ -3208,62 +3209,4 @@ class _SnapshotTotals {
 
   final double debit;
   final double credit;
-}
-
-class _CompactAmountChip extends StatelessWidget {
-  const _CompactAmountChip({
-    required this.label,
-    required this.value,
-    required this.icon,
-    this.color,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color? color;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final primaryColor = color ?? colorScheme.primary;
-
-    return Container(
-      constraints: const BoxConstraints(minWidth: 80),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: primaryColor.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Icon(icon, size: 12, color: primaryColor),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: primaryColor,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 10,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: primaryColor,
-              fontSize: 13,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

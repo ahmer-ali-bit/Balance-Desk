@@ -601,7 +601,9 @@ class LinkedWorkspaceSyncService {
   String? _toCloudSettingKey(String localKey, Map<int, String> customerSyncIds) {
     if (_deviceOnlySettingKeys.contains(localKey) ||
         localKey.startsWith('linked.') ||
-        localKey.startsWith('sync.')) return null;
+        localKey.startsWith('sync.')) {
+      return null;
+    }
     final pageNo = RegExp(r'^ledger\.pageNo:(\d+)$').firstMatch(localKey);
     if (pageNo != null) {
       final id = int.parse(pageNo.group(1)!);

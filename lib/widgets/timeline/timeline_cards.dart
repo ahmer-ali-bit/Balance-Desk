@@ -617,7 +617,7 @@ class PremiumTimelineEntryCard extends StatelessWidget {
                 IconButton(
                   tooltip: 'Move to a saved snapshot',
                   onPressed: onMove,
-                  icon: const Icon(Icons.drive_file_move_outline_rounded, size: 18),
+                  icon: const Icon(Icons.drive_file_move, size: 18),
                 ),
               if (canEdit)
                 IconButton(
