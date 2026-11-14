@@ -107,6 +107,7 @@ class LinkedDevicesService {
     required String deviceName,
     required String platform,
   }) async {
+    final previousWorkspaceId = WorkspaceService.instance.activeWorkspaceId;
     final normalizedToken = inviteToken.trim();
     if (normalizedToken.length < 28) {
       throw const LinkedDeviceException('Enter a valid invite code.');
@@ -142,6 +143,7 @@ class LinkedDevicesService {
         role: 'linked',
         permission: 'edit',
         cursor: 0,
+        returnWorkspaceId: previousWorkspaceId,
       ),
     );
     return workspace;

@@ -106,7 +106,7 @@ class _LinkedDevicesScreenState extends State<LinkedDevicesScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Disconnect this device?'),
         content: const Text(
-          'This device will no longer sync with the owner. Its local workspace data will remain on this device.',
+          'This device will stop syncing and return to the workspace you used before joining. The downloaded shared copy will remain saved locally.',
         ),
         actions: <Widget>[
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
@@ -120,7 +120,12 @@ class _LinkedDevicesScreenState extends State<LinkedDevicesScreen> {
     if (confirmed != true) return;
     try {
       await provider.disconnect();
-      if (mounted) _showMessage('Disconnected. The local copy is still available.');
+      if (mounted) {
+        _showMessage(
+          provider.error ??
+              'Disconnected. Returned to your previous workspace; the shared copy is still saved locally.',
+        );
+      }
     } catch (error) {
       if (mounted) _showMessage(error.toString());
     }
@@ -355,10 +360,10 @@ class _LinkedDevicesScreenState extends State<LinkedDevicesScreen> {
                 : provider.error!
         : lastSyncLabel == null
             ? provider.isLinked
-                ? 'Automatic sync is on. Cloud changes are checked about every 15 seconds.'
+                ? 'Automatic sync is on. Cloud changes are checked about every 30 seconds.'
                 : 'This workspace remains local until you choose to share or join.'
             : 'Last synced $lastSyncLabel'
-                '${provider.lastChangeCount > 0 ? ' · ${provider.lastChangeCount} updates applied' : ''} · checking for cloud changes every 15 seconds';
+                '${provider.lastChangeCount > 0 ? ' · ${provider.lastChangeCount} updates applied' : ''} · checking for cloud changes every 30 seconds';
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(

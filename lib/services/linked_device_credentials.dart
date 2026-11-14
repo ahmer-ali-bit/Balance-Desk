@@ -12,6 +12,7 @@ class LinkedWorkspaceConfig {
     required this.role,
     required this.permission,
     required this.cursor,
+    this.returnWorkspaceId,
   });
 
   final String localWorkspaceId;
@@ -20,11 +21,17 @@ class LinkedWorkspaceConfig {
   final String role;
   final String permission;
   final int cursor;
+  final String? returnWorkspaceId;
 
   bool get isOwner => role == 'owner';
   bool get isReadOnly => permission == 'read_only';
 
-  LinkedWorkspaceConfig copyWith({String? permission, String? role, int? cursor}) {
+  LinkedWorkspaceConfig copyWith({
+    String? permission,
+    String? role,
+    int? cursor,
+    String? returnWorkspaceId,
+  }) {
     return LinkedWorkspaceConfig(
       localWorkspaceId: localWorkspaceId,
       cloudWorkspaceId: cloudWorkspaceId,
@@ -32,6 +39,7 @@ class LinkedWorkspaceConfig {
       role: role ?? this.role,
       permission: permission ?? this.permission,
       cursor: cursor ?? this.cursor,
+      returnWorkspaceId: returnWorkspaceId ?? this.returnWorkspaceId,
     );
   }
 
@@ -42,6 +50,7 @@ class LinkedWorkspaceConfig {
     'role': role,
     'permission': permission,
     'cursor': cursor,
+    'returnWorkspaceId': returnWorkspaceId,
   };
 
   factory LinkedWorkspaceConfig.fromJson(Map<String, dynamic> json) {
@@ -52,6 +61,7 @@ class LinkedWorkspaceConfig {
       role: json['role'] as String? ?? 'linked',
       permission: json['permission'] as String? ?? 'edit',
       cursor: (json['cursor'] as num?)?.toInt() ?? 0,
+      returnWorkspaceId: json['returnWorkspaceId'] as String?,
     );
   }
 }

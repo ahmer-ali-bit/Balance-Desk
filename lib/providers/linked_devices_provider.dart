@@ -247,7 +247,10 @@ class LinkedDevicesProvider extends ChangeNotifier with WidgetsBindingObserver {
     final config = _config;
     if (config == null || !config.isOwner) return;
     await _service.transferOwnership(config, deviceId);
-    final updated = config.copyWith(role: 'linked');
+    final updated = config.copyWith(
+      role: 'linked',
+      returnWorkspaceId: config.returnWorkspaceId ?? config.localWorkspaceId,
+    );
     _config = updated;
     await LinkedWorkspaceConfigStore().write(updated);
     _devices = const <Map<String, Object?>>[];
@@ -290,20 +293,72 @@ class LinkedDevicesProvider extends ChangeNotifier with WidgetsBindingObserver {
     _setBusy(true);
     try {
       await _service.disconnect(config);
-      _periodicTimer?.cancel();
-      _periodicTimer = null;
-      _debounceTimer?.cancel();
-      _debounceTimer = null;
-      _config = null;
-      _devices = const <Map<String, Object?>>[];
-      _error = null;
-      DatabaseHelper.instance.writeGuard = null;
+      final restored = await _returnToPreviousWorkspace(config);
+      if (!restored) {
+        _error =
+            'Disconnected. Select your previous workspace from the workspace switcher.';
+      }
     } catch (error) {
       _error = _friendlyError(error);
       rethrow;
     } finally {
       _setBusy(false);
     }
+  }
+
+  Future<bool> _returnToPreviousWorkspace(
+    LinkedWorkspaceConfig config,
+  ) async {
+    if (config.isOwner || !config.localWorkspaceId.startsWith('linked_')) {
+      // Owner workspaces are the owner's original local database, not a
+      // guest-only copy, so disconnect should leave that workspace selected.
+      return true;
+    }
+    _periodicTimer?.cancel();
+    _periodicTimer = null;
+    _debounceTimer?.cancel();
+    _debounceTimer = null;
+    _config = null;
+    _devices = const <Map<String, Object?>>[];
+    _invite = null;
+    _error = null;
+    DatabaseHelper.instance.writeGuard = null;
+
+    final workspaces = WorkspaceService.instance.workspaces;
+    final savedWorkspaceId = config.returnWorkspaceId;
+    String? targetId;
+    if (savedWorkspaceId != null &&
+        savedWorkspaceId != config.localWorkspaceId &&
+        workspaces.any((workspace) => workspace.id == savedWorkspaceId)) {
+      targetId = savedWorkspaceId;
+    } else {
+      // Older linked-workspace configs did not save the previous workspace.
+      // Restore the newest local workspace (or Main Workspace as a fallback).
+      for (final workspace in workspaces.reversed) {
+        if (workspace.id != config.localWorkspaceId &&
+            !workspace.id.startsWith('linked_')) {
+          targetId = workspace.id;
+          break;
+        }
+      }
+      if (targetId == null) {
+        for (final workspace in workspaces) {
+          if (workspace.id != config.localWorkspaceId) {
+            targetId = workspace.id;
+            break;
+          }
+        }
+      }
+    }
+
+    _notify();
+    if (targetId == null ||
+        targetId == WorkspaceService.instance.activeWorkspaceId) {
+      return targetId != null;
+    }
+    final workspaceProvider = _workspaceProvider;
+    if (workspaceProvider == null) return false;
+    return workspaceProvider.switchWorkspace(targetId);
   }
 
   Future<void> syncNow({bool silent = false}) async {
@@ -361,10 +416,10 @@ class LinkedDevicesProvider extends ChangeNotifier with WidgetsBindingObserver {
       if (message.contains('device_revoked_or_invalid') ||
           message.contains('workspace_unavailable')) {
         await _service.forgetRevokedLink(config.localWorkspaceId);
-        _config = null;
-        _devices = const <Map<String, Object?>>[];
-        DatabaseHelper.instance.writeGuard = null;
-        _error = 'Cloud access was removed. This device still has its local copy.';
+        final restored = await _returnToPreviousWorkspace(config);
+        _error = restored
+            ? 'Cloud access was removed. This device still has its local copy.'
+            : 'Cloud access was removed. Select your previous workspace from the workspace switcher.';
       }
       if (!silent) rethrow;
     } finally {
@@ -405,7 +460,7 @@ class LinkedDevicesProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Duration get _nextSyncDelay {
-    if (!_lastSyncFailed) return const Duration(seconds: 15);
+    if (!_lastSyncFailed) return const Duration(seconds: 30);
     final retrySeconds = switch (_consecutiveSyncFailures) {
       <= 1 => 8,
       2 => 16,
