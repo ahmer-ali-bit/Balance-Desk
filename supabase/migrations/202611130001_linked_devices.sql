@@ -1,4 +1,4 @@
--- Balance Desk linked workspaces — capability-based device auth.
+-- Ledger Pro linked workspaces — capability-based device auth.
 -- No service-role key is shipped in the client. Data tables have no client
 -- grants; clients can only use the narrow SECURITY DEFINER RPCs below, each of
 -- which validates a per-install 256-bit capability whose SHA-256 hash is stored.

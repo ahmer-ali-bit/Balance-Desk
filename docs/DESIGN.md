@@ -1,13 +1,13 @@
-# Balance Desk — Design System
+# Ledger Pro — Design System
 **"Modern Professional Ledger"** · v1.0 · 2026-11-13
 
-This document is the single source of truth for the Balance Desk visual
+This document is the single source of truth for the Ledger Pro visual
 redesign. It records the direction, the tokens, and the reasoning — so future
 screens are built from decisions, not guesses.
 
 ## 1. Product & audience
 
-Balance Desk is a **shop ledger / udhaar accounting** app: customer accounts,
+Ledger Pro is a **shop ledger / udhaar accounting** app: customer accounts,
 a ledger-year register, daily snapshots, summary reports, stock ledgers,
 PDF/CSV backups. Users are shop owners and their bookkeepers — often
 non-technical, often working in bright shop light, sometimes on dim evenings.
@@ -21,7 +21,7 @@ Figures must be readable at a glance; mistakes cost money.
 | Theme modes | **Light + Dark + System** — user toggle, persisted |
 | Density | **Adaptive**: comfortable on mobile, compact on desktop (tabular figures everywhere) |
 | Scope | Splash → PIN gate → shell → every screen, both platforms |
-| Brand | Existing hexagon emblem kept; new "BALANCE DESK" lockup, ivory/mint on emerald rail |
+| Brand | Existing hexagon emblem kept; new "LEDGER PRO" lockup, ivory/mint on emerald rail |
 
 References that shaped the system: Mercury/Ramp (calm fintech), Stripe
 Dashboard (paper data-dense tables), classic khata book (warm paper, brass,

@@ -1,5 +1,5 @@
 param(
-  [string]$SourcePath = (Join-Path $PSScriptRoot '..\App Logo.png')
+  [string]$SourcePath = 'assets\branding\ledger-pro-app-icon-1024.png'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -156,15 +156,15 @@ if (-not (Test-Path -LiteralPath $sourceFullPath)) {
 }
 
 $sourceBitmap = [System.Drawing.Bitmap]::FromFile($sourceFullPath)
-$background = [System.Drawing.Color]::FromArgb(255, 3, 16, 7)
+$background = [System.Drawing.Color]::FromArgb(255, 14, 95, 61)
 
 try {
   $crop = Get-ContentBounds -Bitmap $sourceBitmap
 
-  Copy-Item -LiteralPath $sourceFullPath -Destination (Join-Path $repoRoot 'assets\branding\balance-desk-logo-source.png') -Force
+  Copy-Item -LiteralPath $sourceFullPath -Destination (Join-Path $repoRoot 'assets\branding\ledger-pro-logo-source.png') -Force
 
   $iconTargets = @(
-    @{ Path = 'assets\branding\balance-desk-app-icon-1024.png'; Size = 1024 }
+    @{ Path = 'assets\branding\ledger-pro-app-icon-1024.png'; Size = 1024 }
     @{ Path = 'android\app\src\main\res\mipmap-mdpi\ic_launcher.png'; Size = 48 }
     @{ Path = 'android\app\src\main\res\mipmap-hdpi\ic_launcher.png'; Size = 72 }
     @{ Path = 'android\app\src\main\res\mipmap-xhdpi\ic_launcher.png'; Size = 96 }
@@ -192,6 +192,13 @@ try {
     @{ Path = 'macos\Runner\Assets.xcassets\AppIcon.appiconset\app_icon_256.png'; Size = 256 }
     @{ Path = 'macos\Runner\Assets.xcassets\AppIcon.appiconset\app_icon_512.png'; Size = 512 }
     @{ Path = 'macos\Runner\Assets.xcassets\AppIcon.appiconset\app_icon_1024.png'; Size = 1024 }
+    @{ Path = 'windows\runner\resources\app_icon.png'; Size = 1024 }
+    @{ Path = 'linux\runner\resources\app_icon.png'; Size = 1024 }
+    @{ Path = 'web\favicon.png'; Size = 64 }
+    @{ Path = 'web\icons\Icon-192.png'; Size = 192 }
+    @{ Path = 'web\icons\Icon-512.png'; Size = 512 }
+    @{ Path = 'web\icons\Icon-maskable-192.png'; Size = 192 }
+    @{ Path = 'web\icons\Icon-maskable-512.png'; Size = 512 }
   )
 
   foreach ($target in $iconTargets) {

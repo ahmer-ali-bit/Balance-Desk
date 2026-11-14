@@ -13,7 +13,7 @@ import '../utils/number_format_utils.dart';
 import 'company_profile_service.dart';
 import 'export_file_service.dart';
 
-/// Balance Desk — Paper Ledger tokens (see docs/DESIGN.md v1.0).
+/// Ledger Pro — Paper Ledger tokens (see docs/DESIGN.md v1.0).
 /// Debit = money in (teal family) · Credit = money out (rose family) ·
 /// Brass = premium metadata · Emerald = brand.
 const PdfColor _ink = PdfColor.fromInt(0xFF182420);
@@ -287,8 +287,8 @@ class PdfService {
       title: customer.isStockLedger
           ? '${customer.name} — Stock Ledger'
           : '${customer.name} — Customer Ledger',
-      author: 'Balance Desk',
-      creator: 'Balance Desk',
+      author: 'Ledger Pro',
+      creator: 'Ledger Pro',
       theme: pw.ThemeData.withFont(
         base: fonts.latoRegular,
         bold: fonts.latoBold,
@@ -501,8 +501,8 @@ class PdfService {
 
     final pdf = pw.Document(
       title: title,
-      author: 'Balance Desk',
-      creator: 'Balance Desk',
+      author: 'Ledger Pro',
+      creator: 'Ledger Pro',
       theme: pw.ThemeData.withFont(
         base: fonts.latoRegular,
         bold: fonts.latoBold,
@@ -600,7 +600,7 @@ class PdfService {
               crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: <pw.Widget>[
                 pw.Text(
-                  'BALANCE DESK',
+                  'LEDGER PRO',
                   style: pw.TextStyle(
                     font: fonts.latoBold,
                     fontSize: 6.2,
@@ -715,7 +715,7 @@ class PdfService {
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: <pw.Widget>[
                 pw.Text(
-                  'BALANCE DESK',
+                  'LEDGER PRO',
                   style: pw.TextStyle(
                     font: fonts.latoBold,
                     fontSize: 7.6,
@@ -1084,7 +1084,7 @@ class PdfService {
         pw.Row(
           children: <pw.Widget>[
             pw.Text(
-              'BALANCE DESK',
+              'LEDGER PRO',
               style: pw.TextStyle(
                 font: fonts.latoBold,
                 fontSize: 6.2,

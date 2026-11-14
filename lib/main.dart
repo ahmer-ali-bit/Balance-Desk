@@ -46,7 +46,7 @@ class _ThemedMaterialApp extends StatelessWidget {
     final themeMode = context.watch<ThemeProvider>().themeMode;
 
     return MaterialApp(
-      title: 'Balance Desk',
+      title: 'Ledger Pro',
       debugShowCheckedModeBanner: false,
       theme: BalanceDeskTheme.lightTheme(),
       darkTheme: BalanceDeskTheme.darkTheme(),

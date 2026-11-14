@@ -288,7 +288,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
 
   String get _companyName {
     final name = _companyProfile.name.trim();
-    return name.isEmpty ? 'Balance Desk' : name;
+    return name.isEmpty ? 'Ledger Pro' : name;
   }
 
   List<ShellNavEntry> get _shellNavEntries {

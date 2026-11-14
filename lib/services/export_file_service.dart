@@ -88,7 +88,7 @@ class ExportFileService {
         return ExportFileResult(
           savedPath: file.path,
           locationLabel:
-              'Files app › Balance Desk › Exports/${path.basename(file.path)}',
+              'Files app › Ledger Pro › Exports/${path.basename(file.path)}',
         );
       } catch (error, stackTrace) {
         debugPrint(

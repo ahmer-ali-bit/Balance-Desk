@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Presentation-only building blocks for the Balance Desk shell.
+/// Presentation-only building blocks for the Ledger Pro shell.
 ///
 /// Nothing in this file talks to a database, a provider or a service. Every
 /// interactive element is driven by a callback supplied by the caller, so the
@@ -802,7 +802,7 @@ class AppShellSidebar extends StatelessWidget {
     required this.tools,
     required this.showNavEntries,
     this.compact = false,
-    this.footerLabel = 'Balance Desk',
+    this.footerLabel = 'Ledger Pro',
     this.footerSubLabel = 'Developer: Ahmer Abid',
     this.scrollController,
     this.appearanceControl,
@@ -962,7 +962,7 @@ class AppShellSidebar extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 Text(
-                  companyName.trim().isEmpty ? 'Balance Desk' : companyName,
+                  companyName.trim().isEmpty ? 'Ledger Pro' : companyName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(

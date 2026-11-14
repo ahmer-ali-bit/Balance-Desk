@@ -1,5 +1,5 @@
-name: shop
-description: "Desktop shop ledger management system."
+name: ledger_pro
+description: "Ledger Pro — professional ledger and account management."
 publish_to: "none"
 version: 1.0.0+1
 
@@ -43,7 +43,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/logo.png
-    - assets/branding/balance-desk-app-icon-1024.png
+    - assets/branding/ledger-pro-app-icon-1024.png
     # PdfService loads these font files directly through rootBundle. Declaring
     # them as assets as well as app fonts ensures that works in release builds.
     - assets/fonts/
@@ -72,25 +72,34 @@ flutter:
           weight: 700
 
 msix_config:
-  display_name: Balance Desk
-  publisher_display_name: Balance Desk
+  display_name: Ledger Pro
+  publisher_display_name: Ledger Pro
   identity_name: BalanceDesk.App
   publisher: CN=Balance Desk
   msix_version: 1.0.0.0
-  logo_path: assets/branding/balance-desk-app-icon-1024.png
+  logo_path: assets/branding/ledger-pro-app-icon-1024.png
   trim_logo: false
   architecture: x64
   capabilities: internetClient
   output_path: build/windows/msix
-  output_name: balance-desk
+  output_name: ledger-pro
 
 flutter_launcher_icons:
   android: true
   ios: true
   remove_alpha_ios: true
-  image_path: "assets/logo.png"
+  image_path: "assets/branding/ledger-pro-app-icon-1024.png"
+
+  macos:
+    generate: true
+    image_path: "assets/branding/ledger-pro-app-icon-1024.png"
+  web:
+    generate: true
+    image_path: "assets/branding/ledger-pro-app-icon-1024.png"
+    background_color: "#0E5F3D"
+    theme_color: "#0E5F3D"
 
   windows:
     generate: true
-    image_path: "assets/logo.png"
+    image_path: "assets/branding/ledger-pro-app-icon-1024.png"
     icon_size: 256

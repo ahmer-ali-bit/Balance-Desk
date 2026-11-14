@@ -109,7 +109,7 @@ class _AppPinGateScreenState extends State<AppPinGateScreen> {
 
   Future<void> _authenticateWithBiometric() async {
     final success = await _biometricService.authenticate(
-      reason: 'Unlock Balance Desk',
+      reason: 'Unlock Ledger Pro',
     );
     if (!mounted) return;
 
@@ -342,7 +342,7 @@ class _AppPinGateScreenState extends State<AppPinGateScreen> {
       case _AppPinGateView.unlock:
         return _GateHeader(
           icon: Icons.lock_rounded,
-          eyebrow: 'BALANCE DESK',
+          eyebrow: 'LEDGER PRO',
           title: 'Unlock your ledger',
           subtitle: _biometricReady
               ? 'Use $_biometricLabel or enter your PIN to continue.'
@@ -575,7 +575,7 @@ class _BrandPanel extends StatelessWidget {
                         size: 14, color: Color(0xFF7CF2B4)),
                     SizedBox(width: 8),
                     Text(
-                      'BALANCE DESK',
+                      'LEDGER PRO',
                       style: TextStyle(
                         fontFamily: 'Lato',
                         fontSize: 11.5,

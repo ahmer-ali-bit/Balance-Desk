@@ -1,4 +1,4 @@
-/// Supabase endpoint and publishable client key for Balance Desk.
+/// Supabase endpoint and publishable client key for Ledger Pro.
 ///
 /// The publishable/anon key is intentionally public. It grants no direct data
 /// access: public tables have RLS enabled and every RPC validates a per-device

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'finance_colors.dart';
 
-/// Balance Desk design system — "Modern Professional Ledger".
+/// Ledger Pro design system — "Modern Professional Ledger".
 ///
 /// Visual identity derived from the brand mark (deep emerald emblem, mint
 /// accent, ivory paper). One shared geometry/typography backbone drives both

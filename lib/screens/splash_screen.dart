@@ -101,7 +101,7 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     final displayName = _profile.name.trim().isEmpty
-        ? 'Balance Desk'
+        ? 'Ledger Pro'
         : _profile.name.trim();
     final width = MediaQuery.sizeOf(context).width;
     final useDesktopLayout =
@@ -207,7 +207,7 @@ class _SplashScreenState extends State<SplashScreen>
                                 size: 15, color: Color(0xFF7CF2B4)),
                             SizedBox(width: 8),
                             Text(
-                              'BALANCE DESK',
+                              'LEDGER PRO',
                               style: TextStyle(
                                 fontFamily: 'Lato',
                                 fontSize: 12,
@@ -395,7 +395,7 @@ class _SplashScreenState extends State<SplashScreen>
                     const Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        'BALANCE DESK',
+                        'LEDGER PRO',
                         style: TextStyle(
                           fontFamily: 'Lato',
                           fontSize: 11,

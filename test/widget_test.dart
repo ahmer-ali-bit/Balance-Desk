@@ -5,10 +5,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-import 'package:shop/database/app_database.dart';
-import 'package:shop/providers/customer_provider.dart';
-import 'package:shop/providers/linked_devices_provider.dart';
-import 'package:shop/screens/customer_list_screen.dart';
+import 'package:ledger_pro/database/app_database.dart';
+import 'package:ledger_pro/providers/customer_provider.dart';
+import 'package:ledger_pro/providers/linked_devices_provider.dart';
+import 'package:ledger_pro/screens/customer_list_screen.dart';
 
 void main() {
   setUp(() async {

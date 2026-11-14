@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shop/services/linked_device_credentials.dart';
+import 'package:ledger_pro/services/linked_device_credentials.dart';
 
 void main() {
   group('LinkedWorkspaceConfig return workspace', () {

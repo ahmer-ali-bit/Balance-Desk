@@ -446,7 +446,7 @@ class CsvBackupService {
         '${now.hour.toString().padLeft(2, '0')}'
         '${now.minute.toString().padLeft(2, '0')}'
         '${now.second.toString().padLeft(2, '0')}';
-    return 'balance_desk_backup_$stamp.$_backupExtension';
+    return 'ledger_pro_backup_$stamp.$_backupExtension';
   }
 
   Future<String> _resolveAndroidFallbackPath(String fileName) async {

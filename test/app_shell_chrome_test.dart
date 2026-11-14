@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shop/theme/balance_desk_theme.dart';
-import 'package:shop/widgets/app_shell_chrome.dart';
+import 'package:ledger_pro/theme/balance_desk_theme.dart';
+import 'package:ledger_pro/widgets/app_shell_chrome.dart';
 
 const List<ShellNavEntry> _entries = <ShellNavEntry>[
   ShellNavEntry(
@@ -155,7 +155,7 @@ void main() {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: <Widget>[
                         const ShellPageHeader(
-                          eyebrow: 'Balance Desk',
+                          eyebrow: 'Ledger Pro',
                           title: 'Customers',
                           subtitle: 'Accounts, balances and statements',
                           trailing: ShellChip(

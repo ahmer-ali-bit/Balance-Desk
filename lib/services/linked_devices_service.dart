@@ -290,7 +290,7 @@ class LinkedDevicesService {
       final info = await plugin.linuxInfo;
       return (info.prettyName, 'linux');
     }
-    return ('Balance Desk device', 'unknown');
+    return ('Ledger Pro device', 'unknown');
   }
 
 }

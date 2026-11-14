@@ -163,7 +163,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
         '${now.hour.toString().padLeft(2, '0')}'
         '${now.minute.toString().padLeft(2, '0')}'
         '${now.second.toString().padLeft(2, '0')}';
-    return 'balance_desk_backup_$stamp.json';
+    return 'ledger_pro_backup_$stamp.json';
   }
 
   Future<void> _pickAndRestore() async {
