@@ -382,7 +382,7 @@ class PdfService {
       entries: entries,
     );
     return share
-        ? _fileService.shareBytes(
+        ? _sharePdfBytes(
             fileName: _buildFileName(customer.name),
             bytes: bytes,
           )
@@ -391,6 +391,21 @@ class PdfService {
             bytes: bytes,
             dialogTitle: 'Save customer ledger PDF',
           );
+  }
+
+  Future<ExportFileResult> _sharePdfBytes({
+    required String fileName,
+    required Uint8List bytes,
+  }) async {
+    final didShare = await Printing.sharePdf(
+      bytes: bytes,
+      filename: fileName,
+    );
+    return ExportFileResult(
+      savedPath: null,
+      locationLabel: 'the system share menu',
+      shared: didShare,
+    );
   }
 
   Future<void> printCustomerLedgerPdf({
@@ -431,7 +446,7 @@ class PdfService {
     );
 
     return share
-        ? _fileService.shareBytes(fileName: fileName, bytes: bytes)
+        ? _sharePdfBytes(fileName: fileName, bytes: bytes)
         : _fileService.saveBytes(
             fileName: fileName,
             bytes: bytes,
