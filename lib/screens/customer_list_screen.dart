@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../database/app_database.dart';
 import '../models/customer.dart';
 import '../providers/customer_provider.dart';
+import '../providers/linked_devices_provider.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/customer_search_field.dart';
@@ -329,7 +330,10 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
   }
 
   bool _canEdit(BuildContext context, {bool listen = true}) {
-    return true;
+    return !Provider.of<LinkedDevicesProvider>(
+      context,
+      listen: listen,
+    ).isReadOnly;
   }
 
   Widget _buildPremiumMobileCustomerLayout({
@@ -369,19 +373,19 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                   const SizedBox(height: 12),
                   Row(
                     children: <Widget>[
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: provider.isLoading
-                              ? null
-                              : () async {
-                                  await provider.loadCustomers();
-                                  await _loadPageNos();
-                                },
-                          icon: const Icon(Icons.refresh_rounded),
-                          label: const Text('Refresh'),
-                        ),
-                      ),
                       if (canEdit) ...[
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: provider.isLoading
+                                ? null
+                                : () async {
+                                    await provider.loadCustomers();
+                                    await _loadPageNos();
+                                  },
+                            icon: const Icon(Icons.refresh_rounded),
+                            label: const Text('Refresh'),
+                          ),
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: FilledButton.icon(
@@ -493,22 +497,23 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       spacing: 10,
       runSpacing: 10,
       children: <Widget>[
-        OutlinedButton.icon(
-          onPressed: provider.isLoading
-              ? null
-              : () async {
-                  await provider.loadCustomers();
-                  await _loadPageNos();
-                },
-          icon: const Icon(Icons.refresh_rounded),
-          label: const Text('Refresh'),
-        ),
-        if (_canEdit(context))
+        if (_canEdit(context)) ...[
+          OutlinedButton.icon(
+            onPressed: provider.isLoading
+                ? null
+                : () async {
+                    await provider.loadCustomers();
+                    await _loadPageNos();
+                  },
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Refresh'),
+          ),
           FilledButton.icon(
             onPressed: _showAddCustomerDialog,
             icon: const Icon(Icons.person_add_alt_1_rounded),
             label: const Text('Add Customer'),
           ),
+        ],
       ],
     );
 

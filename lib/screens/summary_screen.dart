@@ -13,6 +13,7 @@ import '../widgets/mobile/mobile_premium.dart';
 import '../widgets/customer_search_field.dart';
 import '../widgets/summary_stat_card.dart';
 import '../providers/customer_provider.dart';
+import '../providers/linked_devices_provider.dart';
 import 'ledger_screen.dart';
 import 'package:provider/provider.dart';
 
@@ -52,6 +53,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  bool _canEdit(BuildContext context, {bool listen = true}) {
+    return !Provider.of<LinkedDevicesProvider>(
+      context,
+      listen: listen,
+    ).isReadOnly;
   }
 
   Future<void> _loadSummary() async {
@@ -463,6 +471,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   Widget _buildSummaryToolbar({required bool isCompact}) {
+    if (!_canEdit(context)) return const SizedBox.shrink();
     final isDesktop = PlatformHelper.isDesktop;
     final searchField = CustomerSearchField(
       controller: _searchController,
@@ -593,10 +602,11 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     const SizedBox(height: 10),
                     Text(_errorMessage!, textAlign: TextAlign.center),
                     const SizedBox(height: 12),
-                    FilledButton(
-                      onPressed: _loadSummary,
-                      child: const Text('Retry'),
-                    ),
+                    if (_canEdit(context))
+                      FilledButton(
+                        onPressed: _loadSummary,
+                        child: const Text('Retry'),
+                      ),
                   ],
                 ),
               )
@@ -618,6 +628,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   Widget _buildPremiumMobileSummaryControls(BuildContext context) {
+    if (!_canEdit(context)) return const SizedBox.shrink();
     final canExport = !_isLoading && _summaryData.customers.isNotEmpty;
 
     return MobilePremiumPanel(
@@ -946,10 +957,11 @@ class _SummaryScreenState extends State<SummaryScreen> {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: _loadSummary,
-                  child: const Text('Retry'),
-                ),
+                if (_canEdit(context))
+                  FilledButton(
+                    onPressed: _loadSummary,
+                    child: const Text('Retry'),
+                  ),
               ],
             ),
           ),

@@ -14,6 +14,7 @@ import '../models/summary_snapshot.dart';
 import '../providers/customer_provider.dart';
 import '../providers/ledger_provider.dart';
 import '../providers/ledger_provider_cache.dart';
+import '../providers/linked_devices_provider.dart';
 import '../services/export_service.dart';
 import '../services/pdf_service.dart';
 import '../utils/app_colors.dart';
@@ -112,7 +113,10 @@ class _LedgerViewState extends State<_LedgerView> {
   }
 
   bool _canEdit(BuildContext context, {bool listen = true}) {
-    return true;
+    return !Provider.of<LinkedDevicesProvider>(
+      context,
+      listen: listen,
+    ).isReadOnly;
   }
 
   @override
@@ -1188,6 +1192,7 @@ class _LedgerViewState extends State<_LedgerView> {
     required bool isCompact,
   }) {
     final hasEntries = provider.entries.isNotEmpty;
+    if (!_canEdit(context)) return const <Widget>[];
     if (isCompact) {
       return <Widget>[
         IconButton(
@@ -1624,21 +1629,22 @@ class _LedgerViewState extends State<_LedgerView> {
                     alignment: WrapAlignment.end,
                     children: <Widget>[
                       statusChip,
-                      IconButton(
-                        tooltip: 'Reset opening balance draft',
-                        onPressed: provider.isLoading
-                            ? null
-                            : () {
-                                _restoreOpeningBalanceDraft(provider);
-                                setState(() {});
-                              },
-                        style: IconButton.styleFrom(
-                          foregroundColor: colorScheme.onSurfaceVariant,
-                          backgroundColor: colorScheme.surface,
-                          side: BorderSide(color: colorScheme.outlineVariant),
+                      if (_canEdit(context))
+                        IconButton(
+                          tooltip: 'Reset opening balance draft',
+                          onPressed: provider.isLoading
+                              ? null
+                              : () {
+                                  _restoreOpeningBalanceDraft(provider);
+                                  setState(() {});
+                                },
+                          style: IconButton.styleFrom(
+                            foregroundColor: colorScheme.onSurfaceVariant,
+                            backgroundColor: colorScheme.surface,
+                            side: BorderSide(color: colorScheme.outlineVariant),
+                          ),
+                          icon: const Icon(Icons.restart_alt_rounded, size: 18),
                         ),
-                        icon: const Icon(Icons.restart_alt_rounded, size: 18),
-                      ),
                       if (_canEdit(context)) ...[
                         IconButton(
                           tooltip: 'Clear opening balance',
@@ -1709,7 +1715,7 @@ class _LedgerViewState extends State<_LedgerView> {
                 );
               },
             ),
-            if (!compactForDesktop) ...<Widget>[
+            if (!compactForDesktop && canEdit) ...<Widget>[
               SizedBox(height: verticalGap),
               Wrap(
                 spacing: 8,
@@ -2626,9 +2632,9 @@ class _LedgerViewState extends State<_LedgerView> {
       final balanceColor = AppColors.balanceColor(displayBalance);
 
       final bgColor = isDebit
-          ? (provider.isStockLedger ? AppColors.credit : AppColors.debit)
+          ? AppColors.debit
           : isCredit
-          ? (provider.isStockLedger ? AppColors.debit : AppColors.credit)
+          ? AppColors.credit
           : isBags
           ? colorScheme.primary
           : isBalance
@@ -3892,13 +3898,12 @@ class _LedgerViewState extends State<_LedgerView> {
                   onPressed: () => _clearOpeningBalance(provider),
                   icon: const Icon(Icons.delete_outline, size: 18),
                 )
-              else ...<Widget>[
+              else if (_canEdit(context))
                 IconButton.filledTonal(
                   tooltip: 'Entry Options',
                   onPressed: () => _showEntryMenu(context, provider, entry),
                   icon: const Icon(Icons.more_vert_rounded, size: 18),
                 ),
-              ],
             ],
           ),
         ],
@@ -4431,16 +4436,13 @@ class _LedgerViewState extends State<_LedgerView> {
                   onPressed: () => _clearOpeningBalance(provider),
                   icon: const Icon(Icons.delete_outline),
                 )
-              : Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    IconButton(
-                      tooltip: 'Entry Options',
-                      onPressed: () => _showEntryMenu(context, provider, entry),
-                      icon: const Icon(Icons.more_vert_rounded),
-                    ),
-                  ],
-                ),
+              : _canEdit(context)
+              ? IconButton(
+                  tooltip: 'Entry Options',
+                  onPressed: () => _showEntryMenu(context, provider, entry),
+                  icon: const Icon(Icons.more_vert_rounded),
+                )
+              : const SizedBox.shrink(),
         ),
       ]);
 

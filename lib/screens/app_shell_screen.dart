@@ -11,6 +11,7 @@ import '../models/workspace.dart';
 import '../providers/customer_provider.dart';
 import '../providers/ledger_provider_cache.dart';
 import '../providers/ledger_year_provider.dart';
+import '../providers/linked_devices_provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/app_pin_service.dart';
@@ -316,6 +317,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
   }
 
   Widget _buildSidebar({required bool closeDrawerOnAction}) {
+    final canEdit = _canEdit(context);
     return AppShellSidebar(
       companyName: _companyName,
       subtitle: PlatformHelper.isDesktop
@@ -324,6 +326,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
       logo: _buildCompanyLogo(),
       yearControl: _buildYearControl(closeDrawerOnAction: closeDrawerOnAction),
       workspaceControl: _WorkspaceSwitcher(
+        canEdit: canEdit,
         onWorkspaceSwitched: () {
           _closeDrawerIfNeeded(closeDrawerOnAction);
         },
@@ -335,7 +338,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
         _selectIndex(index);
       },
       tools: <ShellToolEntry>[
-        ShellToolEntry(
+        if (canEdit) ShellToolEntry(
           icon: Icons.business_outlined,
           label: 'Company Profile',
           onTap: () => _runDrawerAction(
@@ -343,7 +346,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
             action: _openCompanyProfileEditor,
           ),
         ),
-        ShellToolEntry(
+        if (canEdit) ShellToolEntry(
           icon: Icons.edit_note_outlined,
           label: 'Notes',
           badge: _sidebarNotes.trim().isNotEmpty,
@@ -360,7 +363,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
             action: _openLinkedDevicesScreen,
           ),
         ),
-        ShellToolEntry(
+        if (canEdit) ShellToolEntry(
           icon: Icons.backup_rounded,
           label: 'Backup & Restore',
           onTap: () => _runDrawerAction(
@@ -368,7 +371,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
             action: _openBackupRestoreScreen,
           ),
         ),
-        ShellToolEntry(
+        if (canEdit) ShellToolEntry(
           icon: Icons.lock_outline_rounded,
           label: _isPinEnabled ? 'Manage App PIN' : 'Set App PIN',
           onTap: () => _runDrawerAction(
@@ -376,7 +379,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
             action: _openPinSettings,
           ),
         ),
-        ShellToolEntry(
+        if (canEdit) ShellToolEntry(
           icon: Icons.system_update_alt_outlined,
           label: 'Check for Update',
           onTap: () => _runDrawerAction(
@@ -417,7 +420,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
               children: <Widget>[
                 Expanded(
                   child: PopupMenuButton<int>(
-                    enabled: !provider.isLoading,
+                    enabled: canEdit && !provider.isLoading,
                     tooltip: 'Switch ledger year',
                     onSelected: (int year) {
                       _closeDrawerIfNeeded(closeDrawerOnAction);
@@ -484,7 +487,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
   }
 
   bool _canEdit(BuildContext context) {
-    return true;
+    return !Provider.of<LinkedDevicesProvider>(context).isReadOnly;
   }
 
   void _closeDrawerIfNeeded(bool closeDrawerOnAction) {
@@ -1448,8 +1451,12 @@ class _ShellDestination {
 }
 
 class _WorkspaceSwitcher extends StatelessWidget {
-  const _WorkspaceSwitcher({required this.onWorkspaceSwitched});
+  const _WorkspaceSwitcher({
+    required this.canEdit,
+    required this.onWorkspaceSwitched,
+  });
 
+  final bool canEdit;
   final VoidCallback onWorkspaceSwitched;
 
   @override
@@ -1466,9 +1473,9 @@ class _WorkspaceSwitcher extends StatelessWidget {
           children: [
             Expanded(
               child: PopupMenuButton<String>(
-                enabled: !provider.isSwitching,
+                enabled: canEdit && !provider.isSwitching,
                 onSelected: (String workspaceId) async {
-                  if (workspaceId == active.id) return;
+                  if (!canEdit || workspaceId == active.id) return;
                   final switched = await provider.switchWorkspace(workspaceId);
                   if (switched) {
                     onWorkspaceSwitched();
@@ -1511,7 +1518,7 @@ class _WorkspaceSwitcher extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                              if (!isActive && w.id != 'default')
+                              if (canEdit && !isActive && w.id != 'default')
                                 PopupMenuButton<_WorkspaceMenuAction>(
                                   padding: EdgeInsets.zero,
                                   icon: Icon(
@@ -1557,11 +1564,12 @@ class _WorkspaceSwitcher extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 6),
-            ShellIconAction(
-              icon: Icons.add_rounded,
-              tooltip: 'Add Workspace',
-              onPressed: () => _showAddWorkspaceDialog(context, provider),
-            ),
+            if (canEdit)
+              ShellIconAction(
+                icon: Icons.add_rounded,
+                tooltip: 'Add Workspace',
+                onPressed: () => _showAddWorkspaceDialog(context, provider),
+              ),
           ],
         );
       },

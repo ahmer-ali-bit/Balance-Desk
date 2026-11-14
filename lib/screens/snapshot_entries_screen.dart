@@ -9,6 +9,7 @@ import '../models/entry.dart';
 import '../models/snapshot_opening_balance.dart';
 import '../models/summary_snapshot.dart';
 import '../providers/customer_provider.dart';
+import '../providers/linked_devices_provider.dart';
 import '../services/export_service.dart';
 import '../services/pdf_service.dart';
 import '../utils/app_colors.dart';
@@ -62,7 +63,10 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
       _snapshots.isEmpty ? null : _snapshots.last;
 
   bool _canEdit(BuildContext context, {bool listen = true}) {
-    return true;
+    return !Provider.of<LinkedDevicesProvider>(
+      context,
+      listen: listen,
+    ).isReadOnly;
   }
 
   double get _openingDebitBalance =>
@@ -1184,6 +1188,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
     BuildContext context, {
     required bool canEdit,
   }) {
+    if (!canEdit) return const SizedBox.shrink();
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final canSave =
@@ -1422,6 +1427,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
   }
 
   Widget _buildHeaderActions({required bool isCompact, required bool canEdit}) {
+    if (!canEdit) return const SizedBox.shrink();
     final isDesktop =
         PlatformHelper.isDesktop &&
         MediaQuery.sizeOf(context).width >= 980;
@@ -1920,7 +1926,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
             const SizedBox(height: 10),
             Text(_errorMessage!, textAlign: TextAlign.center),
             const SizedBox(height: 12),
-            FilledButton(onPressed: _loadTimeline, child: const Text('Retry')),
+            if (_canEdit(context))
+              FilledButton(onPressed: _loadTimeline, child: const Text('Retry')),
           ],
         ),
       );
@@ -2148,10 +2155,11 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: _loadTimeline,
-                  child: const Text('Retry'),
-                ),
+                if (_canEdit(context))
+                  FilledButton(
+                    onPressed: _loadTimeline,
+                    child: const Text('Retry'),
+                  ),
               ],
             ),
           ),

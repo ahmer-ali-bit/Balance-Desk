@@ -7,6 +7,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:shop/database/app_database.dart';
 import 'package:shop/providers/customer_provider.dart';
+import 'package:shop/providers/linked_devices_provider.dart';
 import 'package:shop/screens/customer_list_screen.dart';
 
 void main() {
@@ -37,6 +38,7 @@ void main() {
           ChangeNotifierProvider(
             create: (_) => CustomerProvider()..loadCustomers(),
           ),
+          ChangeNotifierProvider(create: (_) => LinkedDevicesProvider()),
         ],
         child: const MaterialApp(home: Scaffold(body: CustomerListScreen())),
       ),
