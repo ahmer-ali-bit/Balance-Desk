@@ -27,6 +27,8 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
   final ScrollController _tableVerticalController = ScrollController();
   final AppDatabase _database = AppDatabase.instance;
   Map<int, String> _pageNoByCustomer = <int, String>{};
+  static const int _customerPageSize = 100;
+  int _visibleCustomerCount = _customerPageSize;
 
   Future<void> _loadPageNos() async {
     try {
@@ -321,9 +323,13 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       focusNode: searchFocusNode,
       hintText: 'Search customer',
       optionsBuilder: (String query) => provider.filteredCustomers,
-      onChanged: provider.updateSearchQuery,
+      onChanged: (String query) {
+        setState(() => _visibleCustomerCount = _customerPageSize);
+        provider.updateSearchQuery(query);
+      },
       onClear: () {
         _searchController.clear();
+        setState(() => _visibleCustomerCount = _customerPageSize);
         provider.updateSearchQuery('');
       },
     );
@@ -425,26 +431,40 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     required List<Customer> customers,
     required bool canEdit,
   }) {
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: customers.length,
-      itemBuilder: (context, index) {
-        final customer = customers[index];
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: index == customers.length - 1 ? 12 : 10,
+    final visibleCount = customers.length < _visibleCustomerCount
+        ? customers.length
+        : _visibleCustomerCount;
+    return Column(
+      children: <Widget>[
+        for (var index = 0; index < visibleCount; index++) ...[
+          Padding(
+            padding: EdgeInsets.only(
+              bottom: index == visibleCount - 1 ? 12 : 10,
+            ),
+            child: MobilePremiumCustomerCard(
+              name: customers[index].name,
+              ledgerPageNo: _pageNoFor(customers[index]),
+              isStockLedger: customers[index].isStockLedger,
+              onTap: () => _openLedger(customers[index]),
+              onDelete: () => _confirmDelete(customers[index]),
+              canEdit: canEdit,
+            ),
           ),
-          child: MobilePremiumCustomerCard(
-            name: customer.name,
-            ledgerPageNo: _pageNoFor(customer),
-            isStockLedger: customer.isStockLedger,
-            onTap: () => _openLedger(customer),
-            onDelete: () => _confirmDelete(customer),
-            canEdit: canEdit,
+        ],
+        if (visibleCount < customers.length)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: OutlinedButton.icon(
+              onPressed: () => setState(() {
+                _visibleCustomerCount += _customerPageSize;
+              }),
+              icon: const Icon(Icons.expand_more_rounded),
+              label: Text(
+                'Show ${customers.length - visibleCount < _customerPageSize ? customers.length - visibleCount : _customerPageSize} more customers',
+              ),
+            ),
           ),
-        );
-      },
+      ],
     );
   }
 

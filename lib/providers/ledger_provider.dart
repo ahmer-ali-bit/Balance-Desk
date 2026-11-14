@@ -178,9 +178,16 @@ class LedgerProvider extends ChangeNotifier {
       final openingBalance = await _database.getCustomerLedgerOpeningBalance(
         _customer.id!,
       );
-      _entries = rows
-          .map<Entry>((Map<String, Object?> row) => Entry.fromMap(row))
-          .toList(growable: false);
+      final loadedEntries = <Entry>[];
+      for (var index = 0; index < rows.length; index++) {
+        loadedEntries.add(Entry.fromMap(rows[index]));
+        if ((index + 1) % 500 == 0) {
+          // Let loading indicators and user input continue to render while a
+          // large ledger is converted from database rows.
+          await Future<void>.delayed(Duration.zero);
+        }
+      }
+      _entries = List<Entry>.unmodifiable(loadedEntries);
       _openingBalance =
           openingBalance ?? SnapshotOpeningBalance(debit: 0, credit: 0);
       _rebuildVisibleEntries();

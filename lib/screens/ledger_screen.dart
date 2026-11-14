@@ -98,6 +98,8 @@ class _LedgerViewState extends State<_LedgerView> {
   String _lastOpeningBalanceSignature = '';
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _didAutoOpenAddEntry = false;
+  static const int _entryPageSize = 100;
+  int _visibleEntryCount = _entryPageSize;
   Timer? _obDebounceTimer;
 
   @override
@@ -3374,7 +3376,10 @@ class _LedgerViewState extends State<_LedgerView> {
     }
 
     if (compactLayout) {
-      return _buildCompactLedgerEntries(context, provider);
+      return _withMoreEntries(
+        _buildCompactLedgerEntries(context, provider),
+        provider.entries.length,
+      );
     }
 
     final dataTextStyle = const TextStyle(
@@ -3409,7 +3414,8 @@ class _LedgerViewState extends State<_LedgerView> {
                   : 4.0
             : 18.0;
 
-        return Card(
+        return _withMoreEntries(
+          Card(
           clipBehavior: Clip.antiAlias,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
@@ -3542,12 +3548,41 @@ class _LedgerViewState extends State<_LedgerView> {
                 rows: _buildLedgerRows(
                   provider,
                   compact: constraints.maxWidth < 1100,
+                  maxRows: _visibleEntryCount,
                 ),
               ),
             ),
           ),
+          ),
+          provider.entries.length,
         );
       },
+    );
+  }
+
+  Widget _withMoreEntries(Widget entriesWidget, int totalCount) {
+    final visibleCount = _visibleEntryCount < totalCount
+        ? _visibleEntryCount
+        : totalCount;
+    if (visibleCount >= totalCount) return entriesWidget;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        entriesWidget,
+        const SizedBox(height: 12),
+        Center(
+          child: OutlinedButton.icon(
+            onPressed: () => setState(() {
+              final nextCount = _visibleEntryCount + _entryPageSize;
+              _visibleEntryCount = nextCount < totalCount
+                  ? nextCount
+                  : totalCount;
+            }),
+            icon: const Icon(Icons.expand_more_rounded),
+            label: Text('Show ${math.min(_entryPageSize, totalCount - visibleCount)} more entries'),
+          ),
+        ),
+      ],
     );
   }
 
@@ -3604,11 +3639,14 @@ class _LedgerViewState extends State<_LedgerView> {
 
     final reversedBalances = balances.reversed.toList();
     final chronEntries = entries.reversed.toList();
+    final visibleEntryCount = chronEntries.length < _visibleEntryCount
+        ? chronEntries.length
+        : _visibleEntryCount;
 
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: chronEntries.length,
+      itemCount: visibleEntryCount,
       itemBuilder: (context, index) {
         final b = reversedBalances[index];
         return Padding(
@@ -4326,6 +4364,7 @@ class _LedgerViewState extends State<_LedgerView> {
   List<DataRow> _buildLedgerRows(
     LedgerProvider provider, {
     required bool compact,
+    required int maxRows,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final rows = <DataRow>[];
@@ -4333,7 +4372,10 @@ class _LedgerViewState extends State<_LedgerView> {
     double? runningRemainingBags;
 
     final entries = provider.entries.reversed.toList();
+    var entryIndex = 0;
     for (final entry in entries) {
+      final includeRow = entryIndex >= entries.length - maxRows;
+      entryIndex++;
       final isOpeningBalanceEntry = _isOpeningBalanceEntry(provider, entry);
       final debit = entry.debit;
       final credit = entry.credit;
@@ -4368,6 +4410,8 @@ class _LedgerViewState extends State<_LedgerView> {
           remainingBagsLabel = provider.formatBags(currentRemainingBags);
         }
       }
+
+      if (!includeRow) continue;
 
       final List<DataCell> cells = <DataCell>[
         DataCell(Text(_formatStoredDate(entry.entryDate), style: rowStyle)),

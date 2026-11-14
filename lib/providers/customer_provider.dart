@@ -225,9 +225,14 @@ class CustomerProvider extends ChangeNotifier {
 
   Future<void> _refreshCustomers() async {
     final rows = await _database.getCustomers();
-    final customers = rows
-        .map<Customer>((Map<String, Object?> row) => Customer.fromMap(row))
-        .toList(growable: false);
+    final customers = <Customer>[];
+    for (var index = 0; index < rows.length; index++) {
+      customers.add(Customer.fromMap(rows[index]));
+      if ((index + 1) % 500 == 0) {
+        // Keep the first load responsive for large customer directories.
+        await Future<void>.delayed(Duration.zero);
+      }
+    }
     final sortedCustomers = customers.toList(growable: false)
       ..sort((Customer a, Customer b) {
         final leftName = a.name.trim().toLowerCase();
