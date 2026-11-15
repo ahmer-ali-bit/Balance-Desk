@@ -34,17 +34,20 @@ class LedgerProvider extends ChangeNotifier {
        _useWeight = customer.useWeight,
        _database = database ?? AppDatabase.instance {
     _dbSub = _database.onDataChanged.listen((_) {
-      if (!_isDisposed) loadEntries();
+      _scheduleReload();
     });
   }
 
   List<Entry> _entries = <Entry>[];
   List<Entry> _visibleEntries = <Entry>[];
+  List<Entry>? _entriesView;
+  Timer? _reloadDebounce;
   SnapshotOpeningBalance _openingBalance = SnapshotOpeningBalance(
     debit: 0,
     credit: 0,
   );
   bool _isLoading = false;
+  int _loadGeneration = 0;
   String? _errorMessage;
   LedgerDateFilter _activeFilter = LedgerDateFilter.all;
   DateTimeRange? _customRange;
@@ -71,7 +74,8 @@ class LedgerProvider extends ChangeNotifier {
   String get customerPhone => _customerPhone;
   LedgerDateFilter get activeFilter => _activeFilter;
   DateTimeRange? get customRange => _customRange;
-  List<Entry> get entries => List<Entry>.unmodifiable(_visibleEntries);
+  List<Entry> get entries =>
+      _entriesView ??= List<Entry>.unmodifiable(_visibleEntries);
   SnapshotOpeningBalance get openingBalance => _openingBalance;
   bool get hasOpeningBalance => _openingBalance.hasValue;
   bool get isStockLedger => _isStockLedger;
@@ -132,7 +136,20 @@ class LedgerProvider extends ChangeNotifier {
     return '$label (${_formatDate(range.start)} - ${_formatDate(range.end)})';
   }
 
+  void _scheduleReload() {
+    if (_isDisposed) {
+      return;
+    }
+    _reloadDebounce?.cancel();
+    _reloadDebounce = Timer(const Duration(milliseconds: 150), () {
+      if (!_isDisposed) {
+        loadEntries();
+      }
+    });
+  }
+
   Future<void> loadEntries() async {
+    final generation = ++_loadGeneration;
     if (_customer.id == null) {
       _errorMessage = 'Customer record is invalid.';
       _notifyListeners();
@@ -144,6 +161,7 @@ class LedgerProvider extends ChangeNotifier {
     try {
       // Sync customer details to ensure settings like Stock Ledger mode persist correctly
       final customerData = await _database.getCustomer(_customer.id!);
+      if (generation != _loadGeneration) return;
       if (customerData != null) {
         _customerName = customerData['name'] as String? ?? _customerName;
         _customerAddress = customerData['address'] as String? ?? _customerAddress;
@@ -160,12 +178,22 @@ class LedgerProvider extends ChangeNotifier {
               startDate: range.start.toIso8601String(),
               endDate: range.end.toIso8601String(),
             );
+      if (generation != _loadGeneration) return;
       final openingBalance = await _database.getCustomerLedgerOpeningBalance(
         _customer.id!,
       );
-      _entries = rows
-          .map<Entry>((Map<String, Object?> row) => Entry.fromMap(row))
-          .toList(growable: false);
+      if (generation != _loadGeneration) return;
+      final loadedEntries = <Entry>[];
+      for (var index = 0; index < rows.length; index++) {
+        loadedEntries.add(Entry.fromMap(rows[index]));
+        if ((index + 1) % 500 == 0) {
+          // Let loading indicators and user input continue to render while a
+          // large ledger is converted from database rows.
+          await Future<void>.delayed(Duration.zero);
+          if (generation != _loadGeneration) return;
+        }
+      }
+      _entries = List<Entry>.unmodifiable(loadedEntries);
       _openingBalance =
           openingBalance ?? SnapshotOpeningBalance(debit: 0, credit: 0);
       _rebuildVisibleEntries();
@@ -173,9 +201,11 @@ class LedgerProvider extends ChangeNotifier {
     } catch (error, stackTrace) {
       debugPrint('LedgerProvider.loadEntries failed: $error');
       debugPrint('$stackTrace');
-      _errorMessage = 'Unable to load ledger entries.';
+      if (generation == _loadGeneration) {
+        _errorMessage = 'Unable to load ledger entries.';
+      }
     } finally {
-      _setLoading(false);
+      if (generation == _loadGeneration) _setLoading(false);
     }
   }
 
@@ -646,9 +676,11 @@ class LedgerProvider extends ChangeNotifier {
   void _rebuildVisibleEntries() {
     if (!_openingBalance.hasValue) {
       _visibleEntries = List<Entry>.from(_entries, growable: false);
+      _entriesView = null;
       return;
     }
 
+    _entriesView = null;
     _visibleEntries = <Entry>[
       ..._entries,
       Entry(
@@ -683,6 +715,7 @@ class LedgerProvider extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _reloadDebounce?.cancel();
     _dbSub?.cancel();
     super.dispose();
   }

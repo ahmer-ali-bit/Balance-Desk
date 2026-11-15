@@ -3,7 +3,10 @@ import 'package:provider/provider.dart';
 
 import 'providers/customer_provider.dart';
 import 'providers/ledger_year_provider.dart';
+import 'providers/linked_devices_provider.dart';
+import 'providers/theme_provider.dart';
 import 'providers/workspace_provider.dart';
+
 class AppRoot extends StatelessWidget {
   const AppRoot({super.key, required this.child});
 
@@ -17,14 +20,22 @@ class AppRoot extends StatelessWidget {
           create: (_) => WorkspaceProvider(),
         ),
         ChangeNotifierProvider(
-          create: (_) =>
-              LedgerYearProvider()..loadYears(),
+          create: (_) => LedgerYearProvider()..loadYears(),
         ),
         ChangeNotifierProvider(
-          create: (_) =>
-              CustomerProvider()..loadCustomers(),
+          create: (_) => CustomerProvider()..loadCustomers(),
         ),
-
+        ChangeNotifierProvider(
+          create: (_) => ThemeProvider(),
+        ),
+        ChangeNotifierProxyProvider<WorkspaceProvider, LinkedDevicesProvider>(
+          create: (_) => LinkedDevicesProvider(),
+          update: (_, workspace, linkedDevices) {
+            final provider = linkedDevices ?? LinkedDevicesProvider();
+            provider.bindWorkspaceProvider(workspace);
+            return provider;
+          },
+        ),
       ],
       child: child,
     );

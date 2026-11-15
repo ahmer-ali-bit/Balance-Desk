@@ -21,18 +21,12 @@ import 'package:flutter/foundation.dart';
 import '../models/snapshot_opening_balance.dart';
 import '../services/workspace_service.dart';
 
-/// Thrown whenever a write is attempted while the active workspace is linked
-/// to a main device in read-only mode.
+/// Raised by the database boundary when a linked device has read-only access.
 class ReadOnlyWorkspaceException implements Exception {
-  const ReadOnlyWorkspaceException([
-    this.message =
-        'This device is linked in read-only mode. Ask the main device for edit access.',
-  ]);
-
-  final String message;
+  const ReadOnlyWorkspaceException();
 
   @override
-  String toString() => message;
+  String toString() => 'This linked device is read-only.';
 }
 
 class DatabaseHelper {
@@ -46,63 +40,18 @@ class DatabaseHelper {
   static const String summarySnapshotsTable = 'summary_snapshots';
   static const String ledgerYearsTable = 'ledger_years';
   static const String appSettingsTable = 'app_settings';
-  static const String syncTombstonesTable = 'sync_tombstones';
-  static const String syncStateTable = 'sync_state';
-  static const String syncOrphansTable = 'sync_orphans';
   static const String _activeYearSettingKey = 'activeYear';
-  static const int _databaseVersion = 6;
+  static const int _databaseVersion = 7;
 
-  /// Tables that participate in linked-device synchronisation, in the order
-  /// they must be applied so foreign keys always resolve.
-  static const List<String> syncedTables = <String>[
-    ledgerYearsTable,
-    customersTable,
-    entriesTable,
-    summarySnapshotsTable,
-    appSettingsTable,
-  ];
+  /// Set by the linked-device layer. The database wrapper invokes it before
+  /// every data mutation; permissions are never enforced by UI visibility only.
+  bool Function()? writeGuard;
+  bool _isApplyingRemoteChanges = false;
 
   Database? _database;
   int _activeYear = DateTime.now().year;
 
-  /// Guard installed by the linked-devices layer. When it returns `false` the
-  /// workspace is read-only and every mutating call throws
-  /// [ReadOnlyWorkspaceException] — the restriction is therefore enforced at
-  /// the data layer, not only in the UI.
-  bool Function()? writeGuard;
-
-  bool _isApplyingRemoteChanges = false;
-
-  /// `true` while the sync engine is writing records that came from the cloud.
-  bool get isApplyingRemoteChanges => _isApplyingRemoteChanges;
-
   int get activeYear => _activeYear;
-
-  /// Throws when the active workspace is linked in read-only mode.
-  void _assertWritable() {
-    if (_isApplyingRemoteChanges) {
-      return;
-    }
-    final guard = writeGuard;
-    if (guard == null) {
-      return;
-    }
-    if (!guard()) {
-      throw const ReadOnlyWorkspaceException();
-    }
-  }
-
-  /// Runs [action] with the read-only guard suspended and without stamping
-  /// local sync metadata, so remote records can be applied verbatim.
-  Future<T> runAsRemoteApply<T>(Future<T> Function() action) async {
-    final previous = _isApplyingRemoteChanges;
-    _isApplyingRemoteChanges = true;
-    try {
-      return await action();
-    } finally {
-      _isApplyingRemoteChanges = previous;
-    }
-  }
 
   String _snapshotOpeningDebitSettingKey(int year) =>
       'snapshotOpeningDebit:$year';
@@ -171,8 +120,7 @@ class DatabaseHelper {
       );
       _database = _ChangeReportingDatabase(
         _rawDatabase!,
-        onLocalWrite: _onLocalWrite,
-        watchedTables: <String>{...syncedTables, syncTombstonesTable},
+        beforeWrite: _assertWritable,
       );
     } catch (error) {
       debugPrint('Database open failed: $error');
@@ -180,15 +128,6 @@ class DatabaseHelper {
     }
 
     return _database!;
-  }
-
-  /// A write on this device that the cloud still has to hear about.
-  ///
-  /// The sync engine debounces these into a single push, so a burst of edits
-  /// costs one cycle rather than one cycle per keystroke.
-  void _onLocalWrite() {
-    if (_isApplyingRemoteChanges) return;
-    AppDatabase.instance.notifyDataChanged();
   }
 
   bool get _isDesktop =>
@@ -336,42 +275,6 @@ class DatabaseHelper {
         dailyLogPageNo TEXT NOT NULL DEFAULT ''
       )
     ''');
-
-    // Deleted records are remembered here so a delete performed on one device
-    // propagates to every other device and never gets resurrected by a stale
-    // upload from a device that was offline when the delete happened.
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS $syncTombstonesTable(
-        entity TEXT NOT NULL,
-        syncId TEXT NOT NULL,
-        deletedAt TEXT NOT NULL,
-        pushPending INTEGER NOT NULL DEFAULT 1,
-        PRIMARY KEY(entity, syncId)
-      )
-    ''');
-
-    // Sync bookkeeping (link configuration + per-entity pull cursors). Never
-    // synchronised and never part of a CSV backup, so it always describes the
-    // device it lives on.
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS $syncStateTable(
-        stateKey TEXT PRIMARY KEY,
-        stateValue TEXT NOT NULL
-      )
-    ''');
-
-    // Records that arrived before their parent (e.g. an entry whose customer
-    // has not been downloaded yet). Retried on every sync cycle.
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS $syncOrphansTable(
-        entity TEXT NOT NULL,
-        syncId TEXT NOT NULL,
-        payload TEXT NOT NULL,
-        receivedAt TEXT NOT NULL,
-        attempts INTEGER NOT NULL DEFAULT 0,
-        PRIMARY KEY(entity, syncId)
-      )
-    ''');
   }
 
   Future<void> _ensureYearInfrastructure(Database db) async {
@@ -457,84 +360,10 @@ class DatabaseHelper {
     );
   }
 
-  Future<void> _ensureIndexes(Database db) async {
-    await db.execute(
-      'CREATE INDEX IF NOT EXISTS idx_customers_ledger_year ON $customersTable(ledgerYear)',
-    );
-    await db.execute(
-      'CREATE INDEX IF NOT EXISTS idx_entries_customer_id ON $entriesTable(customerId)',
-    );
-    await db.execute(
-      'CREATE INDEX IF NOT EXISTS idx_entries_entry_date ON $entriesTable(entryDate)',
-    );
-    await db.execute(
-      'CREATE INDEX IF NOT EXISTS idx_entries_created_at ON $entriesTable(createdAt)',
-    );
-
-    for (final String table in <String>[
-      customersTable,
-      entriesTable,
-      summarySnapshotsTable,
-    ]) {
-      await db.execute(
-        'CREATE UNIQUE INDEX IF NOT EXISTS idx_${table}_sync_id ON $table(syncId)',
-      );
-    }
-    for (final String table in syncedTables) {
-      await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_${table}_push_pending ON $table(pushPending)',
-      );
-    }
-    await db.execute(
-      'CREATE INDEX IF NOT EXISTS idx_sync_tombstones_pending ON $syncTombstonesTable(pushPending)',
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Linked-device sync infrastructure
-  // ---------------------------------------------------------------------------
-
-  /// SQL expression producing an ISO-8601 UTC stamp with millisecond
-  /// precision. Matches [syncTimestamp] exactly so local and remote stamps can
-  /// be compared as plain strings.
-  static const String _sqlNow = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
-
-  /// SQL expression producing a random 128-bit identifier in UUID shape. Used
-  /// as the cross-device identity of a row, because the local `id` columns are
-  /// `AUTOINCREMENT` and therefore collide between devices.
-  static const String _sqlUuid =
-      "lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-' || "
-      "lower(hex(randomblob(2))) || '-' || lower(hex(randomblob(2))) || '-' || "
-      "lower(hex(randomblob(6)))";
-
-  static const String _syncTriggerRevision = '1';
-
-  /// Current time formatted exactly like [_sqlNow].
-  static String syncTimestamp([DateTime? time]) {
-    final DateTime value = (time ?? DateTime.now()).toUtc();
-    return DateTime.utc(
-      value.year,
-      value.month,
-      value.day,
-      value.hour,
-      value.minute,
-      value.second,
-      value.millisecond,
-    ).toIso8601String();
-  }
-
   Future<void> _ensureSyncInfrastructure(Database db) async {
-    // Added after the first release: a received record used to be thrown away
-    // on the first failure, so the retry counter has to exist on databases that
-    // were created before it.
-    await _ensureColumn(
-      db: db,
-      tableName: syncOrphansTable,
-      columnName: 'attempts',
-      definition: 'INTEGER NOT NULL DEFAULT 0',
-    );
-
-    for (final String table in <String>[
+    // Stable cross-device IDs are separate from local SQLite integer IDs.
+    // These columns are metadata only and do not participate in calculations.
+    for (final table in <String>[
       customersTable,
       entriesTable,
       summarySnapshotsTable,
@@ -546,161 +375,91 @@ class DatabaseHelper {
         definition: 'TEXT',
       );
     }
-    for (final String table in syncedTables) {
-      await _ensureColumn(
-        db: db,
-        tableName: table,
-        columnName: 'updatedAt',
-        definition: 'TEXT',
-      );
-      await _ensureColumn(
-        db: db,
-        tableName: table,
-        columnName: 'pushPending',
-        definition: 'INTEGER NOT NULL DEFAULT 1',
-      );
-    }
-
-    // Backfill identities for rows that existed before this migration.
-    await db.execute(
-      'UPDATE $customersTable SET syncId = $_sqlUuid WHERE syncId IS NULL OR syncId = \'\'',
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS sync_shadow(
+        entity TEXT NOT NULL,
+        recordId TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        revision INTEGER NOT NULL DEFAULT 0,
+        isDeleted INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY(entity, recordId)
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS sync_state(
+        stateKey TEXT PRIMARY KEY,
+        stateValue TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS sync_conflicts(
+        entity TEXT NOT NULL,
+        recordId TEXT NOT NULL,
+        localPayload TEXT NOT NULL,
+        cloudPayload TEXT NOT NULL,
+        cloudRevision INTEGER NOT NULL,
+        cloudDeleted INTEGER NOT NULL DEFAULT 0,
+        detectedAt TEXT NOT NULL,
+        PRIMARY KEY(entity, recordId)
+      )
+    ''');
+    await _ensureColumn(
+      db: db,
+      tableName: 'sync_conflicts',
+      columnName: 'cloudDeleted',
+      definition: 'INTEGER NOT NULL DEFAULT 0',
     );
-    await db.execute(
-      'UPDATE $entriesTable SET syncId = $_sqlUuid WHERE syncId IS NULL OR syncId = \'\'',
-    );
-    await db.execute(
-      'UPDATE $summarySnapshotsTable SET syncId = $_sqlUuid WHERE syncId IS NULL OR syncId = \'\'',
-    );
-    await db.execute(
-      'UPDATE $entriesTable SET updatedAt = COALESCE(createdAt, $_sqlNow) WHERE updatedAt IS NULL',
-    );
-    await db.execute(
-      'UPDATE $summarySnapshotsTable SET updatedAt = COALESCE(savedAt, $_sqlNow) WHERE updatedAt IS NULL',
-    );
-    await db.execute(
-      'UPDATE $ledgerYearsTable SET updatedAt = COALESCE(createdAt, $_sqlNow) WHERE updatedAt IS NULL',
-    );
-    for (final String table in <String>[customersTable, appSettingsTable]) {
-      await db.execute(
-        'UPDATE $table SET updatedAt = $_sqlNow WHERE updatedAt IS NULL',
-      );
-    }
-
-    final revisionRows = await db.query(
-      syncStateTable,
-      columns: <String>['stateValue'],
-      where: 'stateKey = ?',
-      whereArgs: <Object?>['schema.syncTriggers'],
-      limit: 1,
-    );
-    if (revisionRows.isNotEmpty &&
-        revisionRows.first['stateValue'] == _syncTriggerRevision) {
-      return;
-    }
-
-    await _createRowSyncTriggers(db, customersTable);
-    await _createRowSyncTriggers(db, entriesTable);
-    await _createRowSyncTriggers(db, summarySnapshotsTable);
-    await _createKeyedSyncTriggers(db, appSettingsTable, 'settingKey');
-    await _createKeyedSyncTriggers(db, ledgerYearsTable, 'year');
-
-    await db.insert(syncStateTable, <String, Object?>{
-      'stateKey': 'schema.syncTriggers',
-      'stateValue': _syncTriggerRevision,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  /// Triggers for tables identified across devices by a generated `syncId`.
-  Future<void> _createRowSyncTriggers(Database db, String table) async {
-    await db.execute('DROP TRIGGER IF EXISTS trg_${table}_sync_ins');
-    await db.execute('DROP TRIGGER IF EXISTS trg_${table}_sync_upd');
-    await db.execute('DROP TRIGGER IF EXISTS trg_${table}_sync_del');
-
-    await db.execute('''
-      CREATE TRIGGER trg_${table}_sync_ins
-      AFTER INSERT ON $table
-      WHEN NEW.updatedAt IS NULL
-      BEGIN
-        UPDATE $table
-           SET syncId = COALESCE(NULLIF(NEW.syncId, ''), $_sqlUuid),
-               updatedAt = $_sqlNow,
-               pushPending = 1
-         WHERE rowid = NEW.rowid;
-      END
-    ''');
-
-    await db.execute('''
-      CREATE TRIGGER trg_${table}_sync_upd
-      AFTER UPDATE ON $table
-      WHEN NEW.updatedAt IS OLD.updatedAt
-       AND NEW.pushPending IS OLD.pushPending
-      BEGIN
-        UPDATE $table
-           SET syncId = COALESCE(NULLIF(NEW.syncId, ''), $_sqlUuid),
-               updatedAt = $_sqlNow,
-               pushPending = 1
-         WHERE rowid = NEW.rowid;
-      END
-    ''');
-
-    await db.execute('''
-      CREATE TRIGGER trg_${table}_sync_del
-      AFTER DELETE ON $table
-      WHEN OLD.syncId IS NOT NULL AND OLD.syncId != ''
-      BEGIN
-        INSERT OR REPLACE INTO $syncTombstonesTable(
-          entity, syncId, deletedAt, pushPending
-        ) VALUES('$table', OLD.syncId, $_sqlNow, 1);
-      END
-    ''');
+  void _assertWritable() {
+    if (_isApplyingRemoteChanges) return;
+    if (writeGuard != null && !writeGuard!()) {
+      throw const ReadOnlyWorkspaceException();
+    }
   }
 
-  /// Triggers for tables whose primary key is already globally unique.
-  Future<void> _createKeyedSyncTriggers(
-    Database db,
-    String table,
-    String keyColumn,
-  ) async {
-    await db.execute('DROP TRIGGER IF EXISTS trg_${table}_sync_ins');
-    await db.execute('DROP TRIGGER IF EXISTS trg_${table}_sync_upd');
-    await db.execute('DROP TRIGGER IF EXISTS trg_${table}_sync_del');
+  /// Applies server changes without tripping the local permission check.
+  Future<T> runAsRemoteApply<T>(Future<T> Function() action) async {
+    final previous = _isApplyingRemoteChanges;
+    _isApplyingRemoteChanges = true;
+    try {
+      return await action();
+    } finally {
+      _isApplyingRemoteChanges = previous;
+    }
+  }
 
-    await db.execute('''
-      CREATE TRIGGER trg_${table}_sync_ins
-      AFTER INSERT ON $table
-      WHEN NEW.updatedAt IS NULL
-      BEGIN
-        UPDATE $table
-           SET updatedAt = $_sqlNow, pushPending = 1
-         WHERE $keyColumn = NEW.$keyColumn;
-        DELETE FROM $syncTombstonesTable
-         WHERE entity = '$table' AND syncId = CAST(NEW.$keyColumn AS TEXT);
-      END
-    ''');
-
-    await db.execute('''
-      CREATE TRIGGER trg_${table}_sync_upd
-      AFTER UPDATE ON $table
-      WHEN NEW.updatedAt IS OLD.updatedAt
-       AND NEW.pushPending IS OLD.pushPending
-      BEGIN
-        UPDATE $table
-           SET updatedAt = $_sqlNow, pushPending = 1
-         WHERE $keyColumn = NEW.$keyColumn;
-        DELETE FROM $syncTombstonesTable
-         WHERE entity = '$table' AND syncId = CAST(NEW.$keyColumn AS TEXT);
-      END
-    ''');
-
-    await db.execute('''
-      CREATE TRIGGER trg_${table}_sync_del
-      AFTER DELETE ON $table
-      BEGIN
-        INSERT OR REPLACE INTO $syncTombstonesTable(
-          entity, syncId, deletedAt, pushPending
-        ) VALUES('$table', CAST(OLD.$keyColumn AS TEXT), $_sqlNow, 1);
-      END
-    ''');
+  Future<void> _ensureIndexes(Database db) async {
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_customers_ledger_year ON $customersTable(ledgerYear)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_customers_year_name ON $customersTable(ledgerYear, TRIM(name) COLLATE NOCASE, id)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_entries_customer_id ON $entriesTable(customerId)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_entries_customer_created ON $entriesTable(customerId, createdAt DESC, entryDate DESC, id DESC)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_entries_entry_date ON $entriesTable(entryDate)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_entries_created_at ON $entriesTable(createdAt)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_entries_dailylog_created ON $entriesTable(showInDailyLog, createdAt, entryDate, id)',
+    );
+    await db.execute(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_sync_id ON $customersTable(syncId)',
+    );
+    await db.execute(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_entries_sync_id ON $entriesTable(syncId)',
+    );
+    await db.execute(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_snapshots_sync_id ON $summarySnapshotsTable(syncId)',
+    );
   }
 
   Future<void> _ensureColumn({
@@ -777,9 +536,6 @@ class DatabaseHelper {
     required String key,
     required String value,
   }) async {
-    if (isSyncableSettingKey(key)) {
-      _assertWritable();
-    }
     final db = await database;
     await db.insert(appSettingsTable, <String, Object?>{
       'settingKey': key,
@@ -811,7 +567,6 @@ class DatabaseHelper {
     required double debit,
     required double credit,
   }) async {
-    _assertWritable();
     final db = await database;
     await db.insert(appSettingsTable, <String, Object?>{
       'settingKey': _snapshotOpeningDebitSettingKey(_activeYear),
@@ -824,7 +579,6 @@ class DatabaseHelper {
   }
 
   Future<void> clearSnapshotOpeningBalance() async {
-    _assertWritable();
     final db = await database;
     await db.delete(
       appSettingsTable,
@@ -880,6 +634,39 @@ class DatabaseHelper {
     );
   }
 
+  Future<Map<int, SnapshotOpeningBalance>>
+  getCustomerLedgerOpeningBalances() async {
+    final db = await database;
+    final rows = await db.query(
+      appSettingsTable,
+      columns: const <String>['settingKey', 'settingValue'],
+      where: 'settingKey LIKE ?',
+      whereArgs: <Object?>['ledgerOpening%:$_activeYear:%'],
+    );
+    final valuesByCustomer = <int, Map<String, String>>{};
+    for (final row in rows) {
+      final parts = (row['settingKey'] as String).split(':');
+      if (parts.length != 3 || int.tryParse(parts[1]) != _activeYear) continue;
+      final customerId = int.tryParse(parts[2]);
+      if (customerId == null) continue;
+      valuesByCustomer.putIfAbsent(customerId, () => <String, String>{})[
+        parts[0]
+      ] = row['settingValue'] as String? ?? '';
+    }
+
+    return <int, SnapshotOpeningBalance>{
+      for (final entry in valuesByCustomer.entries)
+        entry.key: SnapshotOpeningBalance(
+          debit: double.tryParse(entry.value['ledgerOpeningDebit'] ?? '') ?? 0,
+          credit: double.tryParse(entry.value['ledgerOpeningCredit'] ?? '') ?? 0,
+          buyBags:
+              double.tryParse(entry.value['ledgerOpeningBuyBags'] ?? '') ?? 0,
+          sellBags:
+              double.tryParse(entry.value['ledgerOpeningSellBags'] ?? '') ?? 0,
+        ),
+    };
+  }
+
   Future<void> setCustomerLedgerOpeningBalance({
     required int customerId,
     required double debit,
@@ -887,7 +674,6 @@ class DatabaseHelper {
     double buyBags = 0,
     double sellBags = 0,
   }) async {
-    _assertWritable();
     final db = await database;
     await db.insert(appSettingsTable, <String, Object?>{
       'settingKey': _customerLedgerOpeningDebitSettingKey(
@@ -920,7 +706,6 @@ class DatabaseHelper {
   }
 
   Future<void> clearCustomerLedgerOpeningBalance(int customerId) async {
-    _assertWritable();
     final db = await database;
     await db.delete(
       appSettingsTable,
@@ -951,7 +736,6 @@ class DatabaseHelper {
     String address = '',
     String phone = '',
   }) async {
-    _assertWritable();
     final db = await database;
     return db.transaction<int>((Transaction txn) async {
       final countRows = await txn.rawQuery(
@@ -1023,7 +807,7 @@ class DatabaseHelper {
       ],
       where: 'ledgerYear = ?',
       whereArgs: <Object?>[_activeYear],
-      orderBy: 'name COLLATE NOCASE',
+      orderBy: 'TRIM(name) COLLATE NOCASE ASC, id ASC',
     );
   }
 
@@ -1047,7 +831,6 @@ class DatabaseHelper {
     required double debit,
     required double credit,
   }) async {
-    _assertWritable();
     final db = await database;
     return db.insert(entriesTable, <String, Object?>{
       'customerId': customerId,
@@ -1073,7 +856,6 @@ class DatabaseHelper {
     required String sellBags,
     required double sellAmount,
   }) async {
-    _assertWritable();
     final db = await database;
     return db.insert(entriesTable, <String, Object?>{
       'customerId': customerId,
@@ -1096,7 +878,6 @@ class DatabaseHelper {
     required double debit,
     required double credit,
   }) async {
-    _assertWritable();
     final db = await database;
     return db.update(
       entriesTable,
@@ -1118,7 +899,6 @@ class DatabaseHelper {
     required int entryId,
     required int newCustomerId,
   }) async {
-    _assertWritable();
     final db = await database;
     return db.update(
       entriesTable,
@@ -1129,7 +909,6 @@ class DatabaseHelper {
   }
 
   Future<int> deleteEntry(int id) async {
-    _assertWritable();
     final db = await database;
     return db.delete(entriesTable, where: 'id = ?', whereArgs: <Object?>[id]);
   }
@@ -1144,7 +923,6 @@ class DatabaseHelper {
     required String sellBags,
     required double sellAmount,
   }) async {
-    _assertWritable();
     final db = await database;
     return db.update(
       entriesTable,
@@ -1168,7 +946,6 @@ class DatabaseHelper {
     String? address,
     String? phone,
   }) async {
-    _assertWritable();
     final db = await database;
     final values = <String, Object?>{'name': name.trim()};
     if (address != null) {
@@ -1186,7 +963,6 @@ class DatabaseHelper {
   }
 
   Future<void> updateCustomerStockMode(int id, bool isStockLedger) async {
-    _assertWritable();
     final db = await database;
     await db.update(
       customersTable,
@@ -1197,7 +973,6 @@ class DatabaseHelper {
   }
 
   Future<void> updateCustomerWeightMode(int id, bool useWeight) async {
-    _assertWritable();
     final db = await database;
     await db.update(
       customersTable,
@@ -1344,7 +1119,16 @@ class DatabaseHelper {
     String? startCreatedAt,
   }) async {
     final db = await database;
-    final args = <Object?>[_activeYear];
+    final args = <Object?>[];
+    final pageFilter = StringBuffer(
+      "e2.customerId = c.id AND TRIM(e2.pageNo) <> ''",
+    );
+    if (startCreatedAt != null) {
+      pageFilter.write(' AND e2.createdAt > ?');
+      args.add(startCreatedAt);
+    }
+    args.add(_activeYear);
+
     final whereClause = StringBuffer('c.ledgerYear = ?');
     if (startCreatedAt != null) {
       whereClause.write(' AND e.createdAt > ?');
@@ -1358,12 +1142,41 @@ class DatabaseHelper {
         SUM(e.credit) AS totalCredit,
         SUM(e.buyBags) AS totalBuyBags,
         SUM(e.sellBags) AS totalSellBags,
-        MAX(e.pageNo) AS latestPageNo
+        (
+          SELECT e2.pageNo
+          FROM $entriesTable e2
+          WHERE ${pageFilter.toString()}
+          ORDER BY e2.createdAt DESC, e2.entryDate DESC, e2.id DESC
+          LIMIT 1
+        ) AS latestPageNo
       FROM $customersTable c
       LEFT JOIN $entriesTable e ON e.customerId = c.id
       WHERE ${whereClause.toString()}
       GROUP BY c.id
       ''', args);
+  }
+
+  Future<Map<int, String>> getCustomerLedgerPageNumbers() async {
+    final db = await database;
+    final rows = await db.rawQuery('''
+      SELECT
+        c.id AS customerId,
+        (
+          SELECT e.pageNo
+          FROM $entriesTable e
+          WHERE e.customerId = c.id AND TRIM(e.pageNo) <> ''
+          ORDER BY e.createdAt DESC, e.entryDate DESC, e.id DESC
+          LIMIT 1
+        ) AS ledgerPageNo
+      FROM $customersTable c
+      WHERE c.ledgerYear = ?
+      ''', <Object?>[_activeYear]);
+
+    return <int, String>{
+      for (final row in rows)
+        if (row['customerId'] is int && row['ledgerPageNo'] is String)
+          row['customerId'] as int: row['ledgerPageNo'] as String,
+    };
   }
 
   Future<int> insertCustomer(
@@ -1381,7 +1194,6 @@ class DatabaseHelper {
     required int customerCount,
     String dailyLogPageNo = '',
   }) async {
-    _assertWritable();
     final db = await database;
     return db.insert(summarySnapshotsTable, <String, Object?>{
       'ledgerYear': _activeYear,
@@ -1397,7 +1209,6 @@ class DatabaseHelper {
     required List<int> entryIds,
     required String dailyLogPageNo,
   }) async {
-    _assertWritable();
     final db = await database;
     final placeholders = entryIds.map((_) => '?').join(',');
     await db.rawUpdate(
@@ -1410,7 +1221,6 @@ class DatabaseHelper {
     required int entryId,
     required bool show,
   }) async {
-    _assertWritable();
     final db = await database;
     await db.update(
       entriesTable,
@@ -1443,15 +1253,19 @@ class DatabaseHelper {
     required int id,
     required double overallDebit,
     required double overallCredit,
+    int? customerCount,
   }) async {
-    _assertWritable();
     final db = await database;
+    final values = <String, Object?>{
+      'overallDebit': overallDebit,
+      'overallCredit': overallCredit,
+    };
+    if (customerCount != null) {
+      values['customerCount'] = customerCount;
+    }
     return db.update(
       summarySnapshotsTable,
-      <String, Object?>{
-        'overallDebit': overallDebit,
-        'overallCredit': overallCredit,
-      },
+      values,
       where: 'id = ?',
       whereArgs: <Object?>[id],
     );
@@ -1461,7 +1275,6 @@ class DatabaseHelper {
     required int id,
     required String dailyLogPageNo,
   }) async {
-    _assertWritable();
     final db = await database;
     return db.update(
       summarySnapshotsTable,
@@ -1472,7 +1285,6 @@ class DatabaseHelper {
   }
 
   Future<int> deleteSummarySnapshot(int id) async {
-    _assertWritable();
     final db = await database;
     return db.delete(
       summarySnapshotsTable,
@@ -1482,7 +1294,6 @@ class DatabaseHelper {
   }
 
   Future<int> clearSummarySnapshots() async {
-    _assertWritable();
     final db = await database;
     return db.delete(
       summarySnapshotsTable,
@@ -1491,28 +1302,27 @@ class DatabaseHelper {
     );
   }
 
-  Future<void> addEntryToSavedSnapshot({
+  Future<int> addEntryToSavedSnapshot({
     required int entryId,
     required String savedAt,
     required String? dailyLogPageNo,
   }) async {
-    _assertWritable();
     final db = await database;
-    await db.update(
+    return db.update(
       entriesTable,
       <String, Object?>{
         'showInDailyLog': 1,
         'createdAt': savedAt,
-        'dailyLogPageNo': ?dailyLogPageNo,
+        'dailyLogPageNo': dailyLogPageNo ?? '',
       },
       where: 'id = ?',
       whereArgs: <Object?>[entryId],
     );
-    await recalculateAllSnapshots();
   }
 
-  Future<void> recalculateAllSnapshots() async {
-    _assertWritable();
+  Future<void> recalculateAllSnapshots({
+    SnapshotOpeningBalance? startingBalanceOverride,
+  }) async {
     final snapshotRows = await getSummarySnapshots();
     final snapshots = List<Map<String, Object?>>.from(snapshotRows);
     snapshots.sort((a, b) {
@@ -1521,7 +1331,8 @@ class DatabaseHelper {
       return savedAtA.compareTo(savedAtB);
     });
 
-    final openingBalance = await getSnapshotOpeningBalance();
+    final openingBalance =
+        startingBalanceOverride ?? await getSnapshotOpeningBalance();
 
     String? previousSavedAt;
     SnapshotOpeningBalance currentStartingBalance =
@@ -1532,25 +1343,35 @@ class DatabaseHelper {
       final savedAt = snapshot['savedAt'] as String;
       if (snapshotId == null) continue;
 
-      final entries = await getEntriesWithCustomerRangePaged(
-        startDate: previousSavedAt,
-        endDate: savedAt,
-        limit: 1000000,
-        offset: 0,
-      );
+      const pageSize = 800;
+      var offset = 0;
+      var debitSum = currentStartingBalance.debit;
+      var creditSum = currentStartingBalance.credit;
+      final customerIds = <int>{};
 
-      double debitSum = currentStartingBalance.debit;
-      double creditSum = currentStartingBalance.credit;
-
-      for (final entryRow in entries) {
-        debitSum += (entryRow['debit'] as num?)?.toDouble() ?? 0.0;
-        creditSum += (entryRow['credit'] as num?)?.toDouble() ?? 0.0;
+      while (true) {
+        final entries = await getEntriesWithCustomerRangePaged(
+          startDate: previousSavedAt,
+          endDate: savedAt,
+          limit: pageSize,
+          offset: offset,
+        );
+        for (final entryRow in entries) {
+          debitSum += (entryRow['debit'] as num?)?.toDouble() ?? 0.0;
+          creditSum += (entryRow['credit'] as num?)?.toDouble() ?? 0.0;
+          final customerId = entryRow['customerId'] as int?;
+          if (customerId != null) customerIds.add(customerId);
+        }
+        if (entries.length < pageSize) break;
+        offset += pageSize;
+        await Future<void>.delayed(Duration.zero);
       }
 
       await updateSummarySnapshotTotals(
         id: snapshotId,
         overallDebit: debitSum,
         overallCredit: creditSum,
+        customerCount: customerIds.length,
       );
 
       final finalBalance = debitSum - creditSum;
@@ -1644,7 +1465,6 @@ class DatabaseHelper {
     required List<List<String>> years,
     required List<List<String>> settings,
   }) async {
-    _assertWritable();
     final db = await database;
 
     await db.transaction((txn) async {
@@ -1733,7 +1553,6 @@ class DatabaseHelper {
   }
 
   Future<void> addLedgerYear(int year) async {
-    _assertWritable();
     final db = await database;
     await db.transaction((Transaction txn) async {
       final existingYear = await txn.query(
@@ -2138,7 +1957,6 @@ class DatabaseHelper {
   }
 
   Future<void> deleteLedgerYear(int year) async {
-    _assertWritable();
     final db = await database;
     final remainingRows = await db.query(
       ledgerYearsTable,
@@ -2201,7 +2019,6 @@ class DatabaseHelper {
   }
 
   Future<int> deleteCustomer(int id) async {
-    _assertWritable();
     final db = await database;
     await clearCustomerLedgerOpeningBalance(id);
     await db.delete(
@@ -2213,7 +2030,6 @@ class DatabaseHelper {
   }
 
   Future<bool> resetCustomerIdSequence() async {
-    _assertWritable();
     final db = await database;
     final countRows = await db.rawQuery(
       'SELECT COUNT(*) AS count FROM $customersTable',
@@ -2241,569 +2057,6 @@ class DatabaseHelper {
     return true;
   }
 
-  // ---------------------------------------------------------------------------
-  // Sync primitives used by the linked-devices engine
-  // ---------------------------------------------------------------------------
-
-  static const Set<String> deviceLocalSettingKeys = <String>{
-    'appPin',
-    'appPinHash',
-    'appPinSalt',
-    'appPinSetupDismissed',
-    'autoBackupPath',
-    'companyLogoPath',
-    'biometricUnlockEnabled',
-    'companyProfilePromptSkipped',
-    'ledger.lastSelectedDate',
-    _activeYearSettingKey,
-  };
-
-  static const List<String> _deviceLocalSettingPrefixes = <String>[
-    'linked.',
-    'sync.',
-  ];
-
-  static bool isSyncableSettingKey(String key) {
-    if (deviceLocalSettingKeys.contains(key)) {
-      return false;
-    }
-    for (final String prefix in _deviceLocalSettingPrefixes) {
-      if (key.startsWith(prefix)) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  String get _settingKeyExclusionSql {
-    final placeholders = deviceLocalSettingKeys.map((_) => '?').join(', ');
-    final prefixClauses = _deviceLocalSettingPrefixes
-        .map((String prefix) => "settingKey NOT LIKE '$prefix%'")
-        .join(' AND ');
-    return 'settingKey NOT IN ($placeholders) AND $prefixClauses';
-  }
-
-  Future<String?> getSyncState(String key) async {
-    final db = await database;
-    final rows = await db.query(
-      syncStateTable,
-      columns: <String>['stateValue'],
-      where: 'stateKey = ?',
-      whereArgs: <Object?>[key],
-      limit: 1,
-    );
-    return rows.isEmpty ? null : rows.first['stateValue'] as String?;
-  }
-
-  Future<void> setSyncState(String key, String value) async {
-    final db = await database;
-    await db.insert(syncStateTable, <String, Object?>{
-      'stateKey': key,
-      'stateValue': value,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
-  Future<void> deleteSyncState(String key) async {
-    final db = await database;
-    await db.delete(
-      syncStateTable,
-      where: 'stateKey = ?',
-      whereArgs: <Object?>[key],
-    );
-  }
-
-  Future<Map<String, String>> getSyncStateWithPrefix(String prefix) async {
-    final db = await database;
-    final rows = await db.query(
-      syncStateTable,
-      where: 'stateKey LIKE ?',
-      whereArgs: <Object?>['$prefix%'],
-    );
-    return <String, String>{
-      for (final Map<String, Object?> row in rows)
-        row['stateKey'] as String: row['stateValue'] as String,
-    };
-  }
-
-  Future<void> deleteSyncStateWithPrefix(String prefix) async {
-    final db = await database;
-    await db.delete(
-      syncStateTable,
-      where: 'stateKey LIKE ?',
-      whereArgs: <Object?>['$prefix%'],
-    );
-  }
-
-  Future<List<Map<String, Object?>>> pendingRows(
-    String table, {
-    int limit = 400,
-  }) async {
-    final db = await database;
-
-    if (table == entriesTable) {
-      return db.rawQuery(
-        '''
-        SELECT e.*, c.syncId AS customerSyncId
-        FROM $entriesTable e
-        JOIN $customersTable c ON c.id = e.customerId
-        WHERE e.pushPending = 1
-        ORDER BY e.updatedAt ASC
-        LIMIT ?
-        ''',
-        <Object?>[limit],
-      );
-    }
-
-    if (table == appSettingsTable) {
-      return db.query(
-        appSettingsTable,
-        where: 'pushPending = 1 AND $_settingKeyExclusionSql',
-        whereArgs: <Object?>[...deviceLocalSettingKeys],
-        orderBy: 'updatedAt ASC',
-        limit: limit,
-      );
-    }
-
-    return db.query(
-      table,
-      where: 'pushPending = 1',
-      orderBy: 'updatedAt ASC',
-      limit: limit,
-    );
-  }
-
-  Future<void> markRowsPushed({
-    required String table,
-    required String keyColumn,
-    required List<Object?> keys,
-  }) async {
-    if (keys.isEmpty) {
-      return;
-    }
-    final db = await database;
-    final placeholders = keys.map((_) => '?').join(', ');
-    await db.rawUpdate(
-      'UPDATE $table SET pushPending = 0 WHERE $keyColumn IN ($placeholders)',
-      keys,
-    );
-  }
-
-  Future<List<Map<String, Object?>>> pendingTombstones({
-    int limit = 400,
-  }) async {
-    final db = await database;
-    return db.query(
-      syncTombstonesTable,
-      where: 'pushPending = 1',
-      orderBy: 'deletedAt ASC',
-      limit: limit,
-    );
-  }
-
-  Future<void> markTombstonePushed(String entity, String syncId) async {
-    final db = await database;
-    await db.update(
-      syncTombstonesTable,
-      <String, Object?>{'pushPending': 0},
-      where: 'entity = ? AND syncId = ?',
-      whereArgs: <Object?>[entity, syncId],
-    );
-  }
-
-  Future<String?> tombstoneDeletedAt(String entity, String syncId) async {
-    final db = await database;
-    final rows = await db.query(
-      syncTombstonesTable,
-      columns: <String>['deletedAt'],
-      where: 'entity = ? AND syncId = ?',
-      whereArgs: <Object?>[entity, syncId],
-      limit: 1,
-    );
-    return rows.isEmpty ? null : rows.first['deletedAt'] as String?;
-  }
-
-  Future<void> rememberTombstone({
-    required String entity,
-    required String syncId,
-    required String deletedAt,
-    bool pushPending = false,
-  }) async {
-    final db = await database;
-    await db.insert(syncTombstonesTable, <String, Object?>{
-      'entity': entity,
-      'syncId': syncId,
-      'deletedAt': deletedAt,
-      'pushPending': pushPending ? 1 : 0,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
-  Future<void> forgetTombstone(String entity, String syncId) async {
-    final db = await database;
-    await db.delete(
-      syncTombstonesTable,
-      where: 'entity = ? AND syncId = ?',
-      whereArgs: <Object?>[entity, syncId],
-    );
-  }
-
-  Future<Map<String, Object?>?> rowBySyncId(String table, String syncId) async {
-    final db = await database;
-    final rows = await db.query(
-      table,
-      where: 'syncId = ?',
-      whereArgs: <Object?>[syncId],
-      limit: 1,
-    );
-    return rows.isEmpty ? null : rows.first;
-  }
-
-  Future<int?> customerIdForSyncId(String syncId) async {
-    final row = await rowBySyncId(customersTable, syncId);
-    return row?['id'] as int?;
-  }
-
-  Future<String?> customerSyncIdForId(int customerId) async {
-    final db = await database;
-    final rows = await db.query(
-      customersTable,
-      columns: <String>['syncId'],
-      where: 'id = ?',
-      whereArgs: <Object?>[customerId],
-      limit: 1,
-    );
-    return rows.isEmpty ? null : rows.first['syncId'] as String?;
-  }
-
-  Future<void> applyRemoteRow({
-    required String table,
-    required String syncId,
-    required Map<String, Object?> values,
-  }) async {
-    final db = await database;
-    final payload = <String, Object?>{
-      ...values,
-      'syncId': syncId,
-      'pushPending': 0,
-    };
-
-    final existing = await db.query(
-      table,
-      columns: <String>['id'],
-      where: 'syncId = ?',
-      whereArgs: <Object?>[syncId],
-      limit: 1,
-    );
-
-    if (existing.isEmpty) {
-      await db.insert(table, payload);
-      return;
-    }
-
-    await db.update(
-      table,
-      payload,
-      where: 'syncId = ?',
-      whereArgs: <Object?>[syncId],
-    );
-  }
-
-  Future<void> applyRemoteRowDelete({
-    required String table,
-    required String syncId,
-  }) async {
-    final db = await database;
-    if (table == customersTable) {
-      final rows = await db.query(
-        customersTable,
-        columns: <String>['id'],
-        where: 'syncId = ?',
-        whereArgs: <Object?>[syncId],
-        limit: 1,
-      );
-      final int? customerId = rows.isEmpty ? null : rows.first['id'] as int?;
-      if (customerId != null) {
-        await db.delete(
-          appSettingsTable,
-          where:
-              "settingKey LIKE 'ledgerOpening%:' || ? "
-              "OR settingKey = 'ledger.pageNo:' || ?",
-          whereArgs: <Object?>[customerId, customerId],
-        );
-      }
-      await db.delete(
-        entriesTable,
-        where:
-            'customerId IN (SELECT id FROM $customersTable WHERE syncId = ?)',
-        whereArgs: <Object?>[syncId],
-      );
-    }
-    await db.delete(table, where: 'syncId = ?', whereArgs: <Object?>[syncId]);
-  }
-
-  Future<void> applyRemoteSetting({
-    required String settingKey,
-    required String settingValue,
-    required String updatedAt,
-  }) async {
-    final db = await database;
-    await db.insert(appSettingsTable, <String, Object?>{
-      'settingKey': settingKey,
-      'settingValue': settingValue,
-      'updatedAt': updatedAt,
-      'pushPending': 0,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
-  Future<void> applyRemoteSettingDelete(String settingKey) async {
-    final db = await database;
-    await db.delete(
-      appSettingsTable,
-      where: 'settingKey = ?',
-      whereArgs: <Object?>[settingKey],
-    );
-  }
-
-  Future<void> applyRemoteYear({
-    required int year,
-    required String createdAt,
-    required String updatedAt,
-  }) async {
-    final db = await database;
-    await db.insert(ledgerYearsTable, <String, Object?>{
-      'year': year,
-      'createdAt': createdAt,
-      'updatedAt': updatedAt,
-      'pushPending': 0,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
-  Future<void> applyRemoteYearDelete(int year) async {
-    final db = await database;
-    await db.delete(
-      entriesTable,
-      where:
-          'customerId IN (SELECT id FROM $customersTable WHERE ledgerYear = ?)',
-      whereArgs: <Object?>[year],
-    );
-    await db.delete(
-      customersTable,
-      where: 'ledgerYear = ?',
-      whereArgs: <Object?>[year],
-    );
-    await db.delete(
-      summarySnapshotsTable,
-      where: 'ledgerYear = ?',
-      whereArgs: <Object?>[year],
-    );
-    await db.delete(
-      ledgerYearsTable,
-      where: 'year = ?',
-      whereArgs: <Object?>[year],
-    );
-  }
-
-  Future<void> rememberOrphan({
-    required String entity,
-    required String syncId,
-    required String payload,
-  }) async {
-    final db = await database;
-    await db.insert(syncOrphansTable, <String, Object?>{
-      'entity': entity,
-      'syncId': syncId,
-      'payload': payload,
-      'receivedAt': syncTimestamp(),
-      'attempts': 0,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
-  Future<List<Map<String, Object?>>> pendingOrphans({int limit = 200}) async {
-    final db = await database;
-    return db.query(
-      syncOrphansTable,
-      columns: <String>['entity', 'syncId', 'payload', 'receivedAt', 'attempts'],
-      orderBy: 'receivedAt ASC',
-      limit: limit,
-    );
-  }
-
-  /// Counts one failed attempt at applying an orphan record.
-  Future<void> bumpOrphanAttempt(String entity, String syncId) async {
-    final db = await database;
-    await db.rawUpdate(
-      'UPDATE $syncOrphansTable SET attempts = attempts + 1 '
-      'WHERE entity = ? AND syncId = ?',
-      <Object?>[entity, syncId],
-    );
-  }
-
-  Future<void> forgetOrphan(String entity, String syncId) async {
-    final db = await database;
-    await db.delete(
-      syncOrphansTable,
-      where: 'entity = ? AND syncId = ?',
-      whereArgs: <Object?>[entity, syncId],
-    );
-  }
-
-  Future<void> markEverythingForUpload() async {
-    final db = await database;
-    for (final String table in syncedTables) {
-      await db.rawUpdate('UPDATE $table SET pushPending = 1');
-    }
-    await db.rawUpdate('UPDATE $syncTombstonesTable SET pushPending = 1');
-  }
-
-  Future<void> clearAllPendingUploads() async {
-    final db = await database;
-    for (final String table in syncedTables) {
-      await db.rawUpdate('UPDATE $table SET pushPending = 0');
-    }
-    await db.rawUpdate('UPDATE $syncTombstonesTable SET pushPending = 0');
-  }
-
-  Future<int> pendingUploadCount() async {
-    final db = await database;
-    int total = 0;
-    for (final String table in syncedTables) {
-      final rows = table == appSettingsTable
-          ? await db.rawQuery(
-              'SELECT COUNT(*) AS count FROM $appSettingsTable '
-              'WHERE pushPending = 1 AND $_settingKeyExclusionSql',
-              <Object?>[...deviceLocalSettingKeys],
-            )
-          : await db.rawQuery(
-              'SELECT COUNT(*) AS count FROM $table WHERE pushPending = 1',
-            );
-      total += (rows.first['count'] as int?) ?? 0;
-    }
-    final tombstoneRows = await db.rawQuery(
-      'SELECT COUNT(*) AS count FROM $syncTombstonesTable WHERE pushPending = 1',
-    );
-    return total + ((tombstoneRows.first['count'] as int?) ?? 0);
-  }
-
-  Future<bool> isWorkspaceEmpty() async {
-    final db = await database;
-    final rows = await db.rawQuery(
-      'SELECT '
-      '(SELECT COUNT(*) FROM $customersTable) AS customers, '
-      '(SELECT COUNT(*) FROM $entriesTable) AS entries, '
-      '(SELECT COUNT(*) FROM $summarySnapshotsTable) AS snapshots',
-    );
-    if (rows.isEmpty) {
-      return true;
-    }
-    final row = rows.first;
-    return ((row['customers'] as int?) ?? 0) == 0 &&
-        ((row['entries'] as int?) ?? 0) == 0 &&
-        ((row['snapshots'] as int?) ?? 0) == 0;
-  }
-
-  Future<void> clearSyncBookkeeping() async {
-    final db = await database;
-    await db.delete(syncTombstonesTable);
-    await db.delete(syncOrphansTable);
-    await db.delete(
-      syncStateTable,
-      where: 'stateKey != ?',
-      whereArgs: <Object?>['schema.syncTriggers'],
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Guest Workspace Backup / Restore (for Linked Devices feature)
-  // ---------------------------------------------------------------------------
-
-  /// Path of the ".db.bak" backup file used when this device joins a
-  /// linked workspace. On disconnect the backup is restored so the guest's
-  /// own data comes back exactly as it was before joining.
-  Future<String> _resolveGuestBackupPath() async {
-    final activePath = await _resolveDatabasePath();
-    return '$activePath.bak';
-  }
-
-  /// Called BEFORE this device joins a linked (admin) workspace.
-  /// Copies the current SQLite DB file to a ".bak" file so the guest's
-  /// own data can be restored later on disconnect.
-  Future<void> createGuestBackup() async {
-    try {
-      final activePath = await _resolveDatabasePath();
-      final backupPath = await _resolveGuestBackupPath();
-
-      // Close active DB connection so file is safe to copy
-      await close();
-
-      final activeFile = File(activePath);
-      if (await activeFile.exists()) {
-        // Overwrite any previous backup
-        final backupFile = File(backupPath);
-        if (await backupFile.exists()) {
-          await backupFile.delete();
-        }
-        await activeFile.copy(backupPath);
-        debugPrint('Guest backup created at: $backupPath');
-      }
-
-      // Reopen DB connection
-      await initialize();
-    } catch (error) {
-      debugPrint('createGuestBackup failed: $error');
-      // Make sure DB reopens even on failure
-      await initialize();
-      rethrow;
-    }
-  }
-
-  /// Called ON DISCONNECT from a linked workspace.
-  /// Deletes the admin's data (current active DB file) and restores
-  /// the guest's own backup DB file. If no backup exists, a fresh
-  /// empty DB is created so the app stays usable.
-  Future<void> restoreGuestBackup() async {
-    try {
-      final activePath = await _resolveDatabasePath();
-      final backupPath = await _resolveGuestBackupPath();
-
-      await close();
-
-      final backupFile = File(backupPath);
-      final activeFile = File(activePath);
-
-      // Delete admin's data (current active DB)
-      if (await activeFile.exists()) {
-        await activeFile.delete();
-      }
-
-      // Restore guest's backup, if it exists
-      if (await backupFile.exists()) {
-        await backupFile.copy(activePath);
-        // Cleanup backup after restore
-        await backupFile.delete();
-        debugPrint('Guest workspace restored from backup');
-      } else {
-        debugPrint('No guest backup found — fresh workspace will be created');
-      }
-
-      // Reopen DB — creates fresh one if no backup existed
-      await initialize();
-    } catch (error) {
-      debugPrint('restoreGuestBackup failed: $error');
-      await initialize();
-      rethrow;
-    }
-  }
-
-  /// True if a guest backup exists (i.e., this device is currently linked
-  /// to an admin workspace).
-  Future<bool> hasGuestBackup() async {
-    try {
-      final backupPath = await _resolveGuestBackupPath();
-      return File(backupPath).exists();
-    } catch (_) {
-      return false;
-    }
-  }
-
   Future<void> close() async {
     final db = _database;
     _database = null;
@@ -2817,24 +2070,31 @@ class DatabaseHelper {
 /// Reports every write that goes through the database.
 ///
 /// This is the single point where the app learns that a record was created,
-/// changed or removed, so the sync engine gets its push signal without every
-/// mutating method having to remember to raise it. Reads pass straight
+/// changed or removed, so providers reload their view of the data without
+/// every mutating method having to raise the signal. Reads pass straight
 /// through, and schema statements never count as a change.
 class _ChangeReportingDatabase implements Database {
-  _ChangeReportingDatabase(
-    this._inner, {
-    required this.onLocalWrite,
-    required this.watchedTables,
-  });
+  _ChangeReportingDatabase(this._inner, {required this.beforeWrite});
 
   final Database _inner;
-  final void Function() onLocalWrite;
+  final void Function() beforeWrite;
 
-  /// Tables whose writes the cloud has to hear about. Sync bookkeeping lives in
-  /// other tables, so ignoring those keeps a sync cycle from waking itself up.
-  final Set<String> watchedTables;
+  static const Set<String> _contentTables = <String>{
+    DatabaseHelper.ledgerYearsTable,
+    DatabaseHelper.customersTable,
+    DatabaseHelper.entriesTable,
+    DatabaseHelper.summarySnapshotsTable,
+    DatabaseHelper.appSettingsTable,
+  };
 
-  bool _isWatched(String table) => watchedTables.contains(table);
+  bool _isWatched(String table) => _contentTables.contains(table);
+
+  bool _isMutatingSql(String sql) => RegExp(
+    r'^\s*(INSERT|UPDATE|DELETE|REPLACE)\b',
+    caseSensitive: false,
+  ).hasMatch(sql);
+
+  void _report() => AppDatabase.instance.notifyDataChanged();
 
   @override
   String get path => _inner.path;
@@ -2879,6 +2139,7 @@ class _ChangeReportingDatabase implements Database {
     String sql, [
     List<Object?>? arguments,
   ]) {
+    if (_isMutatingSql(sql)) beforeWrite();
     return _inner.rawQuery(sql, arguments);
   }
 
@@ -2924,6 +2185,7 @@ class _ChangeReportingDatabase implements Database {
 
   @override
   Future<void> execute(String sql, [List<Object?>? arguments]) {
+    if (_isMutatingSql(sql)) beforeWrite();
     return _inner.execute(sql, arguments);
   }
 
@@ -2936,6 +2198,7 @@ class _ChangeReportingDatabase implements Database {
     String? nullColumnHack,
     ConflictAlgorithm? conflictAlgorithm,
   }) async {
+    beforeWrite();
     try {
       return await _inner.insert(
         table,
@@ -2944,7 +2207,7 @@ class _ChangeReportingDatabase implements Database {
         conflictAlgorithm: conflictAlgorithm,
       );
     } finally {
-      if (_isWatched(table)) onLocalWrite();
+      if (_isWatched(table)) _report();
     }
   }
 
@@ -2956,6 +2219,7 @@ class _ChangeReportingDatabase implements Database {
     List<Object?>? whereArgs,
     ConflictAlgorithm? conflictAlgorithm,
   }) async {
+    beforeWrite();
     try {
       return await _inner.update(
         table,
@@ -2965,7 +2229,7 @@ class _ChangeReportingDatabase implements Database {
         conflictAlgorithm: conflictAlgorithm,
       );
     } finally {
-      if (_isWatched(table)) onLocalWrite();
+      if (_isWatched(table)) _report();
     }
   }
 
@@ -2975,37 +2239,41 @@ class _ChangeReportingDatabase implements Database {
     String? where,
     List<Object?>? whereArgs,
   }) async {
+    beforeWrite();
     try {
       return await _inner.delete(table, where: where, whereArgs: whereArgs);
     } finally {
-      if (_isWatched(table)) onLocalWrite();
+      if (_isWatched(table)) _report();
     }
   }
 
   @override
   Future<int> rawInsert(String sql, [List<Object?>? arguments]) async {
+    beforeWrite();
     try {
       return await _inner.rawInsert(sql, arguments);
     } finally {
-      onLocalWrite();
+      _report();
     }
   }
 
   @override
   Future<int> rawUpdate(String sql, [List<Object?>? arguments]) async {
+    beforeWrite();
     try {
       return await _inner.rawUpdate(sql, arguments);
     } finally {
-      onLocalWrite();
+      _report();
     }
   }
 
   @override
   Future<int> rawDelete(String sql, [List<Object?>? arguments]) async {
+    beforeWrite();
     try {
       return await _inner.rawDelete(sql, arguments);
     } finally {
-      onLocalWrite();
+      _report();
     }
   }
 
@@ -3016,13 +2284,14 @@ class _ChangeReportingDatabase implements Database {
     Future<T> Function(Transaction txn) action, {
     bool? exclusive,
   }) async {
+    beforeWrite();
     try {
       return await _inner.transaction(
         (Transaction txn) => action(txn),
         exclusive: exclusive,
       );
     } finally {
-      onLocalWrite();
+      _report();
     }
   }
 
@@ -3032,7 +2301,10 @@ class _ChangeReportingDatabase implements Database {
   }
 
   @override
-  Batch batch() => _inner.batch();
+  Batch batch() {
+    beforeWrite();
+    return _inner.batch();
+  }
 
   // -- Lifecycle -------------------------------------------------------------
 
@@ -3308,11 +2580,13 @@ class AppDatabase {
     required int id,
     required double overallDebit,
     required double overallCredit,
+    int? customerCount,
   }) {
     return _helper.updateSummarySnapshotTotals(
       id: id,
       overallDebit: overallDebit,
       overallCredit: overallCredit,
+      customerCount: customerCount,
     );
   }
 
@@ -3358,6 +2632,10 @@ class AppDatabase {
     String? startCreatedAt,
   }) {
     return _helper.getCustomerEntryTotalsSince(startCreatedAt: startCreatedAt);
+  }
+
+  Future<Map<int, String>> getCustomerLedgerPageNumbers() {
+    return _helper.getCustomerLedgerPageNumbers();
   }
 
   Future<void> restoreFromCsv({
@@ -3417,6 +2695,11 @@ class AppDatabase {
     return _helper.getCustomerLedgerOpeningBalance(customerId);
   }
 
+  Future<Map<int, SnapshotOpeningBalance>>
+  getCustomerLedgerOpeningBalances() {
+    return _helper.getCustomerLedgerOpeningBalances();
+  }
+
   Future<void> setCustomerLedgerOpeningBalance({
     required int customerId,
     required double debit,
@@ -3441,7 +2724,7 @@ class AppDatabase {
 
   Future<bool> resetCustomerIdSequence() => _helper.resetCustomerIdSequence();
 
-  Future<void> addEntryToSavedSnapshot({
+  Future<int> addEntryToSavedSnapshot({
     required int entryId,
     required String savedAt,
     required String? dailyLogPageNo,
@@ -3453,22 +2736,13 @@ class AppDatabase {
     );
   }
 
-  Future<void> recalculateAllSnapshots() {
-    return _helper.recalculateAllSnapshots();
+  Future<void> recalculateAllSnapshots({
+    SnapshotOpeningBalance? startingBalanceOverride,
+  }) {
+    return _helper.recalculateAllSnapshots(
+      startingBalanceOverride: startingBalanceOverride,
+    );
   }
-
-  // ---------------------------------------------------------------------------
-  // Guest Workspace Backup / Restore (for Linked Devices feature)
-  // ---------------------------------------------------------------------------
-
-  /// Creates a backup of the guest's own DB before joining an admin workspace.
-  Future<void> createGuestBackup() => _helper.createGuestBackup();
-
-  /// Restores the guest's own DB from backup after disconnecting.
-  Future<void> restoreGuestBackup() => _helper.restoreGuestBackup();
-
-  /// True if a guest backup file exists.
-  Future<bool> hasGuestBackup() => _helper.hasGuestBackup();
 
   Future<void> close() => _helper.close();
 

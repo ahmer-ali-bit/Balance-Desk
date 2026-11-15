@@ -13,43 +13,78 @@ class CustomerProvider extends ChangeNotifier {
     AppDatabase? database,
   }) : _database = database ?? AppDatabase.instance {
     _dbSub = _database.onDataChanged.listen((_) {
-      if (!_isDisposed) loadCustomers();
+      _scheduleReload();
     });
   }
 
   List<Customer> _customers = <Customer>[];
+  List<Customer>? _customersView;
+  List<Customer>? _filteredCache;
+  String _filteredCacheQuery = '';
+  int _customersVersion = 0;
+  int _filteredCacheVersion = -1;
+  int _loadGeneration = 0;
+  Timer? _reloadDebounce;
   bool _isLoading = false;
   String? _errorMessage;
   String _searchQuery = '';
 
-  List<Customer> get customers => List<Customer>.unmodifiable(_customers);
+  List<Customer> get customers =>
+      _customersView ??= List<Customer>.unmodifiable(_customers);
   List<Customer> get filteredCustomers {
     final query = _searchQuery.trim().toLowerCase();
     if (query.isEmpty) {
       return customers;
     }
 
-    return _customers
+    final cached = _filteredCache;
+    if (cached != null &&
+        _filteredCacheQuery == query &&
+        _customersVersion == _filteredCacheVersion) {
+      return cached;
+    }
+
+    final filtered = _customers
         .where((Customer customer) => _matchesStartingLetters(customer, query))
         .toList(growable: false);
+    _filteredCache = filtered;
+    _filteredCacheQuery = query;
+    _filteredCacheVersion = _customersVersion;
+    return filtered;
   }
 
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   String get searchQuery => _searchQuery;
 
+  void _scheduleReload() {
+    if (_isDisposed) {
+      return;
+    }
+    _reloadDebounce?.cancel();
+    _reloadDebounce = Timer(const Duration(milliseconds: 150), () {
+      if (!_isDisposed) {
+        loadCustomers();
+      }
+    });
+  }
+
   Future<void> loadCustomers() async {
+    final generation = ++_loadGeneration;
     _setLoading(true);
 
     try {
-      await _refreshCustomers();
+      await _refreshCustomers(generation: generation);
+      if (generation != _loadGeneration) return;
       _errorMessage = null;
     } catch (error, stackTrace) {
       debugPrint('CustomerProvider.loadCustomers failed: $error');
       debugPrint('$stackTrace');
-      _errorMessage = 'Unable to load customers.';
+      if (generation == _loadGeneration) {
+        _errorMessage = 'Unable to load customers.';
+      }
     } finally {
-      _setLoading(false);
+      if (generation == _loadGeneration) _setLoading(false);
     }
   }
 
@@ -193,24 +228,30 @@ class CustomerProvider extends ChangeNotifier {
         parts.any((String part) => part.startsWith(query));
   }
 
-  Future<void> _refreshCustomers() async {
+  Future<void> _refreshCustomers({int? generation}) async {
+    final activeGeneration = generation ?? ++_loadGeneration;
     final rows = await _database.getCustomers();
-    final customers = rows
-        .map<Customer>((Map<String, Object?> row) => Customer.fromMap(row))
-        .toList(growable: false);
-    final sortedCustomers = customers.toList(growable: false)
-      ..sort((Customer a, Customer b) {
-        final leftName = a.name.trim().toLowerCase();
-        final rightName = b.name.trim().toLowerCase();
-        final nameCompare = leftName.compareTo(rightName);
-        if (nameCompare != 0) {
-          return nameCompare;
-        }
-        final leftId = a.id ?? 0;
-        final rightId = b.id ?? 0;
-        return leftId.compareTo(rightId);
-      });
-    _customers = List<Customer>.unmodifiable(sortedCustomers);
+    if (activeGeneration != _loadGeneration) return;
+
+    final customers = <Customer>[];
+    for (var index = 0; index < rows.length; index++) {
+      customers.add(Customer.fromMap(rows[index]));
+      if ((index + 1) % 500 == 0) {
+        // Keep the first load responsive for large customer directories.
+        await Future<void>.delayed(Duration.zero);
+        if (activeGeneration != _loadGeneration) return;
+      }
+    }
+    if (activeGeneration != _loadGeneration) return;
+
+    // The database query already orders names case-insensitively with an ID
+    // tie-breaker, so avoid sorting a potentially large directory on the UI
+    // isolate.
+    _customers = List<Customer>.unmodifiable(customers);
+    _customersView = null;
+    _filteredCache = null;
+    _customersVersion++;
+    if (generation == null) _setLoading(false);
   }
 
   void _setLoading(bool value) {
@@ -231,6 +272,7 @@ class CustomerProvider extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _reloadDebounce?.cancel();
     _dbSub?.cancel();
     super.dispose();
   }

@@ -5,6 +5,19 @@
 - **DO NOT** touch any **desktop UI** code.
 - **DO NOT** touch any **business logic** code.
 
+## Redesign Session (2026-11-13)
+- The product owner explicitly commissioned a **full visual redesign of BOTH
+  platforms** (mobile + desktop): new design system (`docs/DESIGN.md`),
+  light/dark theme modes with user toggle, bundled Lato + IBM Plex Mono
+  (OFL), emerald-rail navigation rebuilt from the ground up, all screens
+  restyled.
+- This **explicitly overrides** the "desktop UI untouched" restriction for UI
+  code only, for this and follow-on redesign work.
+- **Still forbidden:** business logic, calculations, providers' data paths,
+  database, services, PDF output, models. Presentation-only changes.
+- User's exact words: layout must be "totally different", professional and
+  easy to use, "no guesswork — like a senior Figma developer".
+
 ## Performance Session (2026-06-01)
 
 ### Completed

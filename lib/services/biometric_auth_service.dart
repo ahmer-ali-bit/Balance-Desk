@@ -86,7 +86,7 @@ class BiometricAuthService {
   ///
   /// The [reason] is displayed to the user in the system dialog.
   Future<bool> authenticate({
-    String reason = 'Unlock Balance Desk',
+    String reason = 'Unlock Ledger Pro',
   }) async {
     try {
       return await _localAuth.authenticate(

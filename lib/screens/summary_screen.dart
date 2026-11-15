@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -9,11 +11,12 @@ import '../services/pdf_service.dart';
 import '../utils/app_colors.dart';
 import '../utils/number_format_utils.dart';
 import '../utils/platform_helper.dart';
-import '../widgets/premium/premium_mobile.dart';
-import '../widgets/premium/premium_components.dart';
+import '../widgets/mobile/mobile_premium.dart';
 import '../widgets/customer_search_field.dart';
+import '../widgets/export_delivery_dialog.dart';
 import '../widgets/summary_stat_card.dart';
 import '../providers/customer_provider.dart';
+import '../providers/linked_devices_provider.dart';
 import 'ledger_screen.dart';
 import 'package:provider/provider.dart';
 
@@ -40,22 +43,51 @@ class _SummaryScreenState extends State<SummaryScreen> {
   String _searchQuery = '';
   bool _showSummaryTools = false;
   bool _showSummaryTotals = false;
+  static const int _summaryPageSize = 100;
+  int _visibleSummaryCount = _summaryPageSize;
+  StreamSubscription<void>? _dataSubscription;
+  Timer? _reloadDebounce;
+  int _summaryLoadGeneration = 0;
 
   @override
   void initState() {
     super.initState();
     _loadSummary();
+    _dataSubscription = _database.onDataChanged.listen((_) {
+      _reloadDebounce?.cancel();
+      _reloadDebounce = Timer(const Duration(milliseconds: 250), () {
+        if (mounted) _loadSummary();
+      });
+    });
   }
 
   @override
   void dispose() {
+    _dataSubscription?.cancel();
+    _reloadDebounce?.cancel();
     _tableVerticalController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
   }
 
+  bool _canEdit(BuildContext context, {bool listen = true}) {
+    return !Provider.of<LinkedDevicesProvider>(
+      context,
+      listen: listen,
+    ).isReadOnly;
+  }
+
+  bool _canExport(BuildContext context, {bool listen = true}) {
+    return Provider.of<LinkedDevicesProvider>(
+      context,
+      listen: listen,
+    ).canExport;
+  }
+
   Future<void> _loadSummary() async {
+    _reloadDebounce?.cancel();
+    final generation = ++_summaryLoadGeneration;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -63,11 +95,17 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
     try {
       final customerRows = await _database.getCustomers();
-      final customers = customerRows
-          .map<Customer>((Map<String, Object?> row) => Customer.fromMap(row))
-          .toList(growable: false);
+      final customers = <Customer>[];
+      for (var index = 0; index < customerRows.length; index++) {
+        customers.add(Customer.fromMap(customerRows[index]));
+        if ((index + 1) % 500 == 0) {
+          if (generation != _summaryLoadGeneration) return;
+          await Future<void>.delayed(Duration.zero);
+        }
+      }
 
       // Single JOIN query to compute per-customer totals instead of N+1 queries
+      final openingBalances = await _database.getCustomerLedgerOpeningBalances();
       final totalsRows = await _database.getCustomerEntryTotalsSince();
       final totalsByCustomer = <int, Map<String, Object?>>{};
       for (final row in totalsRows) {
@@ -79,14 +117,19 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
       final summaries = <_CustomerSummary>[];
 
-      for (final customer in customers) {
+      for (var index = 0; index < customers.length; index++) {
+        if ((index + 1) % 500 == 0) {
+          if (generation != _summaryLoadGeneration) return;
+          await Future<void>.delayed(Duration.zero);
+        }
+        final customer = customers[index];
         final customerId = customer.id;
         if (customerId == null) {
           continue;
         }
 
         final openingBalance =
-            await _database.getCustomerLedgerOpeningBalance(customerId) ??
+            openingBalances[customerId] ??
             const SnapshotOpeningBalance(debit: 0, credit: 0);
 
         final totals = totalsByCustomer[customerId];
@@ -118,13 +161,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
           ),
         );
       }
-      summaries.sort(
-        (_CustomerSummary a, _CustomerSummary b) => a.customer.name
-            .trim()
-            .toLowerCase()
-            .compareTo(b.customer.name.trim().toLowerCase()),
-      );
-
       final overallDebit = summaries.fold<double>(
         0,
         (double sum, _CustomerSummary item) => sum + item.totalDebit,
@@ -134,7 +170,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
         (double sum, _CustomerSummary item) => sum + item.totalCredit,
       );
 
-      if (!mounted) {
+      if (!mounted || generation != _summaryLoadGeneration) {
         return;
       }
 
@@ -147,11 +183,12 @@ class _SummaryScreenState extends State<SummaryScreen> {
         _isLoading = false;
       });
     } catch (e) {
-      if (!mounted) {
+      if (!mounted || generation != _summaryLoadGeneration) {
         return;
       }
       setState(() {
         _isLoading = false;
+        _errorMessage = 'Unable to load summary.';
       });
       ScaffoldMessenger.of(
         context,
@@ -178,6 +215,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   Future<void> _exportSummaryPdf() async {
+    if (!_canExport(context, listen: false)) return;
     final rows = _buildSummaryPdfRows();
     if (rows.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -186,37 +224,60 @@ class _SummaryScreenState extends State<SummaryScreen> {
       return;
     }
 
+    final delivery = await showExportDeliveryDialog(context);
+    if (!mounted || delivery == null) return;
+
     try {
-      await _pdfService.exportSnapshotPdf(
-        title: 'Customer Summary',
-        headers: const <String>[
-          'Sr #',
-          'Customer',
-          'Page No',
-          'Total Debit',
-          'Total Credit',
-          'Balance',
-        ],
-        rows: rows,
-        fileName: 'customer_summary.pdf',
-        summaryItems: <({String label, String value})>[
-          (
-            label: 'Customer Qty',
-            value: _summaryData.customers.length.toString(),
+      final pdfResult = await withExportProgress(
+        context,
+        message: 'Preparing PDF…',
+        task: () => _pdfService.exportSnapshotPdf(
+          title: 'Customer Summary',
+          subtitle: 'All Customers',
+          headers: const <String>[
+            'Sr #',
+            'Customer',
+            'Page No',
+            'Total Debit',
+            'Total Credit',
+            'Balance',
+          ],
+          rows: rows,
+          fileName: 'customer_summary.pdf',
+          share: delivery == ExportDelivery.share,
+          summaryItems: <({String label, String value})>[
+            (
+              label: 'Customer Qty',
+              value: _summaryData.customers.length.toString(),
+            ),
+            (
+              label: 'Overall Debit',
+              value: _formatAmount(_summaryData.overallDebit),
+            ),
+            (
+              label: 'Overall Credit',
+              value: _formatAmount(_summaryData.overallCredit),
+            ),
+            (
+              label: 'Final Balance',
+              value: _formatBalance(_summaryData.finalBalance),
+            ),
+          ],
+        ),
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            pdfResult.shared
+                ? 'Share menu opened.'
+                : (pdfResult.isSaved
+                      ? 'Saved to ${pdfResult.locationLabel}'
+                      : 'Export cancelled.'),
           ),
-          (
-            label: 'Overall Debit',
-            value: _formatAmount(_summaryData.overallDebit),
-          ),
-          (
-            label: 'Overall Credit',
-            value: _formatAmount(_summaryData.overallCredit),
-          ),
-          (
-            label: 'Final Balance',
-            value: _formatBalance(_summaryData.finalBalance),
-          ),
-        ],
+        ),
       );
     } catch (e, stack) {
       debugPrint('SummaryScreen._exportSummaryPdf failed: $e');
@@ -225,12 +286,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to export PDF right now.')),
+        SnackBar(content: Text('PDF export failed: $e')),
       );
     }
   }
 
   Future<void> _exportSummaryExcel() async {
+    if (!_canExport(context, listen: false)) return;
     final rows = _buildSummaryExportRows();
     if (rows.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -239,18 +301,39 @@ class _SummaryScreenState extends State<SummaryScreen> {
       return;
     }
 
+    final delivery = await showExportDeliveryDialog(context);
+    if (!mounted || delivery == null) return;
+
     try {
-      await _exportService.saveCsv(
-        dialogTitle: 'Export Summary (Excel)',
-        fileName: 'customer_summary.csv',
-        headers: const <String>[
-          'Customer',
-          'Page No',
-          'Total Debit',
-          'Total Credit',
-          'Balance',
-        ],
-        rows: rows,
+      final csvResult = await withExportProgress(
+        context,
+        message: 'Preparing CSV…',
+        task: () => _exportService.saveCsv(
+          fileName: 'customer_summary.csv',
+          headers: const <String>[
+            'Customer',
+            'Page No',
+            'Total Debit',
+            'Total Credit',
+            'Balance',
+          ],
+          rows: rows,
+          share: delivery == ExportDelivery.share,
+        ),
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            csvResult.shared
+                ? 'Share menu opened.'
+                : (csvResult.isSaved
+                      ? 'Saved to ${csvResult.locationLabel}'
+                      : 'Export cancelled.'),
+          ),
+        ),
       );
     } catch (_) {
       if (!mounted) {
@@ -263,6 +346,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   Future<void> _exportSummary() async {
+    if (!_canExport(context, listen: false)) return;
     final choice = await showDialog<_SummaryExportChoice>(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -273,7 +357,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
             TextButton(
               onPressed: () =>
                   Navigator.of(dialogContext).pop(_SummaryExportChoice.excel),
-              child: const Text('Excel'),
+              child: const Text('Excel / CSV'),
             ),
             FilledButton(
               onPressed: () =>
@@ -394,7 +478,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
           child: LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) {
               final isCompact = constraints.maxWidth < 720;
-              final isDesktop = PlatformHelper.isDesktop;
+              // Match the shell: below the desktop breakpoint the app
+              // shell renders the mobile layout, so the screen does too.
+              final isDesktop =
+                  PlatformHelper.isDesktop && constraints.maxWidth >= 980;
               final bottomPadding =
                   12.0 + MediaQuery.viewInsetsOf(context).bottom;
 
@@ -437,6 +524,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   Widget _buildSummaryToolbar({required bool isCompact}) {
+    final canEdit = _canEdit(context);
+    final canExport = _canExport(context);
+    if (!canEdit && !canExport) return const SizedBox.shrink();
     final isDesktop = PlatformHelper.isDesktop;
     final searchField = CustomerSearchField(
       controller: _searchController,
@@ -445,12 +535,14 @@ class _SummaryScreenState extends State<SummaryScreen> {
       onChanged: (String value) {
         setState(() {
           _searchQuery = value;
+          _visibleSummaryCount = _summaryPageSize;
         });
       },
       onClear: () {
         _searchController.clear();
         setState(() {
           _searchQuery = '';
+          _visibleSummaryCount = _summaryPageSize;
         });
       },
     );
@@ -458,12 +550,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
       spacing: 10,
       runSpacing: 10,
       children: <Widget>[
-        OutlinedButton.icon(
-          onPressed: _isLoading ? null : _loadSummary,
-          icon: const Icon(Icons.refresh_rounded),
-          label: const Text('Refresh'),
-        ),
-        if (isDesktop)
+        if (canEdit)
+          OutlinedButton.icon(
+            onPressed: _isLoading ? null : _loadSummary,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Refresh'),
+          ),
+        if (canExport && isDesktop)
           OutlinedButton.icon(
             onPressed: _isLoading || _summaryData.customers.isEmpty
                 ? null
@@ -471,7 +564,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
             icon: const Icon(Icons.file_download_outlined),
             label: const Text('Export'),
           )
-        else
+        else if (canExport)
           FilledButton.icon(
             onPressed: _isLoading || _summaryData.customers.isEmpty
                 ? null
@@ -486,8 +579,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          searchField,
-          const SizedBox(height: 10),
+          if (canEdit) searchField,
+          if (canEdit) const SizedBox(height: 10),
           actionButtons,
         ],
       );
@@ -504,85 +597,95 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
   Widget _buildPremiumMobileSummaryPage(BuildContext context) {
     final filteredCustomers = _filteredCustomers();
+    final visibleCustomers = _visibleSummaryCustomers(filteredCustomers);
     final overallBalance = _summaryData.finalBalance;
     final balanceColor = AppColors.balanceColor(overallBalance);
 
-    return PremiumPage(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          PremiumHeader(
-            icon: Icons.analytics_rounded,
-            title: 'Summary',
-            subtitle: '${filteredCustomers.length} active customer totals',
-            trailing: _isLoading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2.2),
-                  )
-                : null,
-            children: <Widget>[
-              PremiumMetricGrid(children: <Widget>[
-                PremiumMetricTile(
-                  label: 'Debit',
-                  value: _formatAmount(_summaryData.overallDebit),
-                  icon: Icons.south_west_rounded,
-                  color: AppColors.debit,
+    return SingleChildScrollView(
+      controller: _tableVerticalController,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      child: MobilePremiumPage(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            MobilePremiumHeader(
+              icon: Icons.analytics_rounded,
+              title: 'Summary',
+              subtitle: '${filteredCustomers.length} active customer totals',
+              trailing: _isLoading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2.2),
+                    )
+                  : null,
+              children: <Widget>[
+                MobileMetricGrid(
+                  columns: PlatformHelper.isMacOS ? 2 : null,
+                  fullWidthIndexes: const <int>{2},
+                  children: <Widget>[
+                    MobileMetricTile(
+                      label: 'Debit',
+                      value: _formatAmount(_summaryData.overallDebit),
+                      icon: Icons.south_west_rounded,
+                      color: AppColors.debit,
+                    ),
+                    MobileMetricTile(
+                      label: 'Credit',
+                      value: _formatAmount(_summaryData.overallCredit),
+                      icon: Icons.north_east_rounded,
+                      color: AppColors.credit,
+                    ),
+                    MobileMetricTile(
+                      label: 'Balance',
+                      value: _formatBalance(overallBalance),
+                      icon: Icons.account_balance_wallet_outlined,
+                      color: balanceColor,
+                    ),
+                  ],
                 ),
-                PremiumMetricTile(
-                  label: 'Credit',
-                  value: _formatAmount(_summaryData.overallCredit),
-                  icon: Icons.north_east_rounded,
-                  color: AppColors.credit,
-                ),
-                PremiumMetricTile(
-                  label: 'Balance',
-                  value: _formatBalance(overallBalance),
-                  icon: Icons.account_balance_wallet_outlined,
-                  color: balanceColor,
-                ),
-              ]),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildPremiumMobileSummaryControls(context),
-          const SizedBox(height: 16),
-            _buildPremiumMobileSummaryControls(context),
-const SizedBox(height: 16),
-          if (_isLoading)
-            PremiumPanel(
-              child: const SizedBox(
-                height: 180,
-                child: Center(child: CircularProgressIndicator()),
-              ),
-            )
-          else if (_errorMessage != null)
-            PremiumPanel(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  const Icon(Icons.error_outline_rounded, size: 40),
-                  const SizedBox(height: 10),
-                  Text(_errorMessage!, textAlign: TextAlign.center),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: _loadSummary,
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
-            )
-          else ...<Widget>[
-            PremiumSectionHeader(
-              title: 'Customer Balances',
-              count: '${filteredCustomers.length}',
+              ],
             ),
-            const SizedBox(height: 10),
-            if (filteredCustomers.isEmpty)
-              PremiumPanel(child: _buildEmptyState(context))
-            else
-              _buildPremiumMobileSummaryCards(context, filteredCustomers),
+            const SizedBox(height: 12),
+            _buildPremiumMobileSummaryControls(context),
+            const SizedBox(height: 16),
+            if (_isLoading)
+              MobilePremiumPanel(
+                child: const SizedBox(
+                  height: 180,
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              )
+            else if (_errorMessage != null)
+              MobilePremiumPanel(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    const Icon(Icons.error_outline_rounded, size: 40),
+                    const SizedBox(height: 10),
+                    Text(_errorMessage!, textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    if (_canEdit(context))
+                      FilledButton(
+                        onPressed: _loadSummary,
+                        child: const Text('Retry'),
+                      ),
+                  ],
+                ),
+              )
+            else ...<Widget>[
+              MobileSectionHeader(
+                title: 'Customer Balances',
+                count: '${filteredCustomers.length}',
+              ),
+              const SizedBox(height: 10),
+              if (filteredCustomers.isEmpty)
+                MobilePremiumPanel(child: _buildEmptyState(context))
+              else ...<Widget>[
+                _buildPremiumMobileSummaryCards(context, visibleCustomers),
+                if (visibleCustomers.length < filteredCustomers.length)
+                  _buildShowMoreSummaryButton(filteredCustomers.length),
+              ],
             ],
           ],
         ),
@@ -591,9 +694,14 @@ const SizedBox(height: 16),
   }
 
   Widget _buildPremiumMobileSummaryControls(BuildContext context) {
-    final canExport = !_isLoading && _summaryData.customers.isNotEmpty;
+    final canEdit = _canEdit(context);
+    final exportAllowed = _canExport(context);
+    if (!canEdit && !exportAllowed) return const SizedBox.shrink();
+    final canExport = exportAllowed &&
+        !_isLoading &&
+        _summaryData.customers.isNotEmpty;
 
-    return PremiumPanel(
+    return MobilePremiumPanel(
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -605,33 +713,38 @@ const SizedBox(height: 16),
             onChanged: (String value) {
               setState(() {
                 _searchQuery = value;
+                _visibleSummaryCount = _summaryPageSize;
               });
             },
             onClear: () {
               _searchController.clear();
               setState(() {
                 _searchQuery = '';
+                _visibleSummaryCount = _summaryPageSize;
               });
             },
           ),
           const SizedBox(height: 10),
           Row(
             children: <Widget>[
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _isLoading ? null : _loadSummary,
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('Refresh'),
+              if (canEdit) ...<Widget>[
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _isLoading ? null : _loadSummary,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Refresh'),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: canExport ? _exportSummary : null,
-                  icon: const Icon(Icons.file_download_outlined),
-                  label: const Text('Export'),
+                if (canExport) const SizedBox(width: 10),
+              ],
+              if (canExport)
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _exportSummary,
+                    icon: const Icon(Icons.file_download_outlined),
+                    label: const Text('Export'),
+                  ),
                 ),
-              ),
             ],
           ),
         ],
@@ -639,24 +752,24 @@ const SizedBox(height: 16),
     );
   }
 
-Widget _buildPremiumMobileSummaryCards(
-      BuildContext context,
-      List<_CustomerSummary> customers,
-    ) {
-      return ListView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: customers.length,
-        itemBuilder: (context, index) {
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: index == customers.length - 1 ? 12 : 10,
-            ),
-            child: _buildPremiumMobileSummaryCard(context, customers[index]),
-          );
-        },
-      );
-    }
+  Widget _buildPremiumMobileSummaryCards(
+    BuildContext context,
+    List<_CustomerSummary> customers,
+  ) {
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: customers.length,
+      itemBuilder: (context, index) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: index == customers.length - 1 ? 12 : 10,
+          ),
+          child: _buildPremiumMobileSummaryCard(context, customers[index]),
+        );
+      },
+    );
+  }
 
   Widget _buildPremiumMobileSummaryCard(
       BuildContext context,
@@ -666,7 +779,7 @@ Widget _buildPremiumMobileSummaryCards(
     final colorScheme = theme.colorScheme;
     final balanceColor = AppColors.balanceColor(item.balance);
 
-    return PremiumPanel(
+    return MobilePremiumPanel(
       onTap: () => _navigateToCustomerLedger(item.customer),
       padding: const EdgeInsets.all(14),
       accentColor: balanceColor,
@@ -715,7 +828,7 @@ Widget _buildPremiumMobileSummaryCards(
               Row(
                 children: <Widget>[
                   Expanded(
-                    child: PremiumMetricTile(
+                    child: MobileMetricTile(
                       label: item.customer.isStockLedger ? 'Buy' : 'Debit',
                       value: _formatAmount(item.totalDebit),
                       icon: Icons.south_west_rounded,
@@ -726,7 +839,7 @@ Widget _buildPremiumMobileSummaryCards(
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: PremiumMetricTile(
+                    child: MobileMetricTile(
                       label: item.customer.isStockLedger ? 'Sell' : 'Credit',
                       value: _formatAmount(item.totalCredit),
                       icon: Icons.north_east_rounded,
@@ -738,7 +851,7 @@ Widget _buildPremiumMobileSummaryCards(
                 ],
               ),
               const SizedBox(height: 8),
-              PremiumMetricTile(
+              MobileMetricTile(
                 label: 'Balance',
                 value: _formatBalance(item.balance),
                 icon: Icons.account_balance_wallet_outlined,
@@ -919,10 +1032,11 @@ Widget _buildPremiumMobileSummaryCards(
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: _loadSummary,
-                  child: const Text('Retry'),
-                ),
+                if (_canEdit(context))
+                  FilledButton(
+                    onPressed: _loadSummary,
+                    child: const Text('Retry'),
+                  ),
               ],
             ),
           ),
@@ -934,6 +1048,7 @@ Widget _buildPremiumMobileSummaryCards(
         _summaryData.overallDebit - _summaryData.overallCredit;
 
     final filteredCustomers = _filteredCustomers();
+    final visibleCustomers = _visibleSummaryCustomers(filteredCustomers);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -949,7 +1064,9 @@ Widget _buildPremiumMobileSummaryCards(
         SizedBox(height: compactLayout ? 10 : 12),
         filteredCustomers.isEmpty
             ? _buildEmptyState(context)
-            : _buildSummaryTable(context, filteredCustomers),
+            : _buildSummaryTable(context, visibleCustomers),
+        if (visibleCustomers.length < filteredCustomers.length)
+          _buildShowMoreSummaryButton(filteredCustomers.length),
       ],
     );
   }
@@ -982,7 +1099,6 @@ Widget _buildPremiumMobileSummaryCards(
                 height: 56,
                 icon: Icons.arrow_downward_rounded,
                 backgroundColor: AppColors.debit,
-                labelColor: Colors.white,
               ),
             ),
             SizedBox(
@@ -994,7 +1110,6 @@ Widget _buildPremiumMobileSummaryCards(
                 height: 56,
                 icon: Icons.arrow_upward_rounded,
                 backgroundColor: AppColors.credit,
-                labelColor: Colors.white,
               ),
             ),
             SizedBox(
@@ -1016,7 +1131,6 @@ Widget _buildPremiumMobileSummaryCards(
                               AppColors.credit
                           ? AppColors.credit
                           : Colors.grey.shade600),
-                labelColor: Colors.white,
               ),
             ),
           ],
@@ -1365,6 +1479,35 @@ Widget _buildPremiumMobileSummaryCards(
       height: 34,
       margin: const EdgeInsets.symmetric(horizontal: 8),
       color: Theme.of(context).colorScheme.outlineVariant,
+    );
+  }
+
+  List<_CustomerSummary> _visibleSummaryCustomers(
+    List<_CustomerSummary> customers,
+  ) {
+    return customers.length <= _visibleSummaryCount
+        ? customers
+        : customers.take(_visibleSummaryCount).toList(growable: false);
+  }
+
+  Widget _buildShowMoreSummaryButton(int totalCount) {
+    final remaining = totalCount - _visibleSummaryCount;
+    final nextCount = _visibleSummaryCount + _summaryPageSize;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.only(top: 10, bottom: 12),
+        child: OutlinedButton.icon(
+          onPressed: () => setState(() {
+            _visibleSummaryCount = nextCount < totalCount
+                ? nextCount
+                : totalCount;
+          }),
+          icon: const Icon(Icons.expand_more_rounded),
+          label: Text(
+            'Show ${remaining < _summaryPageSize ? remaining : _summaryPageSize} more customers',
+          ),
+        ),
+      ),
     );
   }
 

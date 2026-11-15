@@ -1,0 +1,60 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main, arena/c3ba4f3f-balance-desk]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          cache: true
+
+      - name: Resolve Flutter dependencies
+        run: flutter pub get
+
+      - name: Build release APK
+        shell: bash
+        run: |
+          set +e
+          flutter build apk --release 2>&1 | tee apk-build.log
+          build_status=${PIPESTATUS[0]}
+          if [ "$build_status" -ne 0 ]; then
+            python3 - <<'PY'
+          from pathlib import Path
+          text = Path('apk-build.log').read_text(errors='replace')[-12000:]
+          text = text.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print(f'::error title=Flutter Android APK build output::{text}')
+          PY
+          fi
+          exit "$build_status"
+
+      - name: Upload APK build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ledger-Pro-Android-build-log
+          path: apk-build.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ledger-Pro-Android-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14

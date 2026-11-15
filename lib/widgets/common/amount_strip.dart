@@ -140,9 +140,13 @@ class _StripItem extends StatelessWidget {
           alignment: Alignment.centerLeft,
           child: Text(
             value,
-            style: theme.textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w900,
-              fontSize: compact ? 12 : null,
+            style: const TextStyle(
+              fontFamily: 'IBM Plex Mono',
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.3,
+            ).copyWith(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontSize: compact ? 12 : 13,
             ),
           ),
         ),

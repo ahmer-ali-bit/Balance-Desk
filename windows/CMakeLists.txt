@@ -4,14 +4,14 @@ project(shop LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
-set(BINARY_NAME "shop")
+set(BINARY_NAME "ledger_pro")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
 cmake_policy(VERSION 3.14...3.25)
 
 if(CMAKE_VERSION VERSION_GREATER_EQUAL "4.0")
-  # The bundled Firebase C++ SDK still declares an older minimum CMake
+  # Some bundled native dependency still declares an older minimum CMake
   # version; keep a compatible policy floor for that dependency tree.
   set(CMAKE_POLICY_VERSION_MINIMUM "3.10" CACHE STRING "" FORCE)
 endif()

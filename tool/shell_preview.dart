@@ -2,8 +2,8 @@
 // Run with: flutter run -d chrome -t tool/shell_preview.dart
 import 'package:flutter/material.dart';
 
-import 'package:shop/theme/balance_desk_theme.dart';
-import 'package:shop/widgets/app_shell_chrome.dart';
+import 'package:ledger_pro/theme/balance_desk_theme.dart';
+import 'package:ledger_pro/widgets/app_shell_chrome.dart';
 
 void main() {
   runApp(
@@ -218,7 +218,7 @@ class _PreviewPageState extends State<_PreviewPage> {
             child: Column(
               children: <Widget>[
                 ShellPageHeader(
-                  eyebrow: 'Balance Desk',
+                  eyebrow: 'Ledger Pro',
                   title: entry.label,
                   subtitle: entry.description,
                   trailing: const ShellChip(

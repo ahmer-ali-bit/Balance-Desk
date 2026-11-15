@@ -12,19 +12,34 @@ class LedgerYearProvider extends ChangeNotifier {
     AppDatabase? database,
   }) : _database = database ?? AppDatabase.instance {
     _dbSub = _database.onDataChanged.listen((_) {
-      if (!_isDisposed) loadYears();
+      _scheduleReload();
     });
   }
 
   List<int> _years = <int>[];
+  List<int>? _yearsView;
+  Timer? _reloadDebounce;
   int _activeYear = DateTime.now().year;
   bool _isLoading = false;
   String? _errorMessage;
 
-  List<int> get years => List<int>.unmodifiable(_years);
+  List<int> get years =>
+      _yearsView ??= List<int>.unmodifiable(_years);
   int get activeYear => _activeYear;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+
+  void _scheduleReload() {
+    if (_isDisposed) {
+      return;
+    }
+    _reloadDebounce?.cancel();
+    _reloadDebounce = Timer(const Duration(milliseconds: 150), () {
+      if (!_isDisposed) {
+        loadYears();
+      }
+    });
+  }
 
   Future<void> loadYears() async {
     _setLoading(true);
@@ -38,6 +53,7 @@ class LedgerYearProvider extends ChangeNotifier {
               <int>[_activeYear, ...years]
                 ..sort((int a, int b) => b.compareTo(a)),
             );
+      _yearsView = null;
       _errorMessage = null;
     } catch (_) {
       _errorMessage = 'Unable to load years.';
@@ -145,6 +161,7 @@ class LedgerYearProvider extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _reloadDebounce?.cancel();
     _dbSub?.cancel();
     super.dispose();
   }

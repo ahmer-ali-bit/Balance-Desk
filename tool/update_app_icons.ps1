@@ -1,5 +1,5 @@
 param(
-  [string]$SourcePath = (Join-Path $PSScriptRoot '..\App Logo.png')
+  [string]$SourcePath = 'assets\branding\ledger-pro-app-icon-1024.png'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -54,7 +54,9 @@ function New-SquareBitmap {
     [System.Drawing.Bitmap]$SourceBitmap,
     [System.Drawing.Rectangle]$Crop,
     [int]$Size,
-    [System.Drawing.Color]$BackgroundColor
+    [System.Drawing.Color]$BackgroundColor,
+    [double]$ContentScale = 0.9,
+    [switch]$Opaque
   )
 
   $target = [System.Drawing.Bitmap]::new(
@@ -65,13 +67,17 @@ function New-SquareBitmap {
   $graphics = [System.Drawing.Graphics]::FromImage($target)
 
   try {
-    $graphics.Clear($BackgroundColor)
+    if ($Opaque) {
+      $graphics.Clear($BackgroundColor)
+    } else {
+      $graphics.Clear([System.Drawing.Color]::Transparent)
+    }
     $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
     $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
     $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
     $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
 
-    $usableSize = $Size * 0.9
+    $usableSize = $Size * $ContentScale
     $scale = [Math]::Min($usableSize / $Crop.Width, $usableSize / $Crop.Height)
     $drawWidth = [Math]::Max(1, [int][Math]::Round($Crop.Width * $scale))
     $drawHeight = [Math]::Max(1, [int][Math]::Round($Crop.Height * $scale))
@@ -156,15 +162,15 @@ if (-not (Test-Path -LiteralPath $sourceFullPath)) {
 }
 
 $sourceBitmap = [System.Drawing.Bitmap]::FromFile($sourceFullPath)
-$background = [System.Drawing.Color]::FromArgb(255, 3, 16, 7)
+$background = [System.Drawing.Color]::FromArgb(255, 6, 43, 33)
 
 try {
   $crop = Get-ContentBounds -Bitmap $sourceBitmap
 
-  Copy-Item -LiteralPath $sourceFullPath -Destination (Join-Path $repoRoot 'assets\branding\balance-desk-logo-source.png') -Force
+  Copy-Item -LiteralPath $sourceFullPath -Destination (Join-Path $repoRoot 'assets\branding\ledger-pro-logo-source.png') -Force
 
   $iconTargets = @(
-    @{ Path = 'assets\branding\balance-desk-app-icon-1024.png'; Size = 1024 }
+    @{ Path = 'assets\branding\ledger-pro-app-icon-1024.png'; Size = 1024 }
     @{ Path = 'android\app\src\main\res\mipmap-mdpi\ic_launcher.png'; Size = 48 }
     @{ Path = 'android\app\src\main\res\mipmap-hdpi\ic_launcher.png'; Size = 72 }
     @{ Path = 'android\app\src\main\res\mipmap-xhdpi\ic_launcher.png'; Size = 96 }
@@ -192,15 +198,51 @@ try {
     @{ Path = 'macos\Runner\Assets.xcassets\AppIcon.appiconset\app_icon_256.png'; Size = 256 }
     @{ Path = 'macos\Runner\Assets.xcassets\AppIcon.appiconset\app_icon_512.png'; Size = 512 }
     @{ Path = 'macos\Runner\Assets.xcassets\AppIcon.appiconset\app_icon_1024.png'; Size = 1024 }
+    @{ Path = 'windows\runner\resources\app_icon.png'; Size = 1024 }
+    @{ Path = 'linux\runner\resources\app_icon.png'; Size = 1024 }
+    @{ Path = 'web\favicon.png'; Size = 64 }
+    @{ Path = 'web\icons\Icon-192.png'; Size = 192 }
+    @{ Path = 'web\icons\Icon-512.png'; Size = 512 }
+    @{ Path = 'web\icons\Icon-maskable-192.png'; Size = 192 }
+    @{ Path = 'web\icons\Icon-maskable-512.png'; Size = 512 }
   )
 
   foreach ($target in $iconTargets) {
-    $bitmap = New-SquareBitmap -SourceBitmap $sourceBitmap -Crop $crop -Size $target.Size -BackgroundColor $background
+    $isIosIcon = $target.Path.StartsWith('ios\Runner\Assets.xcassets\AppIcon.appiconset')
+    $isMaskableWebIcon = $target.Path -like 'web\icons\Icon-maskable-*'
+    $bitmap = New-SquareBitmap `
+      -SourceBitmap $sourceBitmap `
+      -Crop $crop `
+      -Size $target.Size `
+      -BackgroundColor $background `
+      -ContentScale $(if ($isMaskableWebIcon) { 0.72 } else { 0.9 }) `
+      -Opaque:($isIosIcon -or $isMaskableWebIcon)
     try {
       Save-Png -Bitmap $bitmap -Path (Join-Path $repoRoot $target.Path)
     } finally {
       $bitmap.Dispose()
     }
+  }
+
+  # Android adaptive icons need artwork inset into the platform's safe zone.
+  $adaptiveArt = New-SquareBitmap -SourceBitmap $sourceBitmap -Crop $crop -Size 780 -BackgroundColor $background
+  $adaptiveCanvas = [System.Drawing.Bitmap]::new(
+    1024,
+    1024,
+    [System.Drawing.Imaging.PixelFormat]::Format32bppArgb
+  )
+  $adaptiveGraphics = [System.Drawing.Graphics]::FromImage($adaptiveCanvas)
+  try {
+    $adaptiveGraphics.Clear([System.Drawing.Color]::Transparent)
+    $adaptiveGraphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+    $adaptiveGraphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $adaptiveGraphics.DrawImage($adaptiveArt, 122, 122, 780, 780)
+    Save-Png -Bitmap $adaptiveCanvas -Path (Join-Path $repoRoot 'assets\branding\ledger-pro-adaptive-foreground.png')
+    Save-Png -Bitmap $adaptiveCanvas -Path (Join-Path $repoRoot 'android\app\src\main\res\drawable-nodpi\ic_launcher_foreground.png')
+  } finally {
+    $adaptiveGraphics.Dispose()
+    $adaptiveCanvas.Dispose()
+    $adaptiveArt.Dispose()
   }
 
   $icoSizes = @(16, 24, 32, 48, 64, 128, 256)

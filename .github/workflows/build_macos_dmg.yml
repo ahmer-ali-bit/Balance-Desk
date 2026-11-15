@@ -1,0 +1,111 @@
+name: Build macOS DMG
+
+on:
+  push:
+    branches: [main, arena/c3ba4f3f-balance-desk]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          cache: true
+
+      - name: Enable macOS desktop support
+        run: flutter config --enable-macos-desktop
+
+      - name: Resolve Flutter dependencies
+        run: flutter pub get
+
+      - name: Compile release app
+        id: compile
+        shell: bash
+        run: |
+          set +e
+          flutter build macos --release 2>&1 | tee macos-build.log
+          build_status=${PIPESTATUS[0]}
+          {
+            echo '### macOS release build output'
+            echo '```text'
+            tail -n 160 macos-build.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$build_status" -ne 0 ]; then
+            python3 - <<'PY'
+          from pathlib import Path
+          text = Path('macos-build.log').read_text(errors='replace')[-12000:]
+          text = text.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print(f'::error title=Flutter macOS build output::{text}')
+          PY
+          fi
+          exit "$build_status"
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ledger-Pro-macOS-build-log
+          path: macos-build.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Sign and package personal-use drag-to-Applications DMG
+        run: |
+          set -euo pipefail
+          brew install create-dmg
+          APP_PATH="$(find build/macos/Build/Products/Release -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$APP_PATH"
+          # Use the Xcode source plist directly; the plugin needs the empty
+          # keychain-access-groups entitlement carried through ad-hoc signing.
+          APP_ENTITLEMENTS="macos/Runner/Release.entitlements"
+          plutil -lint "$APP_ENTITLEMENTS"
+          /usr/libexec/PlistBuddy -c 'Print :keychain-access-groups' "$APP_ENTITLEMENTS" >/dev/null
+
+          mkdir -p build/packaging/stage
+          STAGED_APP="build/packaging/stage/Ledger Pro.app"
+          ditto "$APP_PATH" "$STAGED_APP"
+          APP_EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$STAGED_APP/Contents/Info.plist")"
+          EXECUTABLE_PATH="$STAGED_APP/Contents/MacOS/$APP_EXECUTABLE"
+          ARCHS="$(lipo -archs "$EXECUTABLE_PATH")"
+          echo "Ledger Pro executable architectures: $ARCHS"
+          [[ "$ARCHS" == *x86_64* ]]
+
+          # Preserve the Keychain entitlement in the personal-use ad-hoc signature.
+          codesign --force --deep --sign - --timestamp=none --entitlements "$APP_ENTITLEMENTS" "$STAGED_APP"
+          codesign --verify --deep --strict --verbose=2 "$STAGED_APP"
+          codesign --display --entitlements :- "$STAGED_APP" > "$RUNNER_TEMP/staged-entitlements.plist" 2>/dev/null
+          /usr/libexec/PlistBuddy -c 'Print :keychain-access-groups' "$RUNNER_TEMP/staged-entitlements.plist" >/dev/null
+
+          rm -rf build/packaging/stage/.background
+          DMG_PATH="build/packaging/Ledger-Pro-macOS.dmg"
+          MOUNT_POINT="$RUNNER_TEMP/ledger-pro-dmg"
+          trap 'hdiutil detach "$MOUNT_POINT" >/dev/null 2>&1 || true' EXIT
+          create-dmg \
+            --volname "Ledger Pro" \
+            --window-pos 200 120 \
+            --window-size 640 400 \
+            --icon-size 100 \
+            --icon "Ledger Pro.app" 170 190 \
+            --app-drop-link 470 190 \
+            "$DMG_PATH" \
+            "build/packaging/stage"
+
+          mkdir -p "$MOUNT_POINT"
+          hdiutil attach "$DMG_PATH" -readonly -nobrowse -mountpoint "$MOUNT_POINT"
+          codesign --verify --deep --strict --verbose=2 "$MOUNT_POINT/Ledger Pro.app"
+          hdiutil detach "$MOUNT_POINT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ledger-Pro-macOS-DMG
+          path: build/packaging/Ledger-Pro-macOS.dmg
+          if-no-files-found: error
+          retention-days: 14

@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $installerDir = Join-Path $repoRoot 'tool\installer'
-$issPath = Join-Path $installerDir 'balance-desk.iss'
+$issPath = Join-Path $installerDir 'ledger-pro.iss'
 $outputDir = Join-Path $repoRoot 'build\windows\installer'
 $releaseDir = Join-Path $repoRoot 'build\windows\x64\runner\Release'
 

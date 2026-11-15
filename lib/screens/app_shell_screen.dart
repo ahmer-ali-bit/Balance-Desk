@@ -11,6 +11,8 @@ import '../models/workspace.dart';
 import '../providers/customer_provider.dart';
 import '../providers/ledger_provider_cache.dart';
 import '../providers/ledger_year_provider.dart';
+import '../providers/linked_devices_provider.dart';
+import '../providers/theme_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/app_pin_service.dart';
 import '../services/biometric_auth_service.dart';
@@ -20,6 +22,7 @@ import '../utils/platform_helper.dart';
 import '../widgets/app_pin_dialogs.dart';
 import '../widgets/app_shell_chrome.dart';
 import 'customer_list_screen.dart';
+import 'linked_devices_screen.dart';
 import 'snapshot_entries_screen.dart';
 import 'summary_screen.dart';
 import 'backup_restore_screen.dart';
@@ -40,6 +43,8 @@ class _AppShellScreenState extends State<AppShellScreen> {
   final ManualUpdateService _manualUpdateService = ManualUpdateService.instance;
   int _selectedIndex = 0;
   int _reloadRevision = 0;
+  List<Widget?> _pageCache = <Widget?>[];
+  String? _pageCacheSignature;
   bool _isPinEnabled = false;
   bool _isBiometricAvailable = false;
   bool _isBiometricEnabled = false;
@@ -155,157 +160,57 @@ class _AppShellScreenState extends State<AppShellScreen> {
 
   Widget _buildDesktopScaffold(Widget content) {
     final destination = _destinations[_selectedIndex];
-    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: colorScheme.surfaceContainerLowest,
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            _buildDesktopTopBar(),
-            const SizedBox(height: 12),
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  SizedBox(
-                    width: ShellMetrics.sidebarWidth,
-                    child: _buildSidebar(closeDrawerOnAction: false),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        _buildDesktopHeader(destination),
-                        const SizedBox(height: 14),
-                        Expanded(child: ShellContentSheet(child: content)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDesktopTopBar() {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final activeYear = context.watch<LedgerYearProvider>().activeYear;
-    final workspaceName = context
-        .watch<WorkspaceProvider>()
-        .activeWorkspace
-        .name;
-    final logo = _buildCompanyLogo();
-
-    return Container(
-      height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        border: Border(
-          bottom: BorderSide(color: colorScheme.outlineVariant),
-        ),
-      ),
-      child: Row(
-        children: <Widget>[
-          if (logo != null) ...[logo, const SizedBox(width: 12)],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+      body: AppShellBackdrop(
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                Text(
-                  _companyName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
-                  ),
+                SizedBox(
+                  width: ShellMetrics.sidebarWidth,
+                  child: _buildSidebar(closeDrawerOnAction: false),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'FY $activeYear  •  $workspaceName',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.labelSmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      _buildDesktopHeader(destination),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: ShellContentSheet(child: content),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          ShellChip(
-            icon: Icons.calendar_month_outlined,
-            label: 'FY $activeYear',
-          ),
-          const SizedBox(width: 10),
-          ShellChip(
-            icon: Icons.workspaces_outlined,
-            label: workspaceName,
-            color: colorScheme.tertiary,
-          ),
-          const SizedBox(width: 16),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildDesktopHeader(_ShellDestination destination) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
+    final activeYear = context.watch<LedgerYearProvider>().activeYear;
+    final workspaceName = context
+        .watch<WorkspaceProvider>()
+        .activeWorkspace
+        .name;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Text(
-            'Balance Desk'.toUpperCase(),
-            style: textTheme.labelSmall?.copyWith(
-              color: colorScheme.primary.withValues(alpha: 0.9),
-              letterSpacing: 1.6,
-              fontWeight: FontWeight.w800,
-              fontSize: 10,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            destination.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.6,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            destination.description,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
+    return ShellPageHeader(
+      eyebrow: destination.description,
+      title: destination.label,
+      subtitle: 'FY $activeYear  ·  $workspaceName',
     );
   }
 
   Widget _buildMobileScaffold(Widget content) {
     final destination = _destinations[_selectedIndex];
     final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
 
     return PopScope(
       canPop: false,
@@ -334,10 +239,10 @@ class _AppShellScreenState extends State<AppShellScreen> {
       },
       child: Scaffold(
         resizeToAvoidBottomInset: true,
-        backgroundColor: colorScheme.surface,
-        drawerScrimColor: Colors.black.withValues(alpha: 0.55),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        drawerScrimColor: Colors.black.withValues(alpha: 0.6),
         drawer: Drawer(
-          width: math.min(MediaQuery.sizeOf(context).width * 0.88, 340),
+          width: math.min(MediaQuery.sizeOf(context).width * 0.88, 330),
           backgroundColor: Colors.transparent,
           elevation: 0,
           child: SafeArea(
@@ -347,101 +252,35 @@ class _AppShellScreenState extends State<AppShellScreen> {
             ),
           ),
         ),
-        appBar: AppBar(
-          toolbarHeight: 64,
-          backgroundColor: colorScheme.surface,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          leadingWidth: 56,
-          leading: Builder(
-            builder: (BuildContext headerContext) {
-              return Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: IconButton(
-                  tooltip: 'Open menu',
-                  onPressed: () => Scaffold.of(headerContext).openDrawer(),
-                  icon: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: colorScheme.outlineVariant),
-                    ),
-                    child: const Icon(Icons.menu_rounded, size: 20),
-                  ),
+        body: Column(
+          children: <Widget>[
+            SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                child: Builder(
+                  builder: (BuildContext headerContext) {
+                    return ShellMobileHeader(
+                      onMenu: () => Scaffold.of(headerContext).openDrawer(),
+                      companyName: _companyName,
+                      title: destination.label,
+                      icon: destination.selectedIcon,
+                      avatar: _buildCompanyLogo(),
+                    );
+                  },
                 ),
-              );
-            },
-          ),
-          titleSpacing: 4,
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Text(
-                _companyName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: textTheme.labelSmall?.copyWith(
-                  color: colorScheme.primary,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.3,
-                ),
-              ),
-              Text(
-                destination.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.3,
-                ),
-              ),
-            ],
-          ),
-          actions: <Widget>[
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: colorScheme.outlineVariant),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: _buildCompanyLogo() ??
-                    Icon(destination.selectedIcon,
-                        color: colorScheme.primary, size: 20),
               ),
             ),
+            Divider(height: 1, color: colorScheme.outlineVariant),
+            Expanded(
+              child: content,
+            ),
           ],
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(1),
-            child: Divider(height: 1, color: colorScheme.outlineVariant),
-          ),
         ),
-        body: SafeArea(
-          top: false,
-          child: Container(
-            color: colorScheme.surface,
-            child: content,
-          ),
-        ),
-        bottomNavigationBar: NavigationBar(
+        bottomNavigationBar: ShellMobileDock(
+          entries: _shellNavEntries,
           selectedIndex: _selectedIndex,
-          onDestinationSelected: _selectIndex,
-          destinations: <NavigationDestination>[
-            for (final _ShellDestination d in _destinations)
-              NavigationDestination(
-                icon: Icon(d.icon),
-                selectedIcon: Icon(d.selectedIcon),
-                label: d.label,
-              ),
-          ],
+          onSelected: _selectIndex,
         ),
       ),
     );
@@ -449,7 +288,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
 
   String get _companyName {
     final name = _companyProfile.name.trim();
-    return name.isEmpty ? 'Balance Desk' : name;
+    return name.isEmpty ? 'Ledger Pro' : name;
   }
 
   List<ShellNavEntry> get _shellNavEntries {
@@ -480,6 +319,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
   }
 
   Widget _buildSidebar({required bool closeDrawerOnAction}) {
+    final canEdit = _canEdit(context);
     return AppShellSidebar(
       companyName: _companyName,
       subtitle: PlatformHelper.isDesktop
@@ -488,6 +328,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
       logo: _buildCompanyLogo(),
       yearControl: _buildYearControl(closeDrawerOnAction: closeDrawerOnAction),
       workspaceControl: _WorkspaceSwitcher(
+        canEdit: canEdit,
         onWorkspaceSwitched: () {
           _closeDrawerIfNeeded(closeDrawerOnAction);
         },
@@ -499,7 +340,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
         _selectIndex(index);
       },
       tools: <ShellToolEntry>[
-        ShellToolEntry(
+        if (canEdit) ShellToolEntry(
           icon: Icons.business_outlined,
           label: 'Company Profile',
           onTap: () => _runDrawerAction(
@@ -507,7 +348,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
             action: _openCompanyProfileEditor,
           ),
         ),
-        ShellToolEntry(
+        if (canEdit) ShellToolEntry(
           icon: Icons.edit_note_outlined,
           label: 'Notes',
           badge: _sidebarNotes.trim().isNotEmpty,
@@ -517,6 +358,14 @@ class _AppShellScreenState extends State<AppShellScreen> {
           ),
         ),
         ShellToolEntry(
+          icon: Icons.devices_rounded,
+          label: 'Linked Devices',
+          onTap: () => _runDrawerAction(
+            closeDrawerOnAction: closeDrawerOnAction,
+            action: _openLinkedDevicesScreen,
+          ),
+        ),
+        if (canEdit) ShellToolEntry(
           icon: Icons.backup_rounded,
           label: 'Backup & Restore',
           onTap: () => _runDrawerAction(
@@ -524,7 +373,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
             action: _openBackupRestoreScreen,
           ),
         ),
-        ShellToolEntry(
+        if (canEdit) ShellToolEntry(
           icon: Icons.lock_outline_rounded,
           label: _isPinEnabled ? 'Manage App PIN' : 'Set App PIN',
           onTap: () => _runDrawerAction(
@@ -532,7 +381,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
             action: _openPinSettings,
           ),
         ),
-        ShellToolEntry(
+        if (canEdit) ShellToolEntry(
           icon: Icons.system_update_alt_outlined,
           label: 'Check for Update',
           onTap: () => _runDrawerAction(
@@ -542,6 +391,17 @@ class _AppShellScreenState extends State<AppShellScreen> {
         ),
       ],
       showNavEntries: true,
+      appearanceControl: _buildAppearanceControl(),
+    );
+  }
+
+  Widget _buildAppearanceControl() {
+    final mode = context.watch<ThemeProvider>().themeMode;
+    return ShellAppearanceSwitch(
+      mode: mode,
+      onChanged: (ThemeMode next) {
+        context.read<ThemeProvider>().setThemeMode(next);
+      },
     );
   }
 
@@ -562,7 +422,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
               children: <Widget>[
                 Expanded(
                   child: PopupMenuButton<int>(
-                    enabled: !provider.isLoading,
+                    enabled: canEdit && !provider.isLoading,
                     tooltip: 'Switch ledger year',
                     onSelected: (int year) {
                       _closeDrawerIfNeeded(closeDrawerOnAction);
@@ -628,9 +488,8 @@ class _AppShellScreenState extends State<AppShellScreen> {
     );
   }
 
-  /// Always returns true since linked devices feature is removed.
   bool _canEdit(BuildContext context) {
-    return true;
+    return !Provider.of<LinkedDevicesProvider>(context).isReadOnly;
   }
 
   void _closeDrawerIfNeeded(bool closeDrawerOnAction) {
@@ -920,13 +779,28 @@ class _AppShellScreenState extends State<AppShellScreen> {
   Widget _buildActivePage() {
     final activeYear = context.watch<LedgerYearProvider>().activeYear;
     final workspaceId = context.watch<WorkspaceProvider>().activeWorkspaceId;
+    final signature = '$_reloadRevision-$activeYear-$workspaceId';
 
-    return KeyedSubtree(
-      key: ValueKey<String>(
-        '$_selectedIndex-$_reloadRevision-$activeYear-$workspaceId',
-      ),
-      child: _destinations[_selectedIndex].child,
-    );
+    // Keep already-visited tabs mounted so moving between screens does not
+    // discard their scroll position or repeat expensive initial loads. Pages
+    // are still created only when first opened, keeping app startup light.
+    if (_pageCacheSignature != signature ||
+        _pageCache.length != _destinations.length) {
+      _pageCacheSignature = signature;
+      _pageCache = List<Widget?>.filled(_destinations.length, null);
+    }
+
+    final pages = List<Widget>.generate(_destinations.length, (int index) {
+      if (_pageCache[index] == null && index == _selectedIndex) {
+        _pageCache[index] = KeyedSubtree(
+          key: ValueKey<String>('$index-$signature'),
+          child: _destinations[index].child,
+        );
+      }
+      return _pageCache[index] ?? const SizedBox.shrink();
+    }, growable: false);
+
+    return IndexedStack(index: _selectedIndex, children: pages);
   }
 
   void _selectIndex(int index) {
@@ -1064,6 +938,13 @@ class _AppShellScreenState extends State<AppShellScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _openLinkedDevicesScreen() async {
+    if (!mounted) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (_) => const LinkedDevicesScreen()),
+    );
   }
 
   Future<void> _openBackupRestoreScreen() async {
@@ -1587,8 +1468,12 @@ class _ShellDestination {
 }
 
 class _WorkspaceSwitcher extends StatelessWidget {
-  const _WorkspaceSwitcher({required this.onWorkspaceSwitched});
+  const _WorkspaceSwitcher({
+    required this.canEdit,
+    required this.onWorkspaceSwitched,
+  });
 
+  final bool canEdit;
   final VoidCallback onWorkspaceSwitched;
 
   @override
@@ -1605,9 +1490,9 @@ class _WorkspaceSwitcher extends StatelessWidget {
           children: [
             Expanded(
               child: PopupMenuButton<String>(
-                enabled: !provider.isSwitching,
+                enabled: canEdit && !provider.isSwitching,
                 onSelected: (String workspaceId) async {
-                  if (workspaceId == active.id) return;
+                  if (!canEdit || workspaceId == active.id) return;
                   final switched = await provider.switchWorkspace(workspaceId);
                   if (switched) {
                     onWorkspaceSwitched();
@@ -1650,7 +1535,7 @@ class _WorkspaceSwitcher extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                              if (!isActive && w.id != 'default')
+                              if (canEdit && !isActive && w.id != 'default')
                                 PopupMenuButton<_WorkspaceMenuAction>(
                                   padding: EdgeInsets.zero,
                                   icon: Icon(
@@ -1696,11 +1581,12 @@ class _WorkspaceSwitcher extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 6),
-            ShellIconAction(
-              icon: Icons.add_rounded,
-              tooltip: 'Add Workspace',
-              onPressed: () => _showAddWorkspaceDialog(context, provider),
-            ),
+            if (canEdit)
+              ShellIconAction(
+                icon: Icons.add_rounded,
+                tooltip: 'Add Workspace',
+                onPressed: () => _showAddWorkspaceDialog(context, provider),
+              ),
           ],
         );
       },

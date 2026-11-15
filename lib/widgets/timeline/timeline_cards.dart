@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../common/amount_chip.dart';
-import '../mobile_premium.dart';
+import '../mobile/mobile_premium.dart';
+import '../../utils/number_format_utils.dart';
 
 const double kMobileCardRadius = 20;
 
@@ -10,7 +11,7 @@ class MobilePremiumCustomerCard extends StatelessWidget {
   const MobilePremiumCustomerCard({
     super.key,
     required this.name,
-    required this.id,
+    required this.ledgerPageNo,
     required this.isStockLedger,
     required this.onTap,
     required this.onDelete,
@@ -18,7 +19,7 @@ class MobilePremiumCustomerCard extends StatelessWidget {
   });
 
   final String name;
-  final String id;
+  final String ledgerPageNo;
   final bool isStockLedger;
   final VoidCallback onTap;
   final VoidCallback? onDelete;
@@ -38,29 +39,21 @@ class MobilePremiumCustomerCard extends StatelessWidget {
           Row(
             children: <Widget>[
               Container(
-                width: 50,
-                height: 50,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: <Color>[
-                      colorScheme.primary.withValues(alpha: 0.16),
-                      colorScheme.secondary.withValues(alpha: 0.10),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(14),
+                  color: colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(13),
                   border: Border.all(
-                    color: colorScheme.primary.withValues(alpha: 0.22),
+                    color: colorScheme.primary.withValues(alpha: 0.18),
                   ),
                 ),
-                child: Center(
-                  child: Text(
-                    name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase(),
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: colorScheme.primary,
-                      fontWeight: FontWeight.w900,
-                    ),
+                alignment: Alignment.center,
+                child: Text(
+                  name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase(),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: colorScheme.onPrimaryContainer,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
               ),
@@ -81,12 +74,20 @@ class MobilePremiumCustomerCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: <Widget>[
+                        Icon(
+                          Icons.menu_book_outlined,
+                          size: 12,
+                          color: colorScheme.tertiary,
+                        ),
+                        const SizedBox(width: 5),
                         Text(
-                          'ID: $id',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          'Pg  ${ledgerPageNo.trim().isEmpty ? '-' : ledgerPageNo.trim()}',
+                          style: const TextStyle(
+                            fontFamily: 'IBM Plex Mono',
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0.3,
+                          ).copyWith(color: colorScheme.tertiary),
                         ),
                         if (isStockLedger) ...[
                           const SizedBox(width: 8),
@@ -131,22 +132,31 @@ class MobilePremiumCustomerCard extends StatelessWidget {
               ),
             ],
           ),
-          const Divider(height: 20),
-          const SizedBox(height: 6),
+          Divider(height: 1, color: colorScheme.outlineVariant),
+          const SizedBox(height: 8),
           Row(
-            mainAxisAlignment: MainAxisAlignment.end,
             children: <Widget>[
-              const SizedBox(width: 8),
-              IconButton(
-                tooltip: 'Open ledger',
+              const Spacer(),
+              TextButton.icon(
                 onPressed: onTap,
-                icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+                icon: const Icon(Icons.menu_book_outlined, size: 16),
+                label: const Text('Open Ledger'),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                ),
               ),
               if (canEdit)
                 IconButton(
                   tooltip: 'Delete customer',
                   onPressed: onDelete,
-                  icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                  icon: Icon(
+                    Icons.delete_outline_rounded,
+                    size: 18,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                 ),
             ],
           ),
@@ -236,14 +246,14 @@ class CustomerCompactCard extends StatelessWidget {
   const CustomerCompactCard({
     super.key,
     required this.name,
-    required this.id,
+    required this.ledgerPageNo,
     required this.onTap,
     required this.onDelete,
     required this.canEdit,
   });
 
   final String name;
-  final String id;
+  final String ledgerPageNo;
   final VoidCallback onTap;
   final VoidCallback? onDelete;
   final bool canEdit;
@@ -290,7 +300,7 @@ class CustomerCompactCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Customer ID: $id',
+                  'Ledger Page: ${ledgerPageNo.trim().isEmpty ? '-' : ledgerPageNo.trim()}',
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),
@@ -439,7 +449,7 @@ class MobilePremiumSummaryCard extends StatelessWidget {
   final bool isStockLedger;
   final VoidCallback onTap;
 
-  String _amount(double v) => v == 0 ? '-' : v.toStringAsFixed(2);
+  String _amount(double v) => v == 0 ? '-' : formatAmount(v);
 
   @override
   Widget build(BuildContext context) {
@@ -532,6 +542,7 @@ class PremiumTimelineEntryCard extends StatelessWidget {
     required this.credit,
     required this.onTap,
     required this.onRemove,
+    this.onMove,
     required this.canEdit,
   });
 
@@ -542,9 +553,10 @@ class PremiumTimelineEntryCard extends StatelessWidget {
   final double credit;
   final VoidCallback onTap;
   final VoidCallback? onRemove;
+  final VoidCallback? onMove;
   final bool canEdit;
 
-  String _amount(double v) => v == 0 ? '-' : v.toStringAsFixed(2);
+  String _amount(double v) => v == 0 ? '-' : formatAmount(v);
 
   @override
   Widget build(BuildContext context) {
@@ -601,6 +613,12 @@ class PremiumTimelineEntryCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (canEdit && onMove != null)
+                IconButton(
+                  tooltip: 'Move to a saved snapshot',
+                  onPressed: onMove,
+                  icon: const Icon(Icons.drive_file_move, size: 18),
+                ),
               if (canEdit)
                 IconButton(
                   tooltip: 'Delete or Remove Entry',
@@ -664,11 +682,14 @@ class PremiumSnapshotCard extends StatelessWidget {
   final VoidCallback? onEditPageNo;
   final VoidCallback? onDelete;
 
-  String _amount(double v) => v == 0 ? '-' : v.toStringAsFixed(2);
+  String _amount(double v) => v == 0 ? '-' : formatAmount(v);
 
   String _balanceText(double v) {
-    final formatted = v.toStringAsFixed(2);
-    return v > 0 ? '+$formatted' : (v < 0 ? formatted : '0');
+    if (v == 0) {
+      return '0';
+    }
+    final formatted = formatAmount(v.abs());
+    return v > 0 ? '+$formatted' : '-$formatted';
   }
 
   @override
@@ -782,11 +803,14 @@ class PremiumBalanceCard extends StatelessWidget {
   final double balance;
   final Color balanceColor;
 
-  String _amount(double v) => v == 0 ? '-' : v.toStringAsFixed(2);
+  String _amount(double v) => v == 0 ? '-' : formatAmount(v);
 
   String _balanceText(double v) {
-    final formatted = v.toStringAsFixed(2);
-    return v > 0 ? '+$formatted' : (v < 0 ? formatted : '0');
+    if (v == 0) {
+      return '0';
+    }
+    final formatted = formatAmount(v.abs());
+    return v > 0 ? '+$formatted' : '-$formatted';
   }
 
   @override

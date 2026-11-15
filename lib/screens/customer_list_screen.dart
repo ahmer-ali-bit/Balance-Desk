@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../database/app_database.dart';
 import '../models/customer.dart';
 import '../providers/customer_provider.dart';
+import '../providers/linked_devices_provider.dart';
 import '../utils/platform_helper.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/customer_search_field.dart';
-import '../widgets/mobile_premium.dart';
+import '../widgets/mobile/mobile_premium.dart';
 import '../widgets/scale_down_width.dart';
 import '../widgets/timeline/timeline_cards.dart';
 import 'ledger_screen.dart';
@@ -23,6 +25,43 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode searchFocusNode = FocusNode();
   final ScrollController _tableVerticalController = ScrollController();
+  final AppDatabase _database = AppDatabase.instance;
+  Map<int, String> _pageNoByCustomer = <int, String>{};
+  static const int _customerPageSize = 100;
+  int _visibleCustomerCount = _customerPageSize;
+
+  Future<void> _loadPageNos() async {
+    try {
+      final rows = await _database.getCustomerEntryTotalsSince();
+      final map = <int, String>{};
+      for (final row in rows) {
+        final id = row['customerId'] as int?;
+        if (id == null) {
+          continue;
+        }
+        final pageNo = (row['latestPageNo'] as String?)?.trim() ?? '';
+        if (pageNo.isNotEmpty) {
+          map[id] = pageNo;
+        }
+      }
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _pageNoByCustomer = map;
+      });
+    } catch (_) {
+      // Keep whatever was loaded before; the list stays usable without it.
+    }
+  }
+
+  String _pageNoFor(Customer customer) {
+    final id = customer.id;
+    if (id == null) {
+      return '';
+    }
+    return _pageNoByCustomer[id] ?? '';
+  }
 
   @override
   void initState() {
@@ -36,6 +75,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       if (provider.customers.isEmpty && !provider.isLoading) {
         provider.loadCustomers();
       }
+      _loadPageNos();
     });
   }
 
@@ -111,6 +151,10 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
         ),
       ),
     );
+    if (!mounted) {
+      return;
+    }
+    _loadPageNos();
   }
 
   Future<void> _confirmDelete(Customer customer) async {
@@ -145,6 +189,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     if (!mounted) {
       return;
     }
+    _loadPageNos();
 
     final message = context.read<CustomerProvider>().errorMessage;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -187,6 +232,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                   } else if (intent.action == _CustomerShortcut.refresh) {
                     if (!provider.isLoading) {
                       provider.loadCustomers();
+                      _loadPageNos();
                     }
                   }
                   return null;
@@ -204,7 +250,11 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
               child: LayoutBuilder(
                 builder: (BuildContext context, BoxConstraints constraints) {
                   final isCompact = constraints.maxWidth < 720;
-                  final isDesktop = PlatformHelper.isDesktop;
+                  // Match the shell: below the desktop breakpoint the app
+                  // shell renders the mobile layout, so the screen does too.
+                  final isDesktop =
+                      PlatformHelper.isDesktop &&
+                      constraints.maxWidth >= 980;
                   if (!isDesktop) {
                     return _buildPremiumMobileCustomerLayout(
                       context: context,
@@ -273,17 +323,23 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       focusNode: searchFocusNode,
       hintText: 'Search customer',
       optionsBuilder: (String query) => provider.filteredCustomers,
-      onChanged: provider.updateSearchQuery,
+      onChanged: (String query) {
+        setState(() => _visibleCustomerCount = _customerPageSize);
+        provider.updateSearchQuery(query);
+      },
       onClear: () {
         _searchController.clear();
+        setState(() => _visibleCustomerCount = _customerPageSize);
         provider.updateSearchQuery('');
       },
     );
   }
 
-  /// Always returns true since linked devices feature is removed.
   bool _canEdit(BuildContext context, {bool listen = true}) {
-    return true;
+    return !Provider.of<LinkedDevicesProvider>(
+      context,
+      listen: listen,
+    ).isReadOnly;
   }
 
   Widget _buildPremiumMobileCustomerLayout({
@@ -299,7 +355,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       controller: _tableVerticalController,
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       child: MobilePremiumPage(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 112),
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
@@ -323,22 +379,41 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                   const SizedBox(height: 12),
                   Row(
                     children: <Widget>[
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: provider.isLoading
-                              ? null
-                              : provider.loadCustomers,
-                          icon: const Icon(Icons.refresh_rounded),
-                          label: const Text('Refresh'),
-                        ),
-                      ),
                       if (canEdit) ...[
+                        Expanded(
+                          child: SizedBox(
+                            height: 48,
+                            child: OutlinedButton.icon(
+                              onPressed: provider.isLoading
+                                  ? null
+                                  : () async {
+                                      await provider.loadCustomers();
+                                      await _loadPageNos();
+                                    },
+                              icon: const Icon(Icons.refresh_rounded),
+                              label: const Text('Refresh'),
+                            ),
+                          ),
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: FilledButton.icon(
-                            onPressed: _showAddCustomerDialog,
-                            icon: const Icon(Icons.person_add_alt_1_rounded),
-                            label: const Text('Add Customer'),
+                          child: SizedBox(
+                            height: 48,
+                            child: FilledButton.icon(
+                              onPressed: _showAddCustomerDialog,
+                              icon: const Icon(
+                                Icons.person_add_alt_1_rounded,
+                                size: 20,
+                              ),
+                              label: const FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  'Add Customer',
+                                  maxLines: 1,
+                                  softWrap: false,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -372,26 +447,40 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     required List<Customer> customers,
     required bool canEdit,
   }) {
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: customers.length,
-      itemBuilder: (context, index) {
-        final customer = customers[index];
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: index == customers.length - 1 ? 12 : 10,
+    final visibleCount = customers.length < _visibleCustomerCount
+        ? customers.length
+        : _visibleCustomerCount;
+    return Column(
+      children: <Widget>[
+        for (var index = 0; index < visibleCount; index++) ...[
+          Padding(
+            padding: EdgeInsets.only(
+              bottom: index == visibleCount - 1 ? 12 : 10,
+            ),
+            child: MobilePremiumCustomerCard(
+              name: customers[index].name,
+              ledgerPageNo: _pageNoFor(customers[index]),
+              isStockLedger: customers[index].isStockLedger,
+              onTap: () => _openLedger(customers[index]),
+              onDelete: () => _confirmDelete(customers[index]),
+              canEdit: canEdit,
+            ),
           ),
-          child: MobilePremiumCustomerCard(
-            name: customer.name,
-            id: customer.id?.toString() ?? '-',
-            isStockLedger: customer.isStockLedger,
-            onTap: () => _openLedger(customer),
-            onDelete: () => _confirmDelete(customer),
-            canEdit: canEdit,
+        ],
+        if (visibleCount < customers.length)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: OutlinedButton.icon(
+              onPressed: () => setState(() {
+                _visibleCustomerCount += _customerPageSize;
+              }),
+              icon: const Icon(Icons.expand_more_rounded),
+              label: Text(
+                'Show ${customers.length - visibleCount < _customerPageSize ? customers.length - visibleCount : _customerPageSize} more customers',
+              ),
+            ),
           ),
-        );
-      },
+      ],
     );
   }
 
@@ -444,17 +533,23 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       spacing: 10,
       runSpacing: 10,
       children: <Widget>[
-        OutlinedButton.icon(
-          onPressed: provider.isLoading ? null : provider.loadCustomers,
-          icon: const Icon(Icons.refresh_rounded),
-          label: const Text('Refresh'),
-        ),
-        if (_canEdit(context))
+        if (_canEdit(context)) ...[
+          OutlinedButton.icon(
+            onPressed: provider.isLoading
+                ? null
+                : () async {
+                    await provider.loadCustomers();
+                    await _loadPageNos();
+                  },
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Refresh'),
+          ),
           FilledButton.icon(
             onPressed: _showAddCustomerDialog,
             icon: const Icon(Icons.person_add_alt_1_rounded),
             label: const Text('Add Customer'),
           ),
+        ],
       ],
     );
 
@@ -482,11 +577,43 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     BuildContext context, {
     required int count,
   }) {
-    return Text(
-      'Directory ($count)',
-      style: Theme.of(
-        context,
-      ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Row(
+      children: <Widget>[
+        Container(
+          width: 3.5,
+          height: 16,
+          decoration: BoxDecoration(
+            color: colorScheme.primary,
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          'DIRECTORY',
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.6,
+                color: colorScheme.onSurfaceVariant,
+              ),
+        ),
+        const SizedBox(width: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+          decoration: BoxDecoration(
+            color: colorScheme.primaryContainer,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            '$count',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: colorScheme.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -557,6 +684,9 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
         final customerNameStyle = Theme.of(
           context,
         ).textTheme.bodyLarge?.copyWith(fontSize: isCompactTable ? 18 : null);
+        final visibleCount = customers.length < _visibleCustomerCount
+            ? customers.length
+            : _visibleCustomerCount;
 
         return ScaleDownWidth(
           designWidth: designWidth,
@@ -576,11 +706,11 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                       horizontalMargin: isCompactTable ? 0 : 12,
                       columnSpacing: isCompactTable ? 10 : 18,
                       showCheckboxColumn: false,
-                      headingRowHeight: 56,
-                      dataRowMinHeight: 54,
-                      dataRowMaxHeight: 60,
+                      headingRowHeight: 46,
+                      dataRowMinHeight: 48,
+                      dataRowMaxHeight: 54,
                       headingRowColor: WidgetStatePropertyAll<Color?>(
-                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                        Theme.of(context).colorScheme.surfaceContainerLow,
                       ),
                       columns: <DataColumn>[
                         DataColumn(
@@ -591,7 +721,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                             child: Text('Customer'),
                           ),
                         ),
-                        const DataColumn(label: Text('Customer ID')),
+                        const DataColumn(label: Text('Ledger Page')),
                         const DataColumn(label: Text('Open Ledger')),
                         DataColumn(
                           label: Padding(
@@ -602,9 +732,10 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                           ),
                         ),
                       ],
-                      rows: List<DataRow>.generate(customers.length, (
-                        int index,
-                      ) {
+                      rows: <DataRow>[
+                        ...List<DataRow>.generate(visibleCount, (
+                          int index,
+                        ) {
                         final customer = customers[index];
 
                         return DataRow.byIndex(
@@ -616,12 +747,28 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                                 width: isCompactTable ? 250 : 280,
                                 child: Row(
                                   children: <Widget>[
-                                    CircleAvatar(
-                                      radius: isCompactTable ? 16 : 18,
+                                    Container(
+                                      width: isCompactTable ? 34 : 38,
+                                      height: isCompactTable ? 34 : 38,
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primaryContainer,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      alignment: Alignment.center,
                                       child: Text(
                                         customer.name.isEmpty
                                             ? '?'
                                             : customer.name[0].toUpperCase(),
+                                        style: TextStyle(
+                                          fontFamily: 'Lato',
+                                          fontSize: isCompactTable ? 14 : 15,
+                                          fontWeight: FontWeight.w900,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onPrimaryContainer,
+                                        ),
                                       ),
                                     ),
                                     SizedBox(width: isCompactTable ? 10 : 12),
@@ -672,7 +819,18 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                                 ),
                               ),
                             ),
-                            DataCell(Text('${customer.id ?? '-'}')),
+                            DataCell(
+                              Text(
+                                _pageNoFor(customer).isEmpty
+                                    ? '-'
+                                    : _pageNoFor(customer),
+                                style: const TextStyle(
+                                  fontFamily: 'IBM Plex Mono',
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
                             DataCell(
                               TextButton.icon(
                                 onPressed: () => _openLedger(customer),
@@ -685,13 +843,38 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                                   ? IconButton(
                                       tooltip: 'Delete customer',
                                       onPressed: () => _confirmDelete(customer),
-                                      icon: const Icon(Icons.delete_outline),
+                                      icon: Icon(
+                                        Icons.delete_outline,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                      ),
                                     )
                                   : const SizedBox.shrink(),
                             ),
                           ],
                         );
-                      }),
+                        }),
+                        if (visibleCount < customers.length)
+                          DataRow(
+                            cells: <DataCell>[
+                              DataCell(
+                                TextButton.icon(
+                                  onPressed: () => setState(() {
+                                    _visibleCustomerCount += _customerPageSize;
+                                  }),
+                                  icon: const Icon(Icons.expand_more_rounded),
+                                  label: Text(
+                                    'Show ${customers.length - visibleCount < _customerPageSize ? customers.length - visibleCount : _customerPageSize} more customers',
+                                  ),
+                                ),
+                              ),
+                              const DataCell(SizedBox.shrink()),
+                              const DataCell(SizedBox.shrink()),
+                              const DataCell(SizedBox.shrink()),
+                            ],
+                          ),
+                      ],
                     ),
                   ),
                 ),
@@ -721,7 +904,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
 
         return CustomerCompactCard(
           name: customer.name,
-          id: customer.id?.toString() ?? '-',
+          ledgerPageNo: _pageNoFor(customer),
           onTap: () => _openLedger(customer),
           onDelete: () => _confirmDelete(customer),
           canEdit: _canEdit(context),

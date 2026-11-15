@@ -70,11 +70,16 @@ class HeroBalanceCard extends StatelessWidget {
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
-            child: Text(
+              child: Text(
               value,
-              style: theme.textTheme.titleLarge?.copyWith(
+              style: const TextStyle(
+                fontFamily: 'IBM Plex Mono',
+                letterSpacing: -0.4,
+              ).copyWith(
                 color: Colors.white,
-                fontWeight: FontWeight.w800,
+                fontSize: 23,
+                height: 1.15,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),

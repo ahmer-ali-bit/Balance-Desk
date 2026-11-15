@@ -14,6 +14,7 @@ import '../models/summary_snapshot.dart';
 import '../providers/customer_provider.dart';
 import '../providers/ledger_provider.dart';
 import '../providers/ledger_provider_cache.dart';
+import '../providers/linked_devices_provider.dart';
 import '../services/export_service.dart';
 import '../services/pdf_service.dart';
 import '../utils/app_colors.dart';
@@ -21,6 +22,7 @@ import '../utils/number_format_utils.dart' as number_format_utils;
 import '../utils/platform_helper.dart';
 import '../widgets/amount_input_field.dart';
 import '../widgets/app_empty_state.dart';
+import '../widgets/export_delivery_dialog.dart';
 import '../widgets/forms/opening_balance_field.dart';
 import '../widgets/mobile/hero_balance_card.dart';
 import '../widgets/scale_down_width.dart';
@@ -96,6 +98,8 @@ class _LedgerViewState extends State<_LedgerView> {
   String _lastOpeningBalanceSignature = '';
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _didAutoOpenAddEntry = false;
+  static const int _entryPageSize = 100;
+  int _visibleEntryCount = _entryPageSize;
   Timer? _obDebounceTimer;
 
   @override
@@ -111,9 +115,18 @@ class _LedgerViewState extends State<_LedgerView> {
     });
   }
 
-  /// Always returns true since linked devices feature is removed.
   bool _canEdit(BuildContext context, {bool listen = true}) {
-    return true;
+    return !Provider.of<LinkedDevicesProvider>(
+      context,
+      listen: listen,
+    ).isReadOnly;
+  }
+
+  bool _canExport(BuildContext context, {bool listen = true}) {
+    return Provider.of<LinkedDevicesProvider>(
+      context,
+      listen: listen,
+    ).canExport;
   }
 
   @override
@@ -677,18 +690,42 @@ class _LedgerViewState extends State<_LedgerView> {
       return;
     }
 
+    final delivery = await showExportDeliveryDialog(context);
+    if (!mounted || delivery == null) return;
+
     try {
-      await _pdfService.exportCustomerLedgerPdf(
-        customer: provider.customer,
-        entries: provider.entries,
+      final result = await withExportProgress(
+        context,
+        message: 'Preparing PDF…',
+        task: () => _pdfService.exportCustomerLedgerPdf(
+          customer: provider.customer,
+          entries: provider.entries,
+          share: delivery == ExportDelivery.share,
+        ),
       );
-    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.shared
+                ? 'Share menu opened.'
+                : (result.isSaved
+                      ? 'Saved to ${result.locationLabel}'
+                      : 'Export cancelled.'),
+          ),
+        ),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('PDF export failed: $error');
+      debugPrint('$stackTrace');
       if (!mounted) {
         return;
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to export PDF right now.')),
+        SnackBar(content: Text('PDF export failed: $error')),
       );
     }
   }
@@ -717,7 +754,6 @@ class _LedgerViewState extends State<_LedgerView> {
 
       rows.add(<String>[
         _formatStoredDate(entry.entryDate),
-        _formatStoredDate(entry.createdAt),
         entry.pageNo.isEmpty ? '-' : entry.pageNo,
         entry.displayDescription,
         provider.formatAmount(debit),
@@ -732,20 +768,40 @@ class _LedgerViewState extends State<_LedgerView> {
       'csv',
     );
 
+    final delivery = await showExportDeliveryDialog(context);
+    if (!mounted || delivery == null) return;
+
     try {
-      await _exportService.saveCsv(
-        dialogTitle: 'Export Ledger (Excel)',
-        fileName: fileName,
-        headers: const <String>[
-          'Entry Date',
-          'Created Date',
-          'Page No',
-          'Description',
-          'Debit',
-          'Credit',
-          'Balance',
-        ],
-        rows: rows,
+      final csvResult = await withExportProgress(
+        context,
+        message: 'Preparing CSV…',
+        task: () => _exportService.saveCsv(
+          fileName: fileName,
+          headers: const <String>[
+            'Entry Date',
+            'Page No',
+            'Description',
+            'Debit',
+            'Credit',
+            'Balance',
+          ],
+          rows: rows,
+          share: delivery == ExportDelivery.share,
+        ),
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            csvResult.shared
+                ? 'Share menu opened.'
+                : (csvResult.isSaved
+                      ? 'Saved to ${csvResult.locationLabel}'
+                      : 'Export cancelled.'),
+          ),
+        ),
       );
     } catch (_) {
       if (!mounted) {
@@ -758,6 +814,7 @@ class _LedgerViewState extends State<_LedgerView> {
   }
 
   Future<void> _exportWithOptions() async {
+    if (!_canExport(context, listen: false)) return;
     final choice = await showDialog<_ExportChoice>(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -768,7 +825,7 @@ class _LedgerViewState extends State<_LedgerView> {
             TextButton(
               onPressed: () =>
                   Navigator.of(dialogContext).pop(_ExportChoice.excel),
-              child: const Text('Excel'),
+              child: const Text('Excel / CSV'),
             ),
             FilledButton(
               onPressed: () =>
@@ -792,6 +849,7 @@ class _LedgerViewState extends State<_LedgerView> {
   }
 
   Future<void> _printPdf() async {
+    if (!_canExport(context, listen: false)) return;
     final provider = context.read<LedgerProvider>();
     if (provider.entries.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1144,10 +1202,10 @@ class _LedgerViewState extends State<_LedgerView> {
   }) async {
     switch (action) {
       case _LedgerAppBarAction.export:
-        await _exportWithOptions();
+        if (_canExport(context, listen: false)) await _exportWithOptions();
         break;
       case _LedgerAppBarAction.print:
-        await _printPdf();
+        if (_canExport(context, listen: false)) await _printPdf();
         break;
       case _LedgerAppBarAction.editCustomer:
         if (_canEdit(context, listen: false)) {
@@ -1160,12 +1218,69 @@ class _LedgerViewState extends State<_LedgerView> {
     }
   }
 
+  Future<void> _showLedgerOverflowMenu(LedgerProvider provider) async {
+    final canEdit = _canEdit(context, listen: false);
+    final canExport = _canExport(context, listen: false);
+    final hasEntries = provider.entries.isNotEmpty;
+    final actions = <({
+      _LedgerAppBarAction action,
+      IconData icon,
+      String label,
+    })>[
+      if (canExport && hasEntries)
+        (
+          action: _LedgerAppBarAction.export,
+          icon: Icons.file_download_outlined,
+          label: 'Export',
+        ),
+      if (canExport && hasEntries)
+        (
+          action: _LedgerAppBarAction.print,
+          icon: Icons.print_outlined,
+          label: 'Print',
+        ),
+      if (canEdit)
+        (
+          action: _LedgerAppBarAction.editCustomer,
+          icon: Icons.edit_outlined,
+          label: 'Edit Customer',
+        ),
+      (
+        action: _LedgerAppBarAction.filterAndBalance,
+        icon: Icons.tune_rounded,
+        label: 'Filters',
+      ),
+    ];
+
+    final action = await showModalBottomSheet<_LedgerAppBarAction>(
+      context: context,
+      useSafeArea: true,
+      builder: (BuildContext sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            for (final item in actions)
+              ListTile(
+                leading: Icon(item.icon),
+                title: Text(item.label),
+                onTap: () => Navigator.of(sheetContext).pop(item.action),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    await _handleAppBarAction(action, provider: provider);
+  }
+
   List<Widget> _buildAppBarActions({
     required BuildContext context,
     required LedgerProvider provider,
     required bool isCompact,
   }) {
     final hasEntries = provider.entries.isNotEmpty;
+    final canEdit = _canEdit(context);
+    final canExport = _canExport(context);
     if (isCompact) {
       return <Widget>[
         IconButton(
@@ -1173,54 +1288,29 @@ class _LedgerViewState extends State<_LedgerView> {
           onPressed: provider.isLoading ? null : provider.loadEntries,
           icon: const Icon(Icons.refresh_rounded),
         ),
-        PopupMenuButton<_LedgerAppBarAction>(
+        IconButton(
           tooltip: 'More actions',
-          onSelected: (_LedgerAppBarAction action) {
-            unawaited(_handleAppBarAction(action, provider: provider));
-          },
-          itemBuilder: (BuildContext context) =>
-              <PopupMenuEntry<_LedgerAppBarAction>>[
-                PopupMenuItem<_LedgerAppBarAction>(
-                  value: _LedgerAppBarAction.export,
-                  enabled: hasEntries,
-                  child: _buildAppBarMenuItem(
-                    context,
-                    icon: Icons.file_download_outlined,
-                    label: 'Export',
-                  ),
-                ),
-                PopupMenuItem<_LedgerAppBarAction>(
-                  value: _LedgerAppBarAction.print,
-                  enabled: hasEntries,
-                  child: _buildAppBarMenuItem(
-                    context,
-                    icon: Icons.print_outlined,
-                    label: 'Print',
-                  ),
-                ),
-                if (_canEdit(context))
-                  PopupMenuItem<_LedgerAppBarAction>(
-                    value: _LedgerAppBarAction.editCustomer,
-                    child: _buildAppBarMenuItem(
-                      context,
-                      icon: Icons.edit_outlined,
-                      label: 'Edit Customer',
-                    ),
-                  ),
-                PopupMenuItem<_LedgerAppBarAction>(
-                  value: _LedgerAppBarAction.filterAndBalance,
-                  child: _buildAppBarMenuItem(
-                    context,
-                    icon: Icons.tune_rounded,
-                    label: 'Menu',
-                  ),
-                ),
-              ],
+          onPressed: () => unawaited(_showLedgerOverflowMenu(provider)),
+          icon: const Icon(Icons.more_horiz_rounded),
         ),
         const SizedBox(width: 4),
       ];
     }
-
+    if (!canEdit) {
+      if (!canExport || !hasEntries) return const <Widget>[];
+      return <Widget>[
+        OutlinedButton.icon(
+          onPressed: _exportWithOptions,
+          icon: const Icon(Icons.file_download_outlined),
+          label: const Text('Export'),
+        ),
+        OutlinedButton.icon(
+          onPressed: _printPdf,
+          icon: const Icon(Icons.print_outlined),
+          label: const Text('Print'),
+        ),
+      ];
+    }
     final maxWidth = math.min(MediaQuery.sizeOf(context).width * 0.72, 540.0);
 
     return <Widget>[
@@ -1271,20 +1361,6 @@ class _LedgerViewState extends State<_LedgerView> {
         ),
       ),
     ];
-  }
-
-  Widget _buildAppBarMenuItem(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-  }) {
-    return Row(
-      children: <Widget>[
-        Icon(icon, size: 18),
-        const SizedBox(width: 12),
-        Text(label, style: Theme.of(context).textTheme.bodyMedium),
-      ],
-    );
   }
 
   Widget _buildFilterBar({
@@ -1602,21 +1678,22 @@ class _LedgerViewState extends State<_LedgerView> {
                     alignment: WrapAlignment.end,
                     children: <Widget>[
                       statusChip,
-                      IconButton(
-                        tooltip: 'Reset opening balance draft',
-                        onPressed: provider.isLoading
-                            ? null
-                            : () {
-                                _restoreOpeningBalanceDraft(provider);
-                                setState(() {});
-                              },
-                        style: IconButton.styleFrom(
-                          foregroundColor: colorScheme.onSurfaceVariant,
-                          backgroundColor: colorScheme.surface,
-                          side: BorderSide(color: colorScheme.outlineVariant),
+                      if (_canEdit(context))
+                        IconButton(
+                          tooltip: 'Reset opening balance draft',
+                          onPressed: provider.isLoading
+                              ? null
+                              : () {
+                                  _restoreOpeningBalanceDraft(provider);
+                                  setState(() {});
+                                },
+                          style: IconButton.styleFrom(
+                            foregroundColor: colorScheme.onSurfaceVariant,
+                            backgroundColor: colorScheme.surface,
+                            side: BorderSide(color: colorScheme.outlineVariant),
+                          ),
+                          icon: const Icon(Icons.restart_alt_rounded, size: 18),
                         ),
-                        icon: const Icon(Icons.restart_alt_rounded, size: 18),
-                      ),
                       if (_canEdit(context)) ...[
                         IconButton(
                           tooltip: 'Clear opening balance',
@@ -1687,7 +1764,7 @@ class _LedgerViewState extends State<_LedgerView> {
                 );
               },
             ),
-            if (!compactForDesktop) ...<Widget>[
+            if (!compactForDesktop && canEdit) ...<Widget>[
               SizedBox(height: verticalGap),
               Wrap(
                 spacing: 8,
@@ -2351,17 +2428,22 @@ class _LedgerViewState extends State<_LedgerView> {
                     final balanceAccent = AppColors.balanceColor(
                       displayBalance,
                     );
-                    final balanceCard = _buildHeroBalanceCard(
-                      context,
-                      value: provider.formatBalance(displayBalance),
-                      accentColor: balanceAccent,
-                      label: 'Balance',
-                    );
+                    // The wide hero card consumes too much vertical space in
+                    // the narrow macOS window layout; keep balance in the
+                    // compact ledger stats below instead.
+                    final balanceCard = PlatformHelper.isMacOS
+                        ? null
+                        : _buildHeroBalanceCard(
+                            context,
+                            value: provider.formatBalance(displayBalance),
+                            accentColor: balanceAccent,
+                            label: 'Balance',
+                          );
                     final bagsCard = provider.isStockLedger
                         ? _buildHeroBalanceCard(
                             context,
-                            value: provider.finalRemainingBags.toStringAsFixed(
-                              0,
+                            value: provider.formatBags(
+                              provider.finalRemainingBags,
                             ),
                             accentColor: colorScheme.primary,
                             label: 'Remaining',
@@ -2380,17 +2462,20 @@ class _LedgerViewState extends State<_LedgerView> {
                             ?editButton,
                           ],
                         ),
-                        const SizedBox(height: 16),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            if (bagsCard != null) ...[
-                              Expanded(child: bagsCard),
-                              const SizedBox(width: 12),
+                        if (bagsCard != null || balanceCard != null) ...[
+                          const SizedBox(height: 16),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              if (bagsCard != null)
+                                Expanded(child: bagsCard),
+                              if (bagsCard != null && balanceCard != null)
+                                const SizedBox(width: 12),
+                              if (balanceCard != null)
+                                Expanded(child: balanceCard),
                             ],
-                            Expanded(child: balanceCard),
-                          ],
-                        ),
+                          ),
+                        ],
                       ],
                     );
                   },
@@ -2604,9 +2689,9 @@ class _LedgerViewState extends State<_LedgerView> {
       final balanceColor = AppColors.balanceColor(displayBalance);
 
       final bgColor = isDebit
-          ? (provider.isStockLedger ? AppColors.credit : AppColors.debit)
+          ? AppColors.debit
           : isCredit
-          ? (provider.isStockLedger ? AppColors.debit : AppColors.credit)
+          ? AppColors.credit
           : isBags
           ? colorScheme.primary
           : isBalance
@@ -2936,7 +3021,10 @@ class _LedgerViewState extends State<_LedgerView> {
 
         return LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
-            final isDesktop = PlatformHelper.isDesktop;
+            // Match the shell: below the desktop breakpoint the app
+            // shell renders the mobile layout, so the screen does too.
+            final isDesktop =
+                PlatformHelper.isDesktop && constraints.maxWidth >= 980;
             final isCompact = !isDesktop && constraints.maxWidth < 760;
             final useCardLayout = constraints.maxWidth < 1100;
             final hasFab = isCompact;
@@ -3005,11 +3093,12 @@ class _LedgerViewState extends State<_LedgerView> {
                                 context: context,
                                 provider: provider,
                               ),
-                              const SizedBox(height: 16),
-                              _buildOpeningBalanceSection(
-                                context: context,
-                                provider: provider,
-                              ),
+                              if (_canEdit(context)) ...<Widget>[
+                                const SizedBox(height: 16),
+                                _buildOpeningBalanceSection(
+                                  context: context,
+                                  provider: provider,
+                                ),
                               const SizedBox(height: 24),
                               Text(
                                 'LEDGER TYPE',
@@ -3100,6 +3189,7 @@ class _LedgerViewState extends State<_LedgerView> {
                                       ),
                                   contentPadding: EdgeInsets.zero,
                                 ),
+                              ],
                               ],
                             ],
                           ),
@@ -3195,9 +3285,11 @@ class _LedgerViewState extends State<_LedgerView> {
                           if (intent.action == _LedgerShortcut.addEntry &&
                               canEdit) {
                             _showAddEntryDialog();
-                          } else if (intent.action == _LedgerShortcut.export) {
+                          } else if (intent.action == _LedgerShortcut.export &&
+                              _canExport(context, listen: false)) {
                             _exportWithOptions();
-                          } else if (intent.action == _LedgerShortcut.print) {
+                          } else if (intent.action == _LedgerShortcut.print &&
+                              _canExport(context, listen: false)) {
                             _printPdf();
                           } else if (intent.action == _LedgerShortcut.goBack) {
                             Navigator.of(context).maybePop();
@@ -3285,20 +3377,27 @@ class _LedgerViewState extends State<_LedgerView> {
         title: 'No ledger entries yet',
         message: canEdit
             ? 'Add the first debit or credit entry for this customer.'
-            : 'This device is linked in read-only mode, so entries can only be '
-                  'added from a device with edit access.',
+            : 'Entries can only be added from a device with edit access.',
         actionLabel: canEdit ? 'Add Entry' : null,
         onAction: canEdit ? _showAddEntryDialog : null,
       );
     }
 
     if (compactLayout) {
-      return _buildCompactLedgerEntries(context, provider);
+      return _withMoreEntries(
+        _buildCompactLedgerEntries(context, provider),
+        provider.entries.length,
+      );
     }
 
-    final dataTextStyle = Theme.of(
-      context,
-    ).textTheme.bodyMedium?.copyWith(fontSize: 14, fontWeight: FontWeight.w600);
+    final dataTextStyle = const TextStyle(
+      fontFamily: 'IBM Plex Mono',
+      fontSize: 12.5,
+      fontWeight: FontWeight.w500,
+      letterSpacing: -0.2,
+    ).copyWith(
+      color: Theme.of(context).colorScheme.onSurface,
+    );
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
@@ -3323,7 +3422,8 @@ class _LedgerViewState extends State<_LedgerView> {
                   : 4.0
             : 18.0;
 
-        return Card(
+        return _withMoreEntries(
+          Card(
           clipBehavior: Clip.antiAlias,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
@@ -3333,11 +3433,11 @@ class _LedgerViewState extends State<_LedgerView> {
                 dataTextStyle: dataTextStyle,
                 horizontalMargin: horizontalMargin,
                 columnSpacing: columnSpacing,
-                headingRowHeight: 54,
-                dataRowMinHeight: 50,
-                dataRowMaxHeight: 56,
+                headingRowHeight: 44,
+                dataRowMinHeight: 46,
+                dataRowMaxHeight: 50,
                 headingRowColor: WidgetStatePropertyAll(
-                  Theme.of(context).colorScheme.surfaceContainerHighest,
+                  Theme.of(context).colorScheme.surfaceContainerLow,
                 ),
                 columns: provider.isStockLedger
                     ? <DataColumn>[
@@ -3345,12 +3445,6 @@ class _LedgerViewState extends State<_LedgerView> {
                           label: FittedBox(
                             fit: BoxFit.scaleDown,
                             child: Text('Entry Date'),
-                          ),
-                        ),
-                        const DataColumn(
-                          label: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('Created Date'),
                           ),
                         ),
                         const DataColumn(
@@ -3423,12 +3517,6 @@ class _LedgerViewState extends State<_LedgerView> {
                         DataColumn(
                           label: FittedBox(
                             fit: BoxFit.scaleDown,
-                            child: Text('Created Date'),
-                          ),
-                        ),
-                        DataColumn(
-                          label: FittedBox(
-                            fit: BoxFit.scaleDown,
                             child: Text('Page No'),
                           ),
                         ),
@@ -3468,12 +3556,41 @@ class _LedgerViewState extends State<_LedgerView> {
                 rows: _buildLedgerRows(
                   provider,
                   compact: constraints.maxWidth < 1100,
+                  maxRows: _visibleEntryCount,
                 ),
               ),
             ),
           ),
+          ),
+          provider.entries.length,
         );
       },
+    );
+  }
+
+  Widget _withMoreEntries(Widget entriesWidget, int totalCount) {
+    final visibleCount = _visibleEntryCount < totalCount
+        ? _visibleEntryCount
+        : totalCount;
+    if (visibleCount >= totalCount) return entriesWidget;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        entriesWidget,
+        const SizedBox(height: 12),
+        Center(
+          child: OutlinedButton.icon(
+            onPressed: () => setState(() {
+              final nextCount = _visibleEntryCount + _entryPageSize;
+              _visibleEntryCount = nextCount < totalCount
+                  ? nextCount
+                  : totalCount;
+            }),
+            icon: const Icon(Icons.expand_more_rounded),
+            label: Text('Show ${math.min(_entryPageSize, totalCount - visibleCount)} more entries'),
+          ),
+        ),
+      ],
     );
   }
 
@@ -3481,13 +3598,19 @@ class _LedgerViewState extends State<_LedgerView> {
     BuildContext context,
     LedgerProvider provider,
   ) {
-    final entries = provider.entries.reversed.toList();
-    final balances = <_EntryBalance>[];
+    // The provider exposes newest-first entries (with a synthetic opening
+    // balance at the end). Walk chronologically to calculate balances, but
+    // only materialize display data for the currently visible newest rows.
+    final entries = provider.entries;
+    final visibleEntryCount = entries.length < _visibleEntryCount
+        ? entries.length
+        : _visibleEntryCount;
+    final visibleBalancesChronological = <_EntryBalance>[];
     double? runningBalance;
     double? runningRemainingBags;
 
-    for (final entry in entries) {
-      final isOpeningBalanceEntry = _isOpeningBalanceEntry(provider, entry);
+    for (var index = entries.length - 1; index >= 0; index--) {
+      final entry = entries[index];
       final debit = entry.debit;
       final credit = entry.credit;
       final buyBags = entry.buyBags;
@@ -3497,56 +3620,54 @@ class _LedgerViewState extends State<_LedgerView> {
           credit != 0 ||
           buyBags.trim().isNotEmpty && buyBags.trim() != '0' ||
           sellBags.trim().isNotEmpty && sellBags.trim() != '0';
-      var balanceLabel = '';
-      var remainingBagsLabel = '';
-      double currentBalance = 0;
+      var currentBalance = 0.0;
 
       if (hasValue) {
         currentBalance = provider.isStockLedger
             ? (runningBalance ?? 0) + credit - debit
             : (runningBalance ?? 0) + debit - credit;
         runningBalance = currentBalance;
-        balanceLabel = provider.formatBalance(currentBalance);
-
-        if (provider.isStockLedger) {
-          final currentRemainingBags =
-              (runningRemainingBags ?? 0) +
-              (double.tryParse(buyBags) ?? 0) -
-              (double.tryParse(sellBags) ?? 0);
-          runningRemainingBags = currentRemainingBags;
-          remainingBagsLabel = provider.formatBags(currentRemainingBags);
-        }
       }
 
-      balances.add(
-        _EntryBalance(
-          isOpeningBalanceEntry: isOpeningBalanceEntry,
-          balanceLabel: balanceLabel,
-          balance: currentBalance,
-          remainingBagsLabel: remainingBagsLabel,
-        ),
-      );
-    }
+      if (provider.isStockLedger && hasValue) {
+        runningRemainingBags =
+            (runningRemainingBags ?? 0) +
+            (double.tryParse(buyBags) ?? 0) -
+            (double.tryParse(sellBags) ?? 0);
+      }
 
-    final reversedBalances = balances.reversed.toList();
-    final chronEntries = entries.reversed.toList();
+      if (index < visibleEntryCount) {
+        visibleBalancesChronological.add(
+          _EntryBalance(
+            isOpeningBalanceEntry: _isOpeningBalanceEntry(provider, entry),
+            balanceLabel: hasValue ? provider.formatBalance(currentBalance) : '',
+            balance: currentBalance,
+            remainingBagsLabel: provider.isStockLedger && hasValue
+                ? provider.formatBags(runningRemainingBags ?? 0)
+                : '',
+          ),
+        );
+      }
+    }
 
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: chronEntries.length,
+      itemCount: visibleEntryCount,
       itemBuilder: (context, index) {
-        final b = reversedBalances[index];
+        final balance = visibleBalancesChronological[
+          visibleEntryCount - index - 1
+        ];
         return Padding(
           padding: EdgeInsets.only(top: index == 0 ? 0 : 12),
           child: _buildLedgerEntryCard(
             context,
             provider,
-            entry: chronEntries[index],
-            balanceLabel: b.balanceLabel,
-            balance: b.balance,
-            remainingBagsLabel: b.remainingBagsLabel,
-            isOpeningBalanceEntry: b.isOpeningBalanceEntry,
+            entry: entries[index],
+            balanceLabel: balance.balanceLabel,
+            balance: balance.balance,
+            remainingBagsLabel: balance.remainingBagsLabel,
+            isOpeningBalanceEntry: balance.isOpeningBalanceEntry,
           ),
         );
       },
@@ -3602,12 +3723,6 @@ class _LedgerViewState extends State<_LedgerView> {
                   label: _formatStoredDate(entry.entryDate),
                   accentColor: accentColor,
                   highlight: isOpeningBalanceEntry,
-                ),
-                _buildEntryMetaChip(
-                  context,
-                  icon: Icons.schedule_outlined,
-                  label: _formatStoredDate(entry.createdAt),
-                  accentColor: accentColor,
                 ),
                 if (entry.pageNo.trim().isNotEmpty ||
                     entry.dailyLogPageNo.trim().isNotEmpty)
@@ -3881,13 +3996,12 @@ class _LedgerViewState extends State<_LedgerView> {
                   onPressed: () => _clearOpeningBalance(provider),
                   icon: const Icon(Icons.delete_outline, size: 18),
                 )
-              else ...<Widget>[
+              else if (_canEdit(context))
                 IconButton.filledTonal(
                   tooltip: 'Entry Options',
                   onPressed: () => _showEntryMenu(context, provider, entry),
                   icon: const Icon(Icons.more_vert_rounded, size: 18),
                 ),
-              ],
             ],
           ),
         ],
@@ -4148,10 +4262,25 @@ class _LedgerViewState extends State<_LedgerView> {
   Future<List<Map<String, Object?>>> _getOtherCustomers(
     int currentCustomerId,
   ) async {
-    _cachedLedgerCustomers ??= await AppDatabase.instance.getCustomers();
+    if (_cachedLedgerCustomers == null) {
+      final database = AppDatabase.instance;
+      final customers = await database.getCustomers();
+      final pageNumbers = await database.getCustomerLedgerPageNumbers();
+      _cachedLedgerCustomers = customers
+          .map<Map<String, Object?>>((Map<String, Object?> customer) {
+            final customerId = customer['id'] as int;
+            return <String, Object?>{
+              ...customer,
+              'ledgerPageNo': pageNumbers[customerId] ?? '',
+            };
+          })
+          .toList(growable: false);
+    }
+
     return _cachedLedgerCustomers!
         .where(
-          (Map<String, Object?> c) => (c['id'] as int) != currentCustomerId,
+          (Map<String, Object?> customer) =>
+              (customer['id'] as int) != currentCustomerId,
         )
         .toList(growable: false);
   }
@@ -4259,6 +4388,7 @@ class _LedgerViewState extends State<_LedgerView> {
   List<DataRow> _buildLedgerRows(
     LedgerProvider provider, {
     required bool compact,
+    required int maxRows,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final rows = <DataRow>[];
@@ -4266,8 +4396,10 @@ class _LedgerViewState extends State<_LedgerView> {
     double? runningRemainingBags;
 
     final entries = provider.entries.reversed.toList();
+    var entryIndex = 0;
     for (final entry in entries) {
-      final isOpeningBalanceEntry = _isOpeningBalanceEntry(provider, entry);
+      final includeRow = entryIndex >= entries.length - maxRows;
+      entryIndex++;
       final debit = entry.debit;
       final credit = entry.credit;
       final buyBags = entry.buyBags;
@@ -4277,34 +4409,38 @@ class _LedgerViewState extends State<_LedgerView> {
           credit != 0 ||
           buyBags.trim().isNotEmpty && buyBags.trim() != '0' ||
           sellBags.trim().isNotEmpty && sellBags.trim() != '0';
-      String balanceLabel = '';
-      String remainingBagsLabel = '';
+      var currentBalance = 0.0;
+      if (hasValue) {
+        currentBalance = provider.isStockLedger
+            ? (runningBalance ?? 0) + credit - debit
+            : (runningBalance ?? 0) + debit - credit;
+        runningBalance = currentBalance;
+
+        if (provider.isStockLedger) {
+          runningRemainingBags =
+              (runningRemainingBags ?? 0) +
+              (double.tryParse(buyBags) ?? 0) -
+              (double.tryParse(sellBags) ?? 0);
+        }
+      }
+
+      if (!includeRow) continue;
+
+      final isOpeningBalanceEntry = _isOpeningBalanceEntry(provider, entry);
       final rowStyle = isOpeningBalanceEntry
           ? Theme.of(
               context,
             ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600)
           : null;
-
-      if (hasValue) {
-        final currentBalance = provider.isStockLedger
-            ? (runningBalance ?? 0) + credit - debit
-            : (runningBalance ?? 0) + debit - credit;
-        runningBalance = currentBalance;
-        balanceLabel = provider.formatBalance(currentBalance);
-
-        if (provider.isStockLedger) {
-          final currentRemainingBags =
-              (runningRemainingBags ?? 0) +
-              (double.tryParse(buyBags) ?? 0) -
-              (double.tryParse(sellBags) ?? 0);
-          runningRemainingBags = currentRemainingBags;
-          remainingBagsLabel = provider.formatBags(currentRemainingBags);
-        }
-      }
-
+      final balanceLabel = hasValue
+          ? provider.formatBalance(currentBalance)
+          : '';
+      final remainingBagsLabel =
+          provider.isStockLedger && hasValue
+          ? provider.formatBags(runningRemainingBags ?? 0)
+          : '';
       final List<DataCell> cells = <DataCell>[
         DataCell(Text(_formatStoredDate(entry.entryDate), style: rowStyle)),
-        DataCell(Text(_formatStoredDate(entry.createdAt), style: rowStyle)),
         DataCell(
           Text(
             isOpeningBalanceEntry
@@ -4421,16 +4557,13 @@ class _LedgerViewState extends State<_LedgerView> {
                   onPressed: () => _clearOpeningBalance(provider),
                   icon: const Icon(Icons.delete_outline),
                 )
-              : Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    IconButton(
-                      tooltip: 'Entry Options',
-                      onPressed: () => _showEntryMenu(context, provider, entry),
-                      icon: const Icon(Icons.more_vert_rounded),
-                    ),
-                  ],
-                ),
+              : _canEdit(context)
+              ? IconButton(
+                  tooltip: 'Entry Options',
+                  onPressed: () => _showEntryMenu(context, provider, entry),
+                  icon: const Icon(Icons.more_vert_rounded),
+                )
+              : const SizedBox.shrink(),
         ),
       ]);
 
@@ -5963,6 +6096,7 @@ class _CustomerInfoTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isLight = colorScheme.brightness == Brightness.light;
     final borderRadius = BorderRadius.circular(22);
 
     final resolvedBg = backgroundColor ?? colorScheme.surfaceContainerLowest;
@@ -5980,18 +6114,20 @@ class _CustomerInfoTile extends StatelessWidget {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: isMetric
-                  ? resolvedBg.withValues(alpha: 0.15)
+                  ? resolvedBg.withValues(alpha: isLight ? 0.085 : 0.15)
                   : resolvedBg.withValues(alpha: 0.1),
               gradient: isMetric
-                  ? LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: <Color>[
-                        resolvedBg.withValues(alpha: 0.25),
-                        resolvedBg.withValues(alpha: 0.15),
-                        resolvedBg.withValues(alpha: 0.2),
-                      ],
-                    )
+                  ? (isLight
+                        ? null
+                        : LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: <Color>[
+                              resolvedBg.withValues(alpha: 0.25),
+                              resolvedBg.withValues(alpha: 0.15),
+                              resolvedBg.withValues(alpha: 0.2),
+                            ],
+                          ))
                   : LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
@@ -6012,7 +6148,7 @@ class _CustomerInfoTile extends StatelessWidget {
               borderRadius: borderRadius,
               border: Border.all(
                 color: isMetric
-                    ? resolvedBg.withValues(alpha: 0.3)
+                    ? resolvedBg.withValues(alpha: isLight ? 0.22 : 0.3)
                     : borderColor ??
                           colorScheme.outlineVariant.withValues(alpha: 0.2),
                 width: 1.2,
@@ -6029,7 +6165,9 @@ class _CustomerInfoTile extends StatelessWidget {
                         label.toUpperCase(),
                         style: theme.textTheme.labelMedium?.copyWith(
                           color: isMetric
-                              ? Colors.white.withValues(alpha: 0.7)
+                              ? (isLight
+                                    ? resolvedBg
+                                    : Colors.white.withValues(alpha: 0.7))
                               : labelColor ?? colorScheme.onSurfaceVariant,
                           fontSize: 9,
                           letterSpacing: 0.5,
@@ -6041,7 +6179,7 @@ class _CustomerInfoTile extends StatelessWidget {
                         value,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: isMetric
-                              ? Colors.white
+                              ? (isLight ? colorScheme.onSurface : Colors.white)
                               : (valueColor ?? colorScheme.onSurface),
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
@@ -6167,7 +6305,7 @@ class _LedgerTransferCustomerDialogState
                         return ListTile(
                           title: Text(name),
                           subtitle: Text(
-                            'ID: ${customer['id']}',
+                            'Ledger Page: ${(customer['ledgerPageNo'] as String?)?.trim().isNotEmpty == true ? customer['ledgerPageNo'] : '-'}',
                             style: theme.textTheme.bodySmall,
                           ),
                           onTap: () => Navigator.of(context).pop(customer),

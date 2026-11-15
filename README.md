@@ -1,18 +1,7 @@
-# shop
+# Ledger Pro
 
-A new Flutter project.
+Ledger Pro is a cross-platform ledger and account-management app for customer balances, daily snapshots, inventory entries, linked workspaces, and PDF/CSV exports.
 
-## Getting Started
+## Build
 
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-# Balance-Desk
+Install Flutter and the relevant platform toolchains, then run `flutter pub get`. Build a platform release with the matching Flutter command, for example `flutter build apk --release`, `flutter build windows --release`, or `flutter build macos --release`.

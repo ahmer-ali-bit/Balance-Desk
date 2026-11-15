@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Balance Desk</string>
+	<string>Ledger Pro</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,22 +15,9 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Balance Desk</string>
+	<string>Ledger Pro</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
-			<key>CFBundleURLName</key>
-			<string>com.shop.ledger.balancedesk</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>balancedesk</string>
-			</array>
-		</dict>
-	</array>
 	<key>CFBundleShortVersionString</key>
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>
@@ -39,10 +26,14 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>NSCameraUsageDescription</key>
-	<string>Balance Desk uses the camera to scan linked device QR invites.</string>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<key>NSFaceIDUsageDescription</key>
-	<string>Balance Desk uses Face ID to unlock the app securely.</string>
+	<string>Ledger Pro uses Face ID to unlock the app securely.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Ledger Pro uses the camera to scan a secure workspace link QR code.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

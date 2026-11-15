@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
@@ -20,6 +21,9 @@ class CsvBackupService {
   static const int _backupSchemaVersion = 2;
   static const String _backupExtension = 'json';
   static const String _backupType = 'balancedesk-manual-backup';
+  static const MethodChannel _macBackupPickerChannel = MethodChannel(
+    'com.ledgerpro/backup_restore',
+  );
   static const Set<String> _localOnlySettingKeys = <String>{
     'appPin',
     'appPinHash',
@@ -31,6 +35,8 @@ class CsvBackupService {
 
   final AppDatabase _database;
   final CompanyProfileService _companyProfileService;
+
+  Future<Uint8List> buildBackupBytes() => _buildBackupBytes();
 
   Future<String?> createBackupFile() async {
     final bytes = await _buildBackupBytes();
@@ -414,6 +420,10 @@ class CsvBackupService {
   }
 
   Future<String?> _pickBackupFilePath() async {
+    if (Platform.isMacOS) {
+      return _macBackupPickerChannel.invokeMethod<String>('pickBackupFile');
+    }
+
     final result = await FilePicker.pickFiles(
       dialogTitle: 'Select Backup File',
       type: FileType.custom,
@@ -444,7 +454,7 @@ class CsvBackupService {
         '${now.hour.toString().padLeft(2, '0')}'
         '${now.minute.toString().padLeft(2, '0')}'
         '${now.second.toString().padLeft(2, '0')}';
-    return 'balance_desk_backup_$stamp.$_backupExtension';
+    return 'ledger_pro_backup_$stamp.$_backupExtension';
   }
 
   Future<String> _resolveAndroidFallbackPath(String fileName) async {
