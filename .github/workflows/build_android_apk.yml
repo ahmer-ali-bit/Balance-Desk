@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          flutter build apk --release 2>&1 | tee apk-build.log
+          flutter build apk --release --android-skip-build-dependency-validation 2>&1 | tee apk-build.log
           build_status=${PIPESTATUS[0]}
           if [ "$build_status" -ne 0 ]; then
             python3 - <<'PY'
