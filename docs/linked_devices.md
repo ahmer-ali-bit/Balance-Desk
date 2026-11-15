@@ -29,4 +29,4 @@
 
 ## Cloud schema
 
-The migrations `supabase/migrations/202611130001_linked_devices.sql`, `supabase/migrations/202611130002_owner_transfer_and_sync_status.sql`, and `supabase/migrations/202611130003_preserve_readonly_edits.sql` are applied to the connected Supabase project. The app URL and publishable key are in `lib/core/config/supabase_config.dart`; those are public client values. Never replace them with a `sb_secret_*` or `service_role` key. A privileged project key was exposed during development; rotate it in the Supabase dashboard before production use.
+The linked-device migrations, including `20261115132630_retry_linked_workspace_creation.sql`, are applied to the connected Supabase project. The retry migration makes create-workspace calls recover safely after a lost response and avoids reusing an already-registered device UUID. The app URL and publishable key are in `lib/core/config/supabase_config.dart`; those are public client values. Never replace them with a `sb_secret_*` or `service_role` key. A privileged project key was exposed during development; rotate it in the Supabase dashboard before production use.

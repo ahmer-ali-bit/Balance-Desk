@@ -88,6 +88,24 @@ class LinkedDeviceCredentials {
   Future<void> writeToken(String localWorkspaceId, String token) =>
       _storage.write(key: '${_prefix}token.$localWorkspaceId', value: token);
 
+  Future<String?> readPendingOwnerToken(String localWorkspaceId) =>
+      _storage.read(key: '${_prefix}pending_owner_token.$localWorkspaceId');
+
+  Future<void> writePendingOwnerToken(String localWorkspaceId, String token) =>
+      _storage.write(
+        key: '${_prefix}pending_owner_token.$localWorkspaceId',
+        value: token,
+      );
+
+  Future<void> deletePendingOwnerToken(String localWorkspaceId) =>
+      _storage.delete(key: '${_prefix}pending_owner_token.$localWorkspaceId');
+
+  Future<void> writeDeviceId(String localWorkspaceId, String deviceId) =>
+      _storage.write(
+        key: '${_prefix}device_id.$localWorkspaceId',
+        value: deviceId,
+      );
+
   Future<void> deleteToken(String localWorkspaceId) =>
       _storage.delete(key: '${_prefix}token.$localWorkspaceId');
 

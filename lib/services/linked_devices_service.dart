@@ -49,6 +49,16 @@ class LinkedDevicesService {
       throw const LinkedDeviceException('This workspace is already linked.');
     }
     final deviceId = await _credentials.getOrCreateDeviceId(localWorkspaceId);
+    // Keep a retry token so a timeout after the server commits can safely
+    // repeat the create RPC and recover the same owner device/workspace.
+    final savedPendingToken = await _credentials.readPendingOwnerToken(
+      localWorkspaceId,
+    );
+    final deviceToken =
+        savedPendingToken != null && savedPendingToken.length >= 40
+        ? savedPendingToken
+        : LinkedDeviceCredentials.newSecret();
+    await _credentials.writePendingOwnerToken(localWorkspaceId, deviceToken);
     // This is a newly created cloud workspace, so old revisions/cursors from a
     // previous link must not be sent as optimistic bases to the new workspace.
     final db = await AppDatabase.instance.database;
@@ -57,10 +67,8 @@ class LinkedDevicesService {
       await txn.delete('sync_conflicts');
       await txn.delete('sync_state');
     });
-    final deviceToken = LinkedDeviceCredentials.newSecret();
-    // Persist the capability before registering it remotely so a transient
-    // secure-storage failure cannot strand an already-created owner device.
-    await _credentials.writeToken(localWorkspaceId, deviceToken);
+    // The pending secret is durable before the RPC; a lost response can be
+    // retried with the same capability and recovered idempotently.
     final response = await _api.rpc('bd_create_workspace', <String, Object?>{
       'p_name': workspaceName.trim(),
       'p_device_id': deviceId,
@@ -73,15 +81,19 @@ class LinkedDevicesService {
     if (cloudId == null || cloudId.isEmpty) {
       throw const LinkedDeviceException('The cloud did not create the workspace.');
     }
+    final actualDeviceId = body['device_id']?.toString() ?? deviceId;
+    await _credentials.writeDeviceId(localWorkspaceId, actualDeviceId);
+    await _credentials.writeToken(localWorkspaceId, deviceToken);
     final config = LinkedWorkspaceConfig(
       localWorkspaceId: localWorkspaceId,
       cloudWorkspaceId: cloudId,
-      deviceId: deviceId,
+      deviceId: actualDeviceId,
       role: 'owner',
       permission: 'edit',
       cursor: 0,
     );
     await _configs.write(config);
+    await _credentials.deletePendingOwnerToken(localWorkspaceId);
     return config;
   }
 
@@ -248,6 +260,7 @@ class LinkedDevicesService {
   Future<void> _forgetLocalLink(String localWorkspaceId) async {
     await _configs.delete(localWorkspaceId);
     await _credentials.deleteToken(localWorkspaceId);
+    await _credentials.deletePendingOwnerToken(localWorkspaceId);
   }
 
   Future<String> _requireToken(String localWorkspaceId) async {
