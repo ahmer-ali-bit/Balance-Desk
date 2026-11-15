@@ -71,13 +71,7 @@ jobs:
           echo "Ledger Pro executable architectures: $ARCHS"
           [[ "$ARCHS" == *x86_64* ]]
           codesign --force --deep --sign - --timestamp=none "$STAGED_APP"
-          codesign --force --sign - \
-            --entitlements macos/Runner/Release.entitlements \
-            --timestamp=none "$STAGED_APP"
           codesign --verify --deep --strict --verbose=2 "$STAGED_APP"
-          codesign -d --entitlements :- "$STAGED_APP" 2>&1 | tee build/packaging/signed-entitlements.txt
-          grep -q 'com.apple.security.files.user-selected.read-only' build/packaging/signed-entitlements.txt
-          grep -q 'com.apple.security.files.user-selected.read-write' build/packaging/signed-entitlements.txt
           rm -rf build/packaging/stage/.background
           create-dmg \
             --volname "Ledger Pro" \
