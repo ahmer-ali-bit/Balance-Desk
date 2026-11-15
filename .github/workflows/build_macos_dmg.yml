@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          flutter build macos --release 2>&1 | tee macos-build.log
+          flutter build macos --release --no-codesign 2>&1 | tee macos-build.log
           build_status=${PIPESTATUS[0]}
           {
             echo '### macOS release build output'
@@ -57,8 +57,24 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Package drag-to-Applications DMG
+      - name: Sign, notarize, and package drag-to-Applications DMG
+        env:
+          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         run: |
+          set -euo pipefail
+
+          for secret_name in APPLE_CERTIFICATE_P12_BASE64 APPLE_CERTIFICATE_PASSWORD APPLE_TEAM_ID APPLE_ID APPLE_APP_SPECIFIC_PASSWORD; do
+            if [[ -z "${!secret_name}" ]]; then
+              echo "::error::Missing GitHub Actions secret: ${secret_name}"
+              echo "Configure the Apple Developer ID signing and notarization secrets listed in the workflow before building a distributable macOS DMG."
+              exit 1
+            fi
+          done
+
           brew install create-dmg
           APP_PATH="$(find build/macos/Build/Products/Release -maxdepth 1 -type d -name '*.app' -print -quit)"
           test -n "$APP_PATH"
@@ -70,9 +86,35 @@ jobs:
           ARCHS="$(lipo -archs "$EXECUTABLE_PATH")"
           echo "Ledger Pro executable architectures: $ARCHS"
           [[ "$ARCHS" == *x86_64* ]]
-          codesign --force --deep --sign - --timestamp=none "$STAGED_APP"
+
+          KEYCHAIN_PATH="$RUNNER_TEMP/ledger-pro-build.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+          CERTIFICATE_PATH="$RUNNER_TEMP/developer-id.p12"
+          MOUNT_POINT="$RUNNER_TEMP/ledger-pro-dmg"
+          trap 'hdiutil detach "$MOUNT_POINT" >/dev/null 2>&1 || true; security delete-keychain "$KEYCHAIN_PATH" >/dev/null 2>&1 || true; rm -f "$CERTIFICATE_PATH"' EXIT
+          printf '%s' "$APPLE_CERTIFICATE_P12_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -k "$KEYCHAIN_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+
+          SIGNING_IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | awk -v team="($APPLE_TEAM_ID)" 'index($0, team) && /Developer ID Application:/ { sub(/^[[:space:]]*[0-9]+\) [0-9A-F]+ "/, ""); sub(/"$/, ""); print; exit }')"
+          if [[ -z "$SIGNING_IDENTITY" ]]; then
+            echo "::error::The imported certificate is not a valid Developer ID Application identity for APPLE_TEAM_ID."
+            exit 1
+          fi
+          echo "Signing macOS app with Developer ID Application identity for team $APPLE_TEAM_ID."
+          codesign --force --deep --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$STAGED_APP"
           codesign --verify --deep --strict --verbose=2 "$STAGED_APP"
+          mkdir -p build/packaging
+          codesign -dv --verbose=4 "$STAGED_APP" 2> build/packaging/codesign-details.txt
+          grep -F "TeamIdentifier=$APPLE_TEAM_ID" build/packaging/codesign-details.txt
+          grep -F 'Authority=Developer ID Application:' build/packaging/codesign-details.txt
+
           rm -rf build/packaging/stage/.background
+          DMG_PATH="build/packaging/Ledger-Pro-macOS.dmg"
           create-dmg \
             --volname "Ledger Pro" \
             --window-pos 200 120 \
@@ -80,8 +122,21 @@ jobs:
             --icon-size 100 \
             --icon "Ledger Pro.app" 170 190 \
             --app-drop-link 470 190 \
-            "build/packaging/Ledger-Pro-macOS.dmg" \
+            "$DMG_PATH" \
             "build/packaging/stage"
+
+          mkdir -p "$MOUNT_POINT"
+          hdiutil attach "$DMG_PATH" -readonly -nobrowse -mountpoint "$MOUNT_POINT"
+          codesign --verify --deep --strict --verbose=2 "$MOUNT_POINT/Ledger Pro.app"
+          hdiutil detach "$MOUNT_POINT"
+
+          xcrun notarytool submit "$DMG_PATH" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$DMG_PATH"
+          xcrun stapler validate "$DMG_PATH"
 
       - uses: actions/upload-artifact@v4
         with:
