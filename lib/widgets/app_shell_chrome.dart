@@ -107,9 +107,11 @@ class AppShellBackdrop extends StatelessWidget {
             ),
           ),
         ),
-        CustomPaint(
-          painter: _LedgerGridPainter(isLight: isLight),
-          size: Size.infinite,
+        RepaintBoundary(
+          child: CustomPaint(
+            painter: _LedgerGridPainter(isLight: isLight),
+            size: Size.infinite,
+          ),
         ),
         child,
       ],
@@ -127,13 +129,21 @@ class _LedgerGridPainter extends CustomPainter {
     final dotColor = isLight
         ? const Color(0xFF182420).withValues(alpha: 0.055)
         : const Color(0xFF7CF2B4).withValues(alpha: 0.05);
-    final paint = Paint()..color = dotColor;
     const spacing = 22.0;
+    final points = <Offset>[];
     for (var y = spacing / 2; y < size.height; y += spacing) {
       for (var x = spacing / 2; x < size.width; x += spacing) {
-        canvas.drawCircle(Offset(x, y), 1.05, paint);
+        points.add(Offset(x, y));
       }
     }
+    canvas.drawPoints(
+      PointMode.points,
+      points,
+      Paint()
+        ..color = dotColor
+        ..strokeWidth = 2.1
+        ..strokeCap = StrokeCap.round,
+    );
 
     // A single, quiet mint aura rising from the top-right corner.
     final glow = Paint()
@@ -184,7 +194,10 @@ class ShellContentSheet extends StatelessWidget {
           ),
         ],
       ),
-      child: ClipRRect(borderRadius: borderRadius, child: child),
+      // The page itself is padded and each scrollable clips its own content.
+      // Avoid an unnecessary full-window antialiased clip layer; it adds costly
+      // compositing and can destabilize text painting on Intel macOS.
+      child: child,
     );
   }
 }
