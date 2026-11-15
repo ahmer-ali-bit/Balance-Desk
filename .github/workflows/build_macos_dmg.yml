@@ -63,6 +63,10 @@ jobs:
           brew install create-dmg
           APP_PATH="$(find build/macos/Build/Products/Release -maxdepth 1 -type d -name '*.app' -print -quit)"
           test -n "$APP_PATH"
+          APP_ENTITLEMENTS="$RUNNER_TEMP/ledger-pro-entitlements.plist"
+          codesign --display --entitlements :- "$APP_PATH" > "$APP_ENTITLEMENTS" 2>/dev/null
+          /usr/libexec/PlistBuddy -c 'Print :keychain-access-groups' "$APP_ENTITLEMENTS" >/dev/null
+
           mkdir -p build/packaging/stage
           STAGED_APP="build/packaging/stage/Ledger Pro.app"
           ditto "$APP_PATH" "$STAGED_APP"
@@ -72,10 +76,11 @@ jobs:
           echo "Ledger Pro executable architectures: $ARCHS"
           [[ "$ARCHS" == *x86_64* ]]
 
-          # Personal-use ad-hoc signing: the user clears download quarantine and
-          # re-signs locally once, so macOS validates the exact installed bundle.
-          codesign --force --deep --sign - --timestamp=none "$STAGED_APP"
+          # Preserve the Keychain entitlement in the personal-use ad-hoc signature.
+          codesign --force --deep --sign - --timestamp=none --entitlements "$APP_ENTITLEMENTS" "$STAGED_APP"
           codesign --verify --deep --strict --verbose=2 "$STAGED_APP"
+          codesign --display --entitlements :- "$STAGED_APP" > "$RUNNER_TEMP/staged-entitlements.plist" 2>/dev/null
+          /usr/libexec/PlistBuddy -c 'Print :keychain-access-groups' "$RUNNER_TEMP/staged-entitlements.plist" >/dev/null
 
           rm -rf build/packaging/stage/.background
           DMG_PATH="build/packaging/Ledger-Pro-macOS.dmg"

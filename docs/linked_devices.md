@@ -15,14 +15,14 @@
 - Supabase project: `balance-desk-linked-devices` in `ap-south-1` (Mumbai), Free plan.
 - The app embeds only the Supabase publishable key. A service-role/secret key is never put in the client.
 - Ledger/device/invite tables have RLS enabled and no direct client table grants. Narrow Postgres RPCs are the only public entry points; each data operation validates a 256-bit per-install capability and active device row.
-- Capability values are random, stored in Android Keystore / Apple Keychain / supported OS credential storage, and never written to SQLite or SharedPreferences. The database stores only SHA-256 hashes.
+- Capability values are random, stored in Android Keystore / Apple Keychain / supported OS credential storage, and never written to SQLite or SharedPreferences. On macOS, the signed app must retain the `keychain-access-groups` entitlement expected by `flutter_secure_storage_macos` or Keychain returns `-34018`; the database stores only SHA-256 hashes.
 - Network traffic uses HTTPS. This is server-side access control and transport protection, not end-to-end encryption: the Supabase project owner/database administrators can access data in the managed database. Treat the Supabase account and project dashboard as trusted administrative access.
 - Free cloud plans have usage and availability limits. A paused/unavailable cloud does not erase the local workspace; sync resumes after service is available.
 
 ## Local setup and build
 
 1. Run `flutter pub get` after pulling this feature. It adds secure-storage and QR scanner packages; do not reuse an old build/hot reload for the first install.
-2. Rebuild the native app. macOS secure storage requires the keychain access-group entitlement already added under `macos/Runner`.
+2. Rebuild the native app. macOS secure storage requires the `keychain-access-groups` entitlement declared under `macos/Runner`; the DMG packaging step reapplies and verifies it when ad-hoc signing, so no Apple Developer team is needed. If you must re-sign the installed app locally, preserve its entitlements (`codesign --force --deep --sign - --timestamp=none --preserve-metadata=entitlements "/Applications/Ledger Pro.app"`) rather than stripping them.
 3. On Android/iOS, grant camera access to scan invites. Code copy/paste remains available if scanning is unavailable.
 4. For desktop-to-phone linking, create/show the invite QR on desktop and scan it from the phone. For phone-to-desktop, copy the invite string and paste it into the desktop app.
 5. Keep backups before enabling sharing across real workspaces. Verify add/edit/delete, customer-linked opening-balance settings, ledger years, summary snapshots, read-only, revoke, offline catch-up, conflict review, disconnect, and stop-sharing on two installations.
