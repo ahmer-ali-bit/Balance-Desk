@@ -63,7 +63,15 @@ jobs:
           APP_PATH="$(find build/macos/Build/Products/Release -maxdepth 1 -type d -name '*.app' -print -quit)"
           test -n "$APP_PATH"
           mkdir -p build/packaging/stage
-          ditto "$APP_PATH" "build/packaging/stage/Ledger Pro.app"
+          STAGED_APP="build/packaging/stage/Ledger Pro.app"
+          ditto "$APP_PATH" "$STAGED_APP"
+          APP_EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$STAGED_APP/Contents/Info.plist")"
+          EXECUTABLE_PATH="$STAGED_APP/Contents/MacOS/$APP_EXECUTABLE"
+          ARCHS="$(lipo -archs "$EXECUTABLE_PATH")"
+          echo "Ledger Pro executable architectures: $ARCHS"
+          [[ "$ARCHS" == *x86_64* ]]
+          codesign --force --deep --sign - --timestamp=none "$STAGED_APP"
+          codesign --verify --deep --strict --verbose=2 "$STAGED_APP"
           rm -rf build/packaging/stage/.background
           create-dmg \
             --volname "Ledger Pro" \
