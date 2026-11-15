@@ -1,6 +1,8 @@
 import Cocoa
 import FlutterMacOS
+#if canImport(UniformTypeIdentifiers)
 import UniformTypeIdentifiers
+#endif
 
 class MainFlutterWindow: NSWindow {
   override func awakeFromNib() {
@@ -33,7 +35,11 @@ class MainFlutterWindow: NSWindow {
 
       let panel = NSOpenPanel()
       panel.title = "Select Backup File"
-      panel.allowedContentTypes = [.json]
+      if #available(macOS 11.0, *) {
+        panel.allowedContentTypes = [.json]
+      } else {
+        panel.allowedFileTypes = ["json"]
+      }
       panel.allowsMultipleSelection = false
       panel.canChooseDirectories = false
       panel.canChooseFiles = true
