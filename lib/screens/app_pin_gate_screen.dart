@@ -577,6 +577,7 @@ class _BrandPanel extends StatelessWidget {
                     Text(
                       'LEDGER PRO',
                       style: TextStyle(
+                        fontFamily: 'Lato',
                         fontSize: 11.5,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 2.2,
@@ -603,6 +604,7 @@ class _BrandPanel extends StatelessWidget {
                 const Text(
                   'Your books are\nsafe with you.',
                   style: TextStyle(
+                    fontFamily: 'Lato',
                     fontSize: 32,
                     height: 1.16,
                     fontWeight: FontWeight.w900,
@@ -614,6 +616,7 @@ class _BrandPanel extends StatelessWidget {
                 const Text(
                   'PIN lock keeps your customer and stock ledgers private —\non this device only.',
                   style: TextStyle(
+                    fontFamily: 'Lato',
                     fontSize: 12.5,
                     height: 1.5,
                     fontWeight: FontWeight.w500,
@@ -624,6 +627,7 @@ class _BrandPanel extends StatelessWidget {
                 const Text(
                   'DEVELOPED BY AHMER ABID  ·  DESIGNED FOR PRECISION',
                   style: TextStyle(
+                    fontFamily: 'Lato',
                     fontSize: 8,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1.6,

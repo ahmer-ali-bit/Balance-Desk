@@ -762,6 +762,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                                             ? '?'
                                             : customer.name[0].toUpperCase(),
                                         style: TextStyle(
+                                          fontFamily: 'Lato',
                                           fontSize: isCompactTable ? 14 : 15,
                                           fontWeight: FontWeight.w900,
                                           color: Theme.of(context)

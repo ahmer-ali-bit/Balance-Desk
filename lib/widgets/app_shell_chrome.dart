@@ -240,6 +240,7 @@ class ShellSectionLabel extends StatelessWidget {
         Text(
           label.toUpperCase(),
           style: const TextStyle(
+            fontFamily: 'Lato',
             fontSize: 10,
             fontWeight: FontWeight.w900,
             letterSpacing: 1.5,
@@ -384,6 +385,7 @@ class _ShellNavTileState extends State<ShellNavTile> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
+                          fontFamily: 'Lato',
                           fontSize: 13.5,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0.1,
@@ -397,6 +399,7 @@ class _ShellNavTileState extends State<ShellNavTile> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
+                            fontFamily: 'Lato',
                             fontSize: 10.5,
                             fontWeight: FontWeight.w500,
                             color: _Rail.faint,
@@ -504,6 +507,7 @@ class _ShellToolTileState extends State<ShellToolTile> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
+                    fontFamily: 'Lato',
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.1,
@@ -603,6 +607,7 @@ class ShellSelectField extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
+                fontFamily: 'Lato',
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.15,
@@ -766,6 +771,7 @@ class _AppearanceSegment extends StatelessWidget {
               Text(
                 label,
                 style: TextStyle(
+                  fontFamily: 'Lato',
                   fontSize: 10.5,
                   fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                   letterSpacing: 0.3,
@@ -960,6 +966,7 @@ class AppShellSidebar extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
+                    fontFamily: 'Lato',
                     fontSize: 15.5,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.1,
@@ -972,6 +979,7 @@ class AppShellSidebar extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
+                    fontFamily: 'Lato',
                     fontSize: 8.5,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 1.4,
@@ -1022,6 +1030,7 @@ class AppShellSidebar extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
+                    fontFamily: 'Lato',
                     fontSize: 10.5,
                     fontWeight: FontWeight.w800,
                     color: _Rail.muted,
@@ -1033,6 +1042,7 @@ class AppShellSidebar extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
+                    fontFamily: 'Lato',
                     fontSize: 8.5,
                     fontWeight: FontWeight.w500,
                     color: _Rail.faint,
@@ -1082,6 +1092,7 @@ class ShellChip extends StatelessWidget {
           Text(
             label.toUpperCase(),
             style: TextStyle(
+              fontFamily: 'Lato',
               fontSize: 10,
               fontWeight: FontWeight.w900,
               letterSpacing: 0.8,

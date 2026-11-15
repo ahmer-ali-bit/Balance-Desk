@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import 'finance_colors.dart';
-import 'ledger_fonts.dart';
 
 /// Ledger Pro design system — "Modern Professional Ledger".
 ///
@@ -14,11 +13,11 @@ import 'ledger_fonts.dart';
 class BalanceDeskTheme {
   BalanceDeskTheme._();
 
-  /// Primary UI typeface, selected for the target platform.
-  static String get displayFont => LedgerFonts.sans;
+  /// Primary UI typeface (bundled, OFL).
+  static const String displayFont = 'Lato';
 
-  /// Face used for ledger amounts and tabular figures.
-  static String get amountFont => LedgerFonts.mono;
+  /// Face used for ledger amounts and tabular figures (bundled, OFL).
+  static const String amountFont = 'IBM Plex Mono';
 
   // ─────────────────────────────────────────────────────────────
   // Color tokens — light ("Paper Ledger")
@@ -168,7 +167,7 @@ class BalanceDeskTheme {
   // Typography
   // ─────────────────────────────────────────────────────────────
   static TextTheme _textTheme(ColorScheme scheme) {
-    final base = TextTheme(
+    final base = const TextTheme(
       displayLarge: TextStyle(
         fontFamily: displayFont,
         fontSize: 34,

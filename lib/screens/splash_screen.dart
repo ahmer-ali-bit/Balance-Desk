@@ -209,6 +209,7 @@ class _SplashScreenState extends State<SplashScreen>
                             Text(
                               'LEDGER PRO',
                               style: TextStyle(
+                                fontFamily: 'Lato',
                                 fontSize: 12,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: 2.4,
@@ -225,6 +226,7 @@ class _SplashScreenState extends State<SplashScreen>
                         const Text(
                           'Every rupee,\naccounted for.',
                           style: TextStyle(
+                            fontFamily: 'Lato',
                             fontSize: 37,
                             height: 1.14,
                             fontWeight: FontWeight.w900,
@@ -236,6 +238,7 @@ class _SplashScreenState extends State<SplashScreen>
                         const Text(
                           'Customer udhaar, ledger years, daily snapshots and\nPDF statements — in one calm, professional register.',
                           style: TextStyle(
+                            fontFamily: 'Lato',
                             fontSize: 13.5,
                             height: 1.5,
                             fontWeight: FontWeight.w500,
@@ -246,6 +249,7 @@ class _SplashScreenState extends State<SplashScreen>
                         const Text(
                           'DEVELOPED BY AHMER ABID  ·  DESIGNED FOR PRECISION',
                           style: TextStyle(
+                            fontFamily: 'Lato',
                             fontSize: 8.5,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.6,
@@ -278,6 +282,7 @@ class _SplashScreenState extends State<SplashScreen>
                             Text(
                               'WELCOME BACK',
                               style: TextStyle(
+                                fontFamily: 'Lato',
                                 fontSize: 10.5,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: 2.6,
@@ -290,6 +295,7 @@ class _SplashScreenState extends State<SplashScreen>
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
+                                fontFamily: 'Lato',
                                 fontSize: 34,
                                 height: 1.12,
                                 fontWeight: FontWeight.w900,
@@ -301,6 +307,7 @@ class _SplashScreenState extends State<SplashScreen>
                             Text(
                               'Your ledger is opening…',
                               style: TextStyle(
+                                fontFamily: 'Lato',
                                 fontSize: 13.5,
                                 fontWeight: FontWeight.w500,
                                 color: inkMuted,
@@ -390,6 +397,7 @@ class _SplashScreenState extends State<SplashScreen>
                       child: Text(
                         'LEDGER PRO',
                         style: TextStyle(
+                          fontFamily: 'Lato',
                           fontSize: 11,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 2.4,
@@ -406,6 +414,7 @@ class _SplashScreenState extends State<SplashScreen>
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
+                        fontFamily: 'Lato',
                         fontSize: 25,
                         height: 1.16,
                         fontWeight: FontWeight.w900,
@@ -418,6 +427,7 @@ class _SplashScreenState extends State<SplashScreen>
                       'PROFESSIONAL LEDGER & ACCOUNTING',
                       textAlign: TextAlign.center,
                       style: TextStyle(
+                        fontFamily: 'Lato',
                         fontSize: 8.5,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 2.6,
@@ -442,6 +452,7 @@ class _SplashScreenState extends State<SplashScreen>
                       'PREPARING YOUR WORKSPACE',
                       textAlign: TextAlign.center,
                       style: TextStyle(
+                        fontFamily: 'Lato',
                         fontSize: 8.5,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 2.1,
@@ -452,6 +463,7 @@ class _SplashScreenState extends State<SplashScreen>
                     const Text(
                       'DEVELOPED BY AHMER ABID',
                       style: TextStyle(
+                        fontFamily: 'Lato',
                         fontSize: 9,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 2,
@@ -462,6 +474,7 @@ class _SplashScreenState extends State<SplashScreen>
                     const Text(
                       'DESIGNED FOR PRECISION',
                       style: TextStyle(
+                        fontFamily: 'Lato',
                         fontSize: 7.5,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 2.4,
@@ -512,6 +525,7 @@ class _WelcomeFeature extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
+              fontFamily: 'Lato',
               fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.2,
