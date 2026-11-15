@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          flutter build macos --release --no-codesign 2>&1 | tee macos-build.log
+          flutter build macos --release 2>&1 | tee macos-build.log
           build_status=${PIPESTATUS[0]}
           {
             echo '### macOS release build output'
