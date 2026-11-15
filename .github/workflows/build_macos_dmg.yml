@@ -38,6 +38,14 @@ jobs:
             tail -n 160 macos-build.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$build_status" -ne 0 ]; then
+            python3 - <<'PY'
+          from pathlib import Path
+          text = Path('macos-build.log').read_text(errors='replace')[-12000:]
+          text = text.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print(f'::error title=Flutter macOS build output::{text}')
+          PY
+          fi
           exit "$build_status"
 
       - name: Upload build diagnostics

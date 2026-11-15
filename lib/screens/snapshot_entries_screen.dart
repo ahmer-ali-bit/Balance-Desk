@@ -1431,7 +1431,8 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 ],
               ],
             )
-          else if (canEdit)
+          else if (canEdit) ...<Widget>[
+            const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
@@ -1460,6 +1461,7 @@ class _SnapshotEntriesScreenState extends State<SnapshotEntriesScreen> {
                 ),
               ),
             ),
+          ],
         ],
       ),
     );

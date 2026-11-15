@@ -381,23 +381,29 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                     children: <Widget>[
                       if (canEdit) ...[
                         Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: provider.isLoading
-                                ? null
-                                : () async {
-                                    await provider.loadCustomers();
-                                    await _loadPageNos();
-                                  },
-                            icon: const Icon(Icons.refresh_rounded),
-                            label: const Text('Refresh'),
+                          child: SizedBox(
+                            height: 48,
+                            child: OutlinedButton.icon(
+                              onPressed: provider.isLoading
+                                  ? null
+                                  : () async {
+                                      await provider.loadCustomers();
+                                      await _loadPageNos();
+                                    },
+                              icon: const Icon(Icons.refresh_rounded),
+                              label: const Text('Refresh'),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: FilledButton.icon(
-                            onPressed: _showAddCustomerDialog,
-                            icon: const Icon(Icons.person_add_alt_1_rounded),
-                            label: const Text('Add Customer'),
+                          child: SizedBox(
+                            height: 48,
+                            child: FilledButton.icon(
+                              onPressed: _showAddCustomerDialog,
+                              icon: const Icon(Icons.person_add_alt_1_rounded),
+                              label: const Text('Add Customer'),
+                            ),
                           ),
                         ),
                       ],
