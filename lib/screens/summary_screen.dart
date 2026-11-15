@@ -621,6 +621,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                   : null,
               children: <Widget>[
                 MobileMetricGrid(
+                  columns: PlatformHelper.isMacOS ? 2 : null,
                   fullWidthIndexes: const <int>{2},
                   children: <Widget>[
                     MobileMetricTile(

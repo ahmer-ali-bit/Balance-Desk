@@ -2428,12 +2428,17 @@ class _LedgerViewState extends State<_LedgerView> {
                     final balanceAccent = AppColors.balanceColor(
                       displayBalance,
                     );
-                    final balanceCard = _buildHeroBalanceCard(
-                      context,
-                      value: provider.formatBalance(displayBalance),
-                      accentColor: balanceAccent,
-                      label: 'Balance',
-                    );
+                    // The wide hero card consumes too much vertical space in
+                    // the narrow macOS window layout; keep balance in the
+                    // compact ledger stats below instead.
+                    final balanceCard = PlatformHelper.isMacOS
+                        ? null
+                        : _buildHeroBalanceCard(
+                            context,
+                            value: provider.formatBalance(displayBalance),
+                            accentColor: balanceAccent,
+                            label: 'Balance',
+                          );
                     final bagsCard = provider.isStockLedger
                         ? _buildHeroBalanceCard(
                             context,
@@ -2457,17 +2462,20 @@ class _LedgerViewState extends State<_LedgerView> {
                             ?editButton,
                           ],
                         ),
-                        const SizedBox(height: 16),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            if (bagsCard != null) ...[
-                              Expanded(child: bagsCard),
-                              const SizedBox(width: 12),
+                        if (bagsCard != null || balanceCard != null) ...[
+                          const SizedBox(height: 16),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              if (bagsCard != null)
+                                Expanded(child: bagsCard),
+                              if (bagsCard != null && balanceCard != null)
+                                const SizedBox(width: 12),
+                              if (balanceCard != null)
+                                Expanded(child: balanceCard),
                             ],
-                            Expanded(child: balanceCard),
-                          ],
-                        ),
+                          ),
+                        ],
                       ],
                     );
                   },

@@ -186,19 +186,23 @@ class MobileMetricGrid extends StatelessWidget {
     super.key,
     required this.children,
     this.fullWidthIndexes = const <int>{},
+    this.columns,
   });
 
   final List<Widget> children;
   final Set<int> fullWidthIndexes;
+  final int? columns;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final columns = constraints.maxWidth >= 520 ? 3 : 2;
+        final columnCount =
+            columns ?? (constraints.maxWidth >= 520 ? 3 : 2);
         const spacing = 10.0;
         final width =
-            (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
+            (constraints.maxWidth - ((columnCount - 1) * spacing)) /
+            columnCount;
         return Wrap(
           spacing: spacing,
           runSpacing: spacing,
