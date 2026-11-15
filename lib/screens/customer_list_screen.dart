@@ -401,8 +401,18 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                             height: 48,
                             child: FilledButton.icon(
                               onPressed: _showAddCustomerDialog,
-                              icon: const Icon(Icons.person_add_alt_1_rounded),
-                              label: const Text('Add Customer'),
+                              icon: const Icon(
+                                Icons.person_add_alt_1_rounded,
+                                size: 20,
+                              ),
+                              label: const FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  'Add Customer',
+                                  maxLines: 1,
+                                  softWrap: false,
+                                ),
+                              ),
                             ),
                           ),
                         ),
